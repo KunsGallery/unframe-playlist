@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { 
   getAuth, 
@@ -17,485 +17,508 @@ import {
   onSnapshot, 
   addDoc, 
   deleteDoc,
-  query
+  query,
+  updateDoc,
+  increment
 } from 'firebase/firestore';
+import { 
+  getStorage, 
+  ref, 
+  uploadBytesResumable, 
+  getDownloadURL 
+} from 'firebase/storage';
 import { 
   Play, Pause, SkipBack, SkipForward, 
   Plus, Trash2, LogIn, LogOut, ShieldCheck, AlertCircle,
-  Loader2, Music, RefreshCw
+  Loader2, Music, X, Info, Heart, Award, User, Smartphone, Globe, Upload, FileAudio
 } from 'lucide-react';
+import ReactPlayer from 'react-player';
+import { motion, AnimatePresence } from 'framer-motion';
 
-// --- [🔥 필수] Firebase 설정 및 환경 변수 처리 ---
+// --- [🔥 Firebase 설정] ---
 const firebaseConfig = typeof __firebase_config !== 'undefined' 
   ? (typeof __firebase_config === 'string' ? JSON.parse(__firebase_config) : __firebase_config)
-  : {
-      apiKey: "AIzaSyC_2CzowR-eA7m9dffHheEmOxWM0PKE6Is",
-      authDomain: "unframe-playlist.firebaseapp.com",
-      projectId: "unframe-playlist",
-      storageBucket: "unframe-playlist.firebasestorage.app",
-      messagingSenderId: "875707095707",
-      appId: "1:875707095707:web:0ece5489c652a6d4a0843e",
-    };
+  : { /* 기본값 */ };
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const storage = getStorage(app);
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'unframe-playlist-v1';
-
-// 관리자 이메일 목록
 const ADMIN_EMAILS = ['gallerykuns@gmail.com', 'cybog2004@gmail.com', 'sylove887@gmail.com']; 
+
+// --- [🎨 디자인 시스템] ---
+const glass = "bg-white/[0.03] backdrop-blur-[40px] border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]";
+const h1Title = "font-black uppercase tracking-[-0.07em] leading-[0.8] italic";
+const subTitle = "font-bold uppercase tracking-[0.4em] text-[#004aad]";
 
 export default function App() {
   const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState('user');
+  const [view, setView] = useState('gallery'); 
+  const [selectedTrack, setSelectedTrack] = useState(null);
+  
+  const [tracks, setTracks] = useState([]);
+  const [userLikes, setUserLikes] = useState([]);
+  const [userProfile, setUserProfile] = useState({ listenCount: 0, rewards: [] });
+  
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTrackIdx, setCurrentTrackIdx] = useState(0);
+  const [played, setPlayed] = useState(0);
+  const [duration, setDuration] = useState(0);
+  
+  const [newTrack, setNewTrack] = useState({ title: '', artist: '', image: '', description: '', tag: 'Ambient', audioUrl: '' });
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
+  
   const [scrolled, setScrolled] = useState(false);
   const [authError, setAuthError] = useState(null);
+  
   const canvasRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const analyserRef = useRef(null);
+  const dataArrayRef = useRef(null);
+  const audioIntensityRef = useRef(0);
 
-  const [tracks, setTracks] = useState([]);
-  const [exhibitionInfo, setExhibitionInfo] = useState({
-    heroTitle: "Breaking Frames",
-    heroSubtitle: "Project UP",
-    heroDescription: "전시의 공기는 캔버스를 넘어 당신의 이어폰 속으로 흐릅니다.",
-    tagline: "Resonance Builder"
-  });
-
-  const [newTrack, setNewTrack] = useState({
-    title: '', artist: '', duration: '', image: '', description: '', tag: 'Ambient'
-  });
-
-  // 1. [RULE 3] 인증 로직 강화
+  // 1. [🔐 인증 로직]
   useEffect(() => {
     let isMounted = true;
-
     const initAuth = async () => {
       try {
-        if (auth.currentUser) {
-          if (isMounted) {
-            setUser(auth.currentUser);
-            setLoading(false);
-          }
-          return;
-        }
-
         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
           await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          try {
-            await signInAnonymously(auth);
-          } catch (anonErr) {
-            console.error("Anonymous Auth Error:", anonErr);
-            if (isMounted) {
-              setAuthError(
-                anonErr.code === 'auth/admin-restricted-operation' 
-                ? "Firebase 콘솔에서 '익명 로그인' 기능을 활성화해야 합니다." 
-                : "인증 서버 응답 오류가 발생했습니다."
-              );
-            }
-          }
+        } else if (!auth.currentUser) {
+          await signInAnonymously(auth).catch(() => {});
         }
-      } catch (err) {
-        console.error("Critical Auth Error:", err);
-        if (isMounted) setAuthError("인증 초기화 중 오류가 발생했습니다.");
-      } finally {
-        if (isMounted) setLoading(false);
-      }
+      } catch (err) { console.error(err); } 
+      finally { if (isMounted) setLoading(false); }
     };
-
     initAuth();
-
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
       if (isMounted) {
-        setUser(currentUser);
-        setIsAdmin(currentUser && currentUser.email && ADMIN_EMAILS.includes(currentUser.email));
-        if (currentUser) {
-          setLoading(false);
-          setAuthError(null);
-        }
+        setUser(u);
+        setIsAdmin(u && u.email && ADMIN_EMAILS.includes(u.email));
       }
     });
-
-    return () => {
-      isMounted = false;
-      unsubscribe();
-    };
+    return () => { isMounted = false; unsubscribe(); };
   }, []);
 
-  // 2. [RULE 1, 2] 데이터 동기화
+  // 2. [📊 데이터 동기화]
   useEffect(() => {
     if (!user) return;
-
-    const tracksCollection = collection(db, 'artifacts', appId, 'public', 'data', 'tracks');
-    const unsubscribeTracks = onSnapshot(query(tracksCollection), (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setTracks(data);
-    }, (err) => {
-      console.error("Tracks Sync Error:", err);
-      if (err.code === 'permission-denied') {
-        setAuthError("데이터베이스 접근 권한이 없습니다.");
-      }
+    const tracksRef = collection(db, 'artifacts', appId, 'public', 'data', 'tracks');
+    const unsubTracks = onSnapshot(query(tracksRef), (snap) => {
+      const data = snap.docs.map(d => ({ id: d.id, ...doc.data() || d.data() }));
+      setTracks(data.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
     });
-
-    const settingsDoc = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
-    const unsubscribeSettings = onSnapshot(settingsDoc, (docSnap) => {
-      if (docSnap.exists()) setExhibitionInfo(docSnap.data());
-    }, (err) => {
-      console.error("Settings Sync Error:", err);
+    const likesRef = collection(db, 'artifacts', appId, 'users', user.uid, 'likes');
+    const unsubLikes = onSnapshot(query(likesRef), (snap) => {
+      setUserLikes(snap.docs.map(d => d.id));
     });
-
-    return () => {
-      unsubscribeTracks();
-      unsubscribeSettings();
-    };
+    const profileRef = doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'stats');
+    const unsubProfile = onSnapshot(profileRef, (snap) => {
+      if (snap.exists()) setUserProfile(snap.data());
+      else setDoc(profileRef, { listenCount: 0, rewards: [], firstJoin: Date.now() });
+    });
+    return () => { unsubTracks(); unsubLikes(); unsubProfile(); };
   }, [user]);
 
-  // 3. 배경 애니메이션
+  // 3. [🔊 오디오 비주얼라이저 엔진]
+  const setupVisualizer = () => {
+    if (audioContextRef.current) return;
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioContext();
+    const analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    
+    // Note: Cross-origin restriction might block Analyzer on YouTube/SoundCloud.
+    // Works best with direct files from Firebase Storage.
+    analyserRef.current = analyser;
+    dataArrayRef.current = new Uint8Array(analyser.frequencyBinCount);
+    audioContextRef.current = audioCtx;
+  };
+
+  useEffect(() => {
+    if (isPlaying) {
+      setupVisualizer();
+      if (audioContextRef.current?.state === 'suspended') {
+        audioContextRef.current.resume();
+      }
+    }
+  }, [isPlaying]);
+
+  // 4. [✨ 비주얼라이저 연동 배경 애니메이션]
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     let animationFrameId;
-    let offset = 0;
+    let particles = [];
+
+    const createParticles = () => {
+      particles = [];
+      for (let i = 0; i < 6; i++) {
+        particles.push({
+          x: Math.random() * canvas.width,
+          y: Math.random() * canvas.height,
+          baseR: Math.random() * 300 + 200,
+          vx: (Math.random() - 0.5) * 1.2,
+          vy: (Math.random() - 0.5) * 1.2,
+          color: i % 2 === 0 ? 'rgba(0, 74, 173, 0.15)' : 'rgba(120, 40, 200, 0.1)'
+        });
+      }
+    };
 
     const draw = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // 1. 오디오 데이터 분석
+      let intensity = 0;
+      if (analyserRef.current && isPlaying) {
+        analyserRef.current.getByteFrequencyData(dataArrayRef.current);
+        const sum = dataArrayRef.current.reduce((a, b) => a + b, 0);
+        intensity = sum / dataArrayRef.current.length / 255; // 0 ~ 1 사이 값
+        audioIntensityRef.current = intensity;
+      } else {
+        audioIntensityRef.current = audioIntensityRef.current * 0.95; // 서서히 감소
+      }
+
       ctx.fillStyle = '#050505';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.strokeStyle = `rgba(0, 74, 173, ${isPlaying ? 0.08 : 0.04})`;
-      
-      for (let i = 0; i < canvas.height; i += 12) {
-        const y = (i + offset) % canvas.height;
+
+      particles.forEach(p => {
+        // 음악 강도에 따라 반지름과 속도 조절
+        const currentR = p.baseR * (1 + audioIntensityRef.current * 0.5);
+        const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, currentR);
+        grad.addColorStop(0, p.color);
+        grad.addColorStop(1, 'transparent');
+        
+        ctx.fillStyle = grad;
         ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(canvas.width, y);
-        ctx.stroke();
+        ctx.arc(p.x, p.y, currentR, 0, Math.PI * 2);
+        ctx.fill();
+
+        p.x += p.vx * (1 + audioIntensityRef.current * 5);
+        p.y += p.vy * (1 + audioIntensityRef.current * 5);
+
+        if (p.x < -currentR) p.x = canvas.width + currentR;
+        if (p.x > canvas.width + currentR) p.x = -currentR;
+        if (p.y < -currentR) p.y = canvas.height + currentR;
+        if (p.y > canvas.height + currentR) p.y = -currentR;
+      });
+
+      // 비주얼 그리드 라인
+      ctx.strokeStyle = `rgba(255, 255, 255, ${0.01 + audioIntensityRef.current * 0.05})`;
+      for (let i = 0; i < canvas.width; i += 80) {
+        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke();
       }
-      offset += isPlaying ? 0.8 : 0.2;
+
       animationFrameId = requestAnimationFrame(draw);
     };
 
-    const handleResize = () => {
+    const resize = () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
+      createParticles();
     };
 
-    handleResize();
-    draw();
-    window.addEventListener('resize', handleResize);
+    resize(); draw();
+    window.addEventListener('resize', resize);
     const handleScroll = () => setScrolled(window.scrollY > 50);
     window.addEventListener('scroll', handleScroll);
-
-    return () => {
-      cancelAnimationFrame(animationFrameId);
-      window.removeEventListener('resize', handleResize);
-      window.removeEventListener('scroll', handleScroll);
-    };
+    return () => { cancelAnimationFrame(animationFrameId); window.removeEventListener('resize', resize); window.removeEventListener('scroll', handleScroll); };
   }, [isPlaying]);
 
-  const handleLogin = async () => {
-    const provider = new GoogleAuthProvider();
-    try {
-      await signInWithPopup(auth, provider);
-      setAuthError(null);
-    } catch (err) {
-      console.error("Login Error:", err);
-      setAuthError("로그인 실패: 팝업이 차단되었거나 도메인이 승인되지 않았습니다.");
+  // --- [🚀 비즈니스 로직 핸들러] ---
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    const storageRef = ref(storage, `audio/${Date.now()}_${file.name}`);
+    const uploadTask = uploadBytesResumable(storageRef, file);
+
+    uploadTask.on('state_changed', 
+      (snapshot) => {
+        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        setUploadProgress(progress);
+      }, 
+      (error) => {
+        console.error(error);
+        setIsUploading(false);
+        setAuthError("파일 업로드에 실패했습니다.");
+      }, 
+      () => {
+        getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
+          setNewTrack(prev => ({ ...prev, audioUrl: downloadURL }));
+          setIsUploading(false);
+          setUploadProgress(0);
+        });
+      }
+    );
+  };
+
+  const handleToggleLike = async (e, trackId) => {
+    e.stopPropagation();
+    if (!user) return;
+    const likeDoc = doc(db, 'artifacts', appId, 'users', user.uid, 'likes', trackId);
+    if (userLikes.includes(trackId)) await deleteDoc(likeDoc);
+    else await setDoc(likeDoc, { likedAt: Date.now() });
+  };
+
+  const recordPlayHistory = async () => {
+    if (!user || !currentTrack) return;
+    const profileRef = doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'stats');
+    await updateDoc(profileRef, { listenCount: increment(1), lastPlayed: currentTrack.title });
+    
+    if ('mediaSession' in navigator && currentTrack) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: currentTrack.title,
+        artist: currentTrack.artist,
+        artwork: [{ src: currentTrack.image || 'https://via.placeholder.com/512', sizes: '512x512', type: 'image/png' }]
+      });
     }
   };
 
-  const handleLogout = () => {
-    signOut(auth).then(() => {
-      signInAnonymously(auth).catch(() => {});
-    });
+  const handleLogin = async () => {
+    try { await signInWithPopup(auth, new GoogleAuthProvider()); } catch (err) { setAuthError("로그인 실패"); }
   };
 
   const handleAddTrack = async (e) => {
     e.preventDefault();
     if (!isAdmin) return;
-    try {
-      const tracksRef = collection(db, 'artifacts', appId, 'public', 'data', 'tracks');
-      await addDoc(tracksRef, { ...newTrack, createdAt: Date.now() });
-      setNewTrack({ title: '', artist: '', duration: '', image: '', description: '', tag: 'Ambient' });
-    } catch (err) {
-      setAuthError("트랙 추가 권한이 없습니다.");
-    }
-  };
-
-  const handleDeleteTrack = async (id) => {
-    if (!isAdmin) return;
-    try {
-      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tracks', id));
-    } catch (err) {
-      setAuthError("삭제 권한이 없습니다.");
-    }
+    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tracks'), { ...newTrack, createdAt: Date.now() });
+    setNewTrack({ title: '', artist: '', image: '', description: '', tag: 'Ambient', audioUrl: '' });
   };
 
   const currentTrack = tracks[currentTrackIdx] || null;
+  const likedTracks = tracks.filter(t => userLikes.includes(t.id));
+  const formatTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center text-white gap-6">
-        <Loader2 className="w-12 h-12 animate-spin text-[#004aad]" />
-        <p className="text-[10px] font-black tracking-widest uppercase opacity-40 animate-pulse">Initializing Terminal...</p>
-      </div>
-    );
-  }
-
-  if (!user && authError) {
-    return (
-      <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-8 text-center">
-        <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mb-8 border border-red-500/20">
-          <AlertCircle className="w-10 h-10 text-red-500" />
-        </div>
-        <h2 className="text-2xl font-black uppercase italic tracking-tighter mb-4 text-white">Connection Interrupted</h2>
-        <div className="max-w-md bg-white/5 border border-white/10 p-6 rounded-3xl space-y-4 mb-8 backdrop-blur-xl">
-          <p className="text-xs text-zinc-400 leading-relaxed uppercase tracking-wide">
-            {authError}
-          </p>
-          <div className="pt-4 border-t border-white/5 text-[10px] text-zinc-500 text-left space-y-2">
-            <p className="font-bold text-indigo-400">해결 방법:</p>
-            <p>1. Firebase Console &gt; Authentication &gt; Sign-in method에서 '익명' 사용 설정</p>
-            <p>2. Authentication &gt; Settings &gt; Authorized domains에 현재 도메인 추가</p>
-          </div>
-        </div>
-        <button 
-          onClick={() => window.location.reload()}
-          className="flex items-center gap-3 bg-white text-black px-8 py-4 rounded-full font-black uppercase text-[10px] hover:bg-indigo-500 hover:text-white transition-all shadow-xl"
-        >
-          <RefreshCw className="w-4 h-4" /> Retry Connection
-        </button>
-      </div>
-    );
-  }
+  if (loading) return <div className="min-h-screen bg-black flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-[#004aad]" /></div>;
 
   return (
-    <div className="min-h-screen bg-[#050505] text-zinc-100 font-sans selection:bg-[#004aad] selection:text-white overflow-x-hidden">
+    <div className="min-h-screen bg-[#050505] text-zinc-100 font-sans selection:bg-[#004aad] overflow-x-hidden relative">
       <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none z-0" />
-      <div className="fixed inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.03] pointer-events-none z-10"></div>
+      <div className="fixed inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.03] pointer-events-none z-10 mix-blend-overlay"></div>
 
-      {/* Navigation */}
-      <header className={`fixed top-0 w-full z-[100] transition-all duration-700 ${scrolled ? 'py-4 bg-black/80 backdrop-blur-2xl border-b border-white/5' : 'py-10'}`}>
+      {currentTrack && (
+        <ReactPlayer
+          url={currentTrack.audioUrl}
+          playing={isPlaying}
+          width="0" height="0"
+          playsinline={true} 
+          onProgress={(s) => setPlayed(s.played)}
+          onDuration={setDuration}
+          onStart={recordPlayHistory}
+          onEnded={() => setCurrentTrackIdx(p => (p + 1) % tracks.length)}
+          config={{ youtube: { playerVars: { origin: window.location.origin } } }}
+        />
+      )}
+
+      {/* --- Navigation --- */}
+      <header className={`fixed top-0 w-full z-[100] transition-all duration-500 ${scrolled ? 'py-4 bg-black/40 backdrop-blur-xl border-b border-white/5' : 'py-10'}`}>
         <div className="container mx-auto px-8 flex justify-between items-end">
-          <div className="group cursor-pointer" onClick={() => setView('user')}>
-            <h1 className="text-2xl font-black tracking-tighter uppercase italic leading-none group-hover:text-[#004aad] transition-colors">Unframe<span className="text-[#004aad]">.</span></h1>
-            <p className="text-[9px] font-bold tracking-[0.4em] uppercase text-zinc-500 mt-1">{exhibitionInfo.tagline}</p>
+          <div className="group cursor-pointer" onClick={() => setView('gallery')}>
+            <h1 className="text-3xl font-black tracking-tighter uppercase italic leading-none group-hover:text-[#004aad] transition-colors">Unframe<span className="text-[#004aad]">.</span></h1>
+            <p className={subTitle + " text-[10px] mt-1"}>Reactive Art Collective</p>
           </div>
-          <nav className="flex items-center gap-8">
-             <button onClick={() => setView('user')} className={`text-[10px] font-black uppercase tracking-widest transition-all ${view === 'user' ? 'text-[#004aad]' : 'opacity-40 hover:opacity-100'}`}>Gallery</button>
-             <button onClick={() => setView('admin')} className={`text-[10px] font-black uppercase tracking-widest transition-all ${view === 'admin' ? 'text-[#004aad]' : 'opacity-40 hover:opacity-100'}`}>Console</button>
+          <nav className="flex items-center gap-10">
+             <button onClick={() => setView('gallery')} className={`text-[11px] font-black uppercase tracking-widest transition-all ${view === 'gallery' ? 'text-[#004aad]' : 'opacity-30 hover:opacity-100'}`}>Gallery</button>
+             <button onClick={() => setView('library')} className={`text-[11px] font-black uppercase tracking-widest transition-all ${view === 'library' ? 'text-[#004aad]' : 'opacity-30 hover:opacity-100'}`}>Archive</button>
+             <button onClick={() => setView('admin')} className={`text-[11px] font-black uppercase tracking-widest transition-all ${view === 'admin' ? 'text-[#004aad]' : 'opacity-30 hover:opacity-100'}`}>Console</button>
           </nav>
         </div>
       </header>
 
-      {view === 'admin' ? (
-        <div className="min-h-screen pt-40 pb-40 px-8 container mx-auto relative z-20">
-          {!user || user.isAnonymous ? (
-            <div className="max-w-md mx-auto py-24 bg-white/5 border border-white/10 rounded-[3rem] text-center space-y-8 backdrop-blur-3xl">
-              <LogIn className="w-12 h-12 text-[#004aad] mx-auto" />
-              <div className="space-y-2">
-                <h2 className="text-3xl font-black uppercase italic tracking-tighter">Admin Access</h2>
-                <p className="text-xs text-zinc-500 uppercase tracking-widest leading-relaxed px-10">승인된 관리자 이메일로 로그인해야<br/>데이터를 편집할 수 있습니다.</p>
-              </div>
-              <button onClick={handleLogin} className="bg-white text-black px-12 py-5 rounded-full font-black uppercase text-[10px] hover:bg-[#004aad] hover:text-white transition-all active:scale-95 shadow-xl">
-                Google 계정으로 로그인
-              </button>
-            </div>
-          ) : !isAdmin ? (
-            <div className="max-w-md mx-auto py-24 bg-red-500/5 border border-red-500/10 rounded-[3rem] text-center space-y-8 backdrop-blur-3xl">
-              <ShieldCheck className="w-12 h-12 text-red-500 mx-auto" />
-              <div className="space-y-2">
-                <h2 className="text-3xl font-black uppercase italic tracking-tighter">Access Denied</h2>
-                <p className="text-xs text-red-500/60 uppercase tracking-widest px-10 break-all">{user.email}</p>
-              </div>
-              <button onClick={handleLogout} className="text-[10px] font-black uppercase text-white/40 hover:text-white underline underline-offset-8 transition-all">다른 계정으로 로그인</button>
-            </div>
-          ) : (
-            <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-              <div className="flex justify-between items-end mb-20 border-b border-white/10 pb-10">
-                <div>
-                  <h2 className="text-7xl font-black tracking-tighter uppercase italic leading-none">Console</h2>
-                  <div className="flex items-center gap-3 mt-4">
-                    <span className="w-2 h-2 bg-green-500 rounded-full shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span>
-                    <p className="text-zinc-500 text-[10px] font-bold tracking-widest uppercase">{user.email}</p>
-                  </div>
-                </div>
-                <button onClick={handleLogout} className="text-[10px] font-black uppercase border border-white/10 px-6 py-4 rounded-xl hover:bg-red-600 transition-colors">Sign Out</button>
-              </div>
+      <AnimatePresence mode="wait">
+        {/* Gallery View */}
+        {view === 'gallery' && (
+          <motion.div key="gallery" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="relative z-20 pt-40 px-8 pb-40">
+            <section className="container mx-auto mb-32">
+              <span className={subTitle + " text-sm mb-6 block"}>Sound as Invisible Architecture</span>
+              <h2 className={`${h1Title} text-[15vw] lg:text-[12rem] italic-outline`}>
+                Sonic<br/><span className="not-italic text-[#004aad]">Artifacts</span>
+              </h2>
+            </section>
 
+            <section className="container mx-auto grid grid-cols-1 gap-6">
+              {tracks.map((track, idx) => (
+                <motion.div key={track.id} whileHover={{ scale: 1.01 }} className={`${glass} p-8 lg:p-12 rounded-[3.5rem] flex items-center justify-between group cursor-pointer`} onClick={() => setSelectedTrack(track)}>
+                  <div className="flex items-center gap-10 lg:gap-16">
+                    <span className="text-5xl font-thin italic text-white/5 transition-colors group-hover:text-[#004aad]/20">{(idx + 1).toString().padStart(2, '0')}</span>
+                    <div className="space-y-2">
+                      <h4 className="text-4xl lg:text-7xl font-black uppercase group-hover:italic transition-all duration-500">{track.title}</h4>
+                      <p className="text-xs text-zinc-500 font-bold tracking-[0.4em] uppercase">{track.artist}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-6">
+                    <button onClick={(e) => handleToggleLike(e, track.id)} className={`transition-all ${userLikes.includes(track.id) ? 'text-red-500 scale-125' : 'text-white/20 hover:text-white'}`}>
+                      <Heart className={`w-6 h-6 ${userLikes.includes(track.id) ? 'fill-current' : ''}`} />
+                    </button>
+                    <div onClick={(e) => { e.stopPropagation(); setCurrentTrackIdx(idx); setIsPlaying(true); }} className={`w-16 h-16 rounded-full border border-white/10 flex items-center justify-center transition-all duration-500 ${currentTrackIdx === idx && isPlaying ? 'bg-[#004aad] border-[#004aad]' : 'bg-white/5 group-hover:bg-white group-hover:text-black'}`}>
+                      {currentTrackIdx === idx && isPlaying ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 fill-current ml-1" />}
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </section>
+          </motion.div>
+        )}
+
+        {/* My Archive View */}
+        {view === 'library' && (
+          <motion.div key="library" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="relative z-20 pt-40 px-8 container mx-auto pb-40">
+            {user?.isAnonymous ? (
+              <div className="max-w-2xl mx-auto py-20 text-center space-y-10">
+                <div className={`${glass} p-16 rounded-[4rem]`}>
+                  <Smartphone className="w-16 h-16 mx-auto mb-8 text-[#004aad]" />
+                  <h2 className="text-4xl font-black uppercase italic tracking-tighter">Stay Connected</h2>
+                  <p className="text-zinc-500 text-sm font-medium tracking-widest mt-6">로그인하면 어느 기기에서나 당신의 기록을 불러옵니다.</p>
+                  <button onClick={handleLogin} className="mt-12 bg-white text-black px-16 py-6 rounded-full font-black uppercase text-xs hover:bg-[#004aad] hover:text-white transition-all">Connect Google</button>
+                </div>
+              </div>
+            ) : (
               <div className="grid lg:grid-cols-12 gap-16">
-                <div className="lg:col-span-7 space-y-16">
-                  <section>
-                    <h3 className="text-[10px] font-black uppercase text-zinc-600 mb-8 flex items-center gap-4">
-                      <span className="h-[1px] w-8 bg-zinc-800"></span> Live Tracks
-                    </h3>
-                    <div className="grid gap-2">
-                      {tracks.map(t => (
-                        <div key={t.id} className="bg-white/5 p-5 rounded-2xl flex justify-between items-center group border border-transparent hover:border-[#004aad]/30 hover:bg-[#004aad]/5 transition-all">
-                          <div className="flex items-center gap-6">
-                            <div className="w-12 h-12 bg-zinc-800 rounded-lg overflow-hidden">
-                              <img src={t.image || "https://via.placeholder.com/100"} className="w-full h-full object-cover opacity-60" alt="" />
-                            </div>
-                            <div>
-                              <p className="font-black uppercase tracking-tight">{t.title}</p>
-                              <p className="text-[9px] text-zinc-500 uppercase mt-1 font-bold tracking-widest">{t.artist}</p>
-                            </div>
-                          </div>
-                          <button onClick={() => handleDeleteTrack(t.id)} className="text-zinc-600 hover:text-red-500 p-2 transition-colors"><Trash2 className="w-5 h-5" /></button>
-                        </div>
-                      ))}
+                <div className="lg:col-span-4 space-y-8">
+                  <div className={`${glass} p-10 rounded-[3rem] text-center`}>
+                    <div className="w-24 h-24 bg-indigo-600 rounded-full mx-auto mb-6 flex items-center justify-center"><User className="w-10 h-10 text-white" /></div>
+                    <h2 className="text-2xl font-black uppercase italic tracking-tighter">{user?.displayName}</h2>
+                    <div className="grid grid-cols-2 gap-4 mt-12 border-t border-white/5 pt-10">
+                      <div><p className="text-[9px] font-black text-zinc-600 uppercase">Records</p><p className="text-3xl font-black text-[#004aad]">{userProfile.listenCount || 0}</p></div>
+                      <div><p className="text-[9px] font-black text-zinc-600 uppercase">Collection</p><p className="text-3xl font-black text-white">{userLikes.length}</p></div>
                     </div>
-                  </section>
-                </div>
-
-                <div className="lg:col-span-5">
-                   <div className="bg-[#004aad] p-10 text-black rounded-[2.5rem] sticky top-32 shadow-2xl shadow-[#004aad]/20 animate-in slide-in-from-right-4 duration-700">
-                     <h3 className="text-4xl font-black italic uppercase leading-none mb-10">Deploy Artifact</h3>
-                     <form onSubmit={handleAddTrack} className="space-y-6">
-                       {[
-                         { label: 'Name', key: 'title' },
-                         { label: 'Artist', key: 'artist' },
-                         { label: 'Image URL', key: 'image' }
-                       ].map(field => (
-                         <div key={field.key} className="space-y-1">
-                           <label className="text-[9px] font-black uppercase opacity-60">{field.label}</label>
-                           <input 
-                             required={field.key !== 'image'} 
-                             value={newTrack[field.key]} 
-                             onChange={e => setNewTrack({...newTrack, [field.key]: e.target.value})} 
-                             className="w-full bg-black/10 border-b-2 border-black/20 p-2 focus:border-black outline-none font-bold uppercase transition-colors" 
-                           />
-                         </div>
-                       ))}
-                       <button type="submit" className="w-full bg-black text-white py-6 mt-8 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-zinc-900 transition-all active:scale-95">Deploy Track</button>
-                     </form>
-                   </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      ) : (
-        <main className="relative z-20">
-          <section className="min-h-screen pt-40 pb-20 px-8 flex flex-col justify-end">
-            <div className="container mx-auto grid grid-cols-1 lg:grid-cols-12 gap-10 items-end">
-              <div className="lg:col-span-8">
-                <span className="inline-block animate-bounce text-[#004aad] text-xs font-black tracking-[0.5em] uppercase mb-4">{exhibitionInfo.heroSubtitle}</span>
-                <h2 className="text-[12vw] lg:text-[11rem] font-black leading-[0.85] tracking-[-0.05em] uppercase italic italic-outline">
-                  {exhibitionInfo.heroTitle.split(' ').map((word, i) => (
-                    <React.Fragment key={i}>
-                      {i % 2 === 0 ? <span className="not-italic text-[#004aad]">{word} </span> : <span>{word} </span>}
-                      {i === 0 && <br className="hidden lg:block"/>}
-                    </React.Fragment>
-                  ))}
-                </h2>
-              </div>
-              <div className="lg:col-span-4 space-y-8">
-                <p className="text-xl font-light text-zinc-400 leading-relaxed italic border-l-2 border-[#004aad] pl-6">"{exhibitionInfo.heroDescription}"</p>
-                <div className="flex gap-4 items-center">
-                  <div className="text-[10px] font-bold tracking-widest uppercase text-zinc-600 flex items-center gap-3">
-                    <span className={`w-2 h-2 rounded-full ${user ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-red-500 animate-pulse'}`}></span>
-                    {user ? "Cloud Sync Active" : "Connecting..."}
                   </div>
                 </div>
-              </div>
-            </div>
-          </section>
-
-          <section className="py-40 px-8 bg-gradient-to-b from-transparent to-black">
-            <div className="container mx-auto">
-              <div className="flex items-center gap-6 mb-20">
-                <div className="h-[1px] flex-1 bg-white/10"></div>
-                <h3 className="text-[10px] font-black uppercase tracking-[1em] text-zinc-700">Artifact List</h3>
-                <div className="h-[1px] flex-1 bg-white/10"></div>
-              </div>
-              
-              <div className="grid grid-cols-1">
-                {tracks.map((track, idx) => (
-                  <div 
-                    key={track.id}
-                    onClick={() => {setCurrentTrackIdx(idx); setIsPlaying(true);}}
-                    className="group relative py-14 border-b border-white/5 cursor-pointer flex items-center justify-between transition-all hover:bg-[#004aad]/5 px-8 rounded-2xl"
-                  >
-                    <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 opacity-0 group-hover:opacity-20 transition-all duration-700 pointer-events-none z-0">
-                      <img src={track.image || "https://via.placeholder.com/400"} className="w-full h-full object-cover scale-50 group-hover:scale-100 rotate-12 group-hover:rotate-0 transition-transform duration-1000 blur-2xl" alt="" />
-                    </div>
-                    
-                    <div className="flex items-center gap-16 relative z-10">
-                      <span className="text-5xl font-thin italic text-zinc-800 transition-colors group-hover:text-[#004aad]">{(idx + 1).toString().padStart(2, '0')}</span>
-                      <div className="space-y-2">
-                        <h4 className="text-5xl lg:text-7xl font-black tracking-tighter uppercase group-hover:italic transition-all duration-500">{track.title}</h4>
-                        <div className="flex items-center gap-4">
-                          <p className="text-xs text-zinc-500 font-bold tracking-[0.3em] uppercase">{track.artist}</p>
-                          <span className="w-1 h-1 bg-[#004aad] rounded-full"></span>
-                          <span className="text-[9px] font-black uppercase text-[#004aad]/50 tracking-widest">{track.tag || 'Audio'}</span>
-                        </div>
+                <div className="lg:col-span-8 space-y-12">
+                  <h2 className={`${h1Title} text-7xl lg:text-9xl`}>Personal<br/>Library</h2>
+                  <div className="grid gap-4">
+                    {likedTracks.map(t => (
+                      <div key={t.id} className={`${glass} p-8 rounded-[2.5rem] flex justify-between items-center group`}>
+                        <p className="text-2xl font-black uppercase">{t.title}</p>
+                        <button onClick={(e) => handleToggleLike(e, t.id)} className="p-4 text-red-500"><Heart className="w-6 h-6 fill-current" /></button>
                       </div>
-                    </div>
-
-                    <div className={`w-16 h-16 rounded-full border border-white/10 flex items-center justify-center transition-all duration-500 ${currentTrackIdx === idx && isPlaying ? 'bg-[#004aad] border-[#004aad] scale-110 shadow-lg shadow-[#004aad]/20' : 'group-hover:bg-white group-hover:text-black group-hover:scale-105'}`}>
-                      {currentTrackIdx === idx && isPlaying ? <Pause className="w-7 h-7 fill-current text-white" /> : <Play className="w-7 h-7 fill-current ml-1" />}
-                    </div>
+                    ))}
                   </div>
-                ))}
-                {tracks.length === 0 && !authError && (
-                  <div className="py-40 text-center space-y-4">
-                    <Music className="w-12 h-12 mx-auto text-zinc-800 animate-pulse" />
-                    <p className="text-zinc-800 font-black uppercase text-2xl italic tracking-tighter">Waiting for artifacts...</p>
+                </div>
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {/* Admin Console with Storage Upload */}
+        {view === 'admin' && (
+          <motion.div key="admin" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="pt-40 px-8 container mx-auto pb-40 relative z-20">
+             <div className="grid lg:grid-cols-12 gap-20">
+              <div className="lg:col-span-8 space-y-12">
+                <h2 className={h1Title + " text-7xl lg:text-9xl"}>Console</h2>
+                {!isAdmin ? (
+                   <div className={glass + " p-20 rounded-[4rem] text-center"}>
+                     <ShieldCheck className="w-16 h-16 mx-auto mb-8 text-[#004aad]" />
+                     <button onClick={handleLogin} className="bg-[#004aad] text-white px-16 py-6 rounded-full font-black uppercase text-xs hover:bg-white hover:text-black transition-all">Verify Identity</button>
+                   </div>
+                ) : (
+                  <div className="space-y-4">
+                    {tracks.map(t => (
+                      <div key={t.id} className={`${glass} p-6 px-10 rounded-3xl flex justify-between items-center`}>
+                        <p className="font-black uppercase tracking-tight text-xl">{t.title}</p>
+                        <button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tracks', t.id))} className="p-3 text-red-500/30 hover:text-red-500 transition-colors"><Trash2 className="w-5 h-5" /></button>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
-            </div>
-          </section>
-        </main>
-      )}
+              {isAdmin && (
+                <div className="lg:col-span-4">
+                  <div className="bg-indigo-600 p-12 rounded-[4rem] text-black shadow-2xl">
+                    <h3 className="text-4xl font-black uppercase italic mb-10 leading-none">Artifact<br/>Deployment</h3>
+                    <form onSubmit={handleAddTrack} className="space-y-6">
+                       <input required placeholder="TITLE" value={newTrack.title} onChange={e => setNewTrack({...newTrack, title: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-2 font-black uppercase outline-none" />
+                       <input required placeholder="ARTIST" value={newTrack.artist} onChange={e => setNewTrack({...newTrack, artist: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-2 font-black uppercase outline-none" />
+                       
+                       {/* Storage Upload UI */}
+                       <div className="space-y-3 pt-4">
+                         <label className="text-[9px] font-black uppercase tracking-widest block opacity-50">Audio Source</label>
+                         <div className="relative group">
+                           <input type="file" accept="audio/*" onChange={handleFileUpload} className="absolute inset-0 opacity-0 cursor-pointer z-10" disabled={isUploading} />
+                           <div className={`flex items-center gap-3 p-4 rounded-2xl border-2 border-dashed transition-all ${isUploading ? 'bg-black/20 border-black/50' : 'bg-black/5 border-black/20 group-hover:border-black'}`}>
+                             {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
+                             <span className="text-[10px] font-black uppercase">{isUploading ? `Uploading ${Math.round(uploadProgress)}%` : 'Upload MP3/WAV'}</span>
+                           </div>
+                         </div>
+                         <p className="text-[8px] font-bold opacity-40 uppercase">Or paste direct URL below:</p>
+                         <input placeholder="https://..." value={newTrack.audioUrl} onChange={e => setNewTrack({...newTrack, audioUrl: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-2 text-xs outline-none" />
+                       </div>
 
-      {/* Persistent Player */}
-      {view === 'user' && currentTrack && (
-        <div className="fixed bottom-10 left-0 w-full z-[200] px-8 pointer-events-none animate-in fade-in slide-in-from-bottom-10 duration-700">
-          <div className="container mx-auto flex justify-center">
-            <div className="w-full max-w-2xl bg-zinc-900/90 backdrop-blur-3xl border border-white/10 rounded-full p-2.5 pl-8 pr-5 flex items-center justify-between pointer-events-auto shadow-[0_30px_60px_rgba(0,0,0,0.5)]">
-                <div className="flex items-center gap-6 min-w-0">
-                  <div className="w-12 h-12 rounded-full overflow-hidden bg-zinc-800 relative flex-shrink-0 shadow-inner">
-                    <img src={currentTrack.image || "https://via.placeholder.com/100"} className={`w-full h-full object-cover ${isPlaying ? 'animate-[spin_20s_linear_infinite]' : ''}`} alt="" />
-                    <div className="absolute inset-0 bg-black/20"></div>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-black uppercase truncate tracking-tighter">{currentTrack.title}</p>
-                    <p className="text-[10px] text-[#004aad] font-bold uppercase truncate tracking-widest">{currentTrack.artist}</p>
+                       <button type="submit" disabled={!newTrack.audioUrl || isUploading} className="w-full bg-black text-white py-6 mt-6 rounded-3xl font-black uppercase text-xs hover:bg-zinc-900 disabled:opacity-50 transition-all shadow-xl">Deploy</button>
+                    </form>
                   </div>
                 </div>
-                <div className="flex items-center gap-4">
-                  <button onClick={() => setCurrentTrackIdx(prev => (prev - 1 + tracks.length) % tracks.length)} className="p-3 text-zinc-500 hover:text-white transition-colors"><SkipBack className="w-4 h-4 fill-current" /></button>
-                  <button onClick={() => setIsPlaying(!isPlaying)} className="w-14 h-14 bg-white text-black rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-xl">
-                    {isPlaying ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 fill-current ml-1" />}
-                  </button>
-                  <button onClick={() => setCurrentTrackIdx(prev => (prev + 1) % tracks.length)} className="p-3 text-zinc-500 hover:text-white transition-colors"><SkipForward className="w-4 h-4 fill-current" /></button>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Floating Player with Visualizer Hint */}
+      {currentTrack && (
+        <motion.div initial={{ y: 120 }} animate={{ y: 0 }} className="fixed bottom-10 left-0 w-full z-[200] px-8 flex justify-center pointer-events-none">
+          <div className={`${glass} w-full max-w-3xl p-5 px-10 rounded-full flex flex-col gap-3 pointer-events-auto border-white/20 shadow-2xl`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-6 min-w-0">
+                <div className="w-14 h-14 rounded-full bg-zinc-800 overflow-hidden flex-shrink-0 relative shadow-2xl group cursor-pointer" onClick={() => setSelectedTrack(currentTrack)}>
+                  <img src={currentTrack.image || "https://via.placeholder.com/200"} className={`w-full h-full object-cover ${isPlaying ? 'animate-[spin_20s_linear_infinite]' : ''}`} />
+                  <div className={`absolute inset-0 bg-[#004aad]/20 mix-blend-overlay transition-opacity ${isPlaying ? 'opacity-100' : 'opacity-0'}`} />
                 </div>
+                <div>
+                  <p className="text-lg font-black uppercase truncate leading-none">{currentTrack.title}</p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <p className="text-[10px] text-[#004aad] font-bold uppercase tracking-[0.2em]">{currentTrack.artist}</p>
+                    {isPlaying && <span className="flex gap-0.5 items-end h-2 w-4"><span className="w-1 bg-[#004aad] animate-[wave_0.8s_ease-in-out_infinite]"></span><span className="w-1 bg-[#004aad] animate-[wave_1.1s_ease-in-out_infinite]"></span><span className="w-1 bg-[#004aad] animate-[wave_0.9s_ease-in-out_infinite]"></span></span>}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-6">
+                <button onClick={(e) => handleToggleLike(e, currentTrack.id)} className={`p-2 transition-transform hover:scale-110 ${userLikes.includes(currentTrack.id) ? 'text-red-500' : 'text-zinc-600'}`}><Heart className={`w-6 h-6 ${userLikes.includes(currentTrack.id) ? 'fill-current' : ''}`} /></button>
+                <button onClick={() => setIsPlaying(!isPlaying)} className="w-16 h-16 bg-white text-black rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-2xl">
+                  {isPlaying ? <Pause className="w-7 h-7 fill-current" /> : <Play className="w-7 h-7 fill-current ml-1" />}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </motion.div>
       )}
 
-      <footer className="bg-black py-40 border-t border-white/5 text-center relative z-20">
-         <div className="max-w-xs mx-auto space-y-8">
-           <h4 className="text-[10px] font-black tracking-[1em] text-zinc-800 uppercase italic">UNFRAME</h4>
-           <p className="text-[10px] text-zinc-600 font-bold uppercase leading-relaxed tracking-widest opacity-40">Breaking frames, Building resonance. The air of the exhibition flows beyond the canvas.</p>
-           <div className="pt-8 border-t border-white/5">
-             <p className="text-[9px] text-zinc-900 font-bold uppercase italic">© 2026 UNFRAME ART COLLECTIVE. ALL RIGHTS RESERVED.</p>
-           </div>
-         </div>
-      </footer>
+      {/* Track Detail Modal */}
+      <AnimatePresence>
+        {selectedTrack && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[300] bg-black/80 backdrop-blur-xl flex items-center justify-center p-6" onClick={() => setSelectedTrack(null)}>
+            <motion.div initial={{ scale: 0.9, y: 30 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 30 }} className={`${glass} w-full max-w-6xl rounded-[5rem] overflow-hidden flex flex-col lg:flex-row`} onClick={e => e.stopPropagation()}>
+              <button onClick={() => setSelectedTrack(null)} className="absolute top-10 right-10 p-4 rounded-full bg-white/5 hover:bg-[#004aad] text-white transition-all z-50"><X className="w-6 h-6" /></button>
+              <div className="lg:w-1/2 h-96 lg:h-auto bg-zinc-950">
+                <img src={selectedTrack.image || "https://via.placeholder.com/800"} className="w-full h-full object-cover opacity-50" />
+              </div>
+              <div className="lg:w-1/2 p-12 lg:p-24 flex flex-col justify-between">
+                <div className="space-y-12">
+                  <div>
+                    <span className={subTitle + " text-sm"}>{selectedTrack.artist}</span>
+                    <h3 className={h1Title} style={{ fontSize: '4.5rem' }}>{selectedTrack.title}</h3>
+                  </div>
+                  <p className="text-xl text-zinc-400 font-light leading-relaxed italic border-l-4 border-[#004aad] pl-10 opacity-70">"{selectedTrack.description || 'Reactive audio artifact derived from exhibition coordinates.'}"</p>
+                </div>
+                <button onClick={() => { setCurrentTrackIdx(tracks.findIndex(t => t.id === selectedTrack.id)); setIsPlaying(true); setSelectedTrack(null); }} className="bg-[#004aad] text-white w-full py-8 rounded-[2rem] font-black uppercase text-sm mt-12 hover:bg-white hover:text-black transition-all">Launch Artifact</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <style>{`
         .italic-outline { -webkit-text-stroke: 1px rgba(255,255,255,0.15); color: transparent; }
+        @keyframes wave { 0%, 100% { height: 2px; } 50% { height: 12px; } }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         ::-webkit-scrollbar { width: 5px; }
         ::-webkit-scrollbar-track { background: #050505; }
-        ::-webkit-scrollbar-thumb { background: #111; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: #1a1a1a; border-radius: 10px; }
         ::-webkit-scrollbar-thumb:hover { background: #004aad; }
       `}</style>
     </div>
