@@ -46,8 +46,7 @@ const appId = 'unframe-playlist-v1';
 const ADMIN_EMAILS = ['gallerykuns@gmail.com', 'cybog2004@gmail.com', 'sylove887@gmail.com']; 
 
 // --- [🖼️ ImgBB 설정] ---
-// 여기에 본인의 ImgBB API Key를 넣으세요: https://api.imgbb.com/
-const IMGBB_API_KEY = "d1d66a67fff0404d782a4a001dfb40e2"; 
+const IMGBB_API_KEY = "6be30353a25316492323e20e066e4a2d"; 
 
 // --- [🎨 디자인 시스템] ---
 const glass = "bg-white/[0.03] backdrop-blur-[40px] border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]";
@@ -127,8 +126,27 @@ export default function App() {
     return () => { unsubTracks(); unsubLikes(); unsubProfile(); };
   }, [user]);
 
-  // 🔊 오디오 제어
-  const currentTrack = tracks[currentTrackIdx] || null;
+  // 🔊 [잠금화면 커버 대응] MediaSession 업데이트
+  useEffect(() => {
+    const track = tracks[currentTrackIdx];
+    if ('mediaSession' in navigator && track) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: track.title,
+        artist: track.artist,
+        album: 'Unframe Artifacts',
+        artwork: [
+          { src: track.image || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17", sizes: '512x512', type: 'image/png' },
+          { src: track.image || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17", sizes: '192x192', type: 'image/png' }
+        ]
+      });
+
+      // 시스템 버튼 연동
+      navigator.mediaSession.setActionHandler('play', () => playTrack());
+      navigator.mediaSession.setActionHandler('pause', () => pauseTrack());
+      navigator.mediaSession.setActionHandler('previoustrack', () => playTrack((currentTrackIdx - 1 + tracks.length) % tracks.length));
+      navigator.mediaSession.setActionHandler('nexttrack', () => playTrack((currentTrackIdx + 1) % tracks.length));
+    }
+  }, [currentTrackIdx, tracks]);
 
   const playTrack = async (idx) => {
     const audio = audioRef.current;
@@ -282,7 +300,6 @@ export default function App() {
                        <input required placeholder="TITLE" value={newTrack.title} onChange={e => setNewTrack({...newTrack, title: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-2 font-black uppercase outline-none focus:border-black" />
                        <input required placeholder="ARTIST" value={newTrack.artist} onChange={e => setNewTrack({...newTrack, artist: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-2 font-black uppercase outline-none focus:border-black" />
                        
-                       {/* 🖼️ ImgBB 이미지 업로드 버튼 */}
                        <div className="space-y-2">
                          <label className="text-[9px] font-black uppercase opacity-60">Album Jacket</label>
                          <div className="flex gap-2">
@@ -290,10 +307,10 @@ export default function App() {
                              <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
                              <div className={`p-3 rounded-xl border-2 border-dashed flex items-center justify-center gap-3 transition-all ${isUploadingImg ? 'bg-black/20 border-black' : 'border-black/20 group-hover:border-black'}`}>
                                {isUploadingImg ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                               <span className="text-[10px] font-black uppercase">{isUploadingImg ? 'Uploading...' : 'Upload Image'}</span>
+                               <span className="text-[10px] font-black uppercase text-center">{isUploadingImg ? 'Uploading...' : 'Upload Image'}</span>
                              </div>
                            </div>
-                           {newTrack.image && <div className="w-12 h-12 rounded-xl overflow-hidden border border-black/20 bg-white/10"><img src={newTrack.image} className="w-full h-full object-cover" alt="preview" /></div>}
+                           {newTrack.image && <div className="w-12 h-12 rounded-xl overflow-hidden border border-black/20 bg-white/10 flex-shrink-0"><img src={newTrack.image} className="w-full h-full object-cover" alt="preview" /></div>}
                          </div>
                          <input placeholder="Image URL (Manual)" value={newTrack.image} onChange={e => setNewTrack({...newTrack, image: e.target.value})} className="w-full bg-black/5 border-b border-black/10 p-2 text-[10px] font-medium outline-none" />
                        </div>
@@ -336,7 +353,7 @@ export default function App() {
                  <div className="flex justify-between text-[8px] font-black uppercase opacity-40"><span>{formatTime(currentTime)}</span><span>{formatTime(duration)}</span></div>
                  <div className="h-1.5 bg-white/10 rounded-full relative overflow-hidden group">
                    <div className="absolute inset-y-0 left-0 bg-[#004aad] rounded-full" style={{ width: `${(currentTime/duration)*100}%` }} />
-                   <input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => { if(audioRef.current) audioRef.current.currentTime = parseFloat(e.target.value); }} className="absolute inset-0 w-full opacity-0 cursor-pointer" />
+                   <input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => { if(audioRef.current) audioRef.current.currentTime = parseFloat(e.target.value); }} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                  </div>
                </div>
                <div className="flex items-center gap-3 ml-2">
@@ -357,7 +374,7 @@ export default function App() {
         {selectedTrack && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[300] bg-black/80 backdrop-blur-xl flex items-center justify-center p-6" onClick={() => setSelectedTrack(null)}>
             <motion.div initial={{ scale: 0.9, y: 30 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 30 }} transition={{ type: "spring", stiffness: 300, damping: 30 }} className={`${glass} w-full max-w-6xl rounded-[5rem] overflow-hidden flex flex-col lg:flex-row shadow-2xl`} onClick={e => e.stopPropagation()}>
-              <button onClick={() => setSelectedTrack(null)} className="absolute top-10 right-10 p-4 rounded-full bg-black/5 hover:bg-[#004aad] text-white transition-all z-50"><X className="w-6 h-6" /></button>
+              <button onClick={() => setSelectedTrack(null)} className="absolute top-10 right-10 p-4 rounded-full bg-white/5 hover:bg-[#004aad] text-white transition-all z-50"><X className="w-6 h-6" /></button>
               <div className="lg:w-1/2 h-96 lg:h-auto bg-zinc-950 flex items-center justify-center relative"><img src={selectedTrack.image || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe"} className="w-full h-full object-cover opacity-50" /><div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" /></div>
               <div className="lg:w-1/2 p-12 lg:p-24 flex flex-col justify-between">
                 <div className="space-y-12"><div><span className={subTitle + " text-sm"}>{selectedTrack.artist}</span><h3 className={h1Title} style={{ fontSize: '4.5rem' }}>{selectedTrack.title}</h3></div><p className="text-xl lg:text-2xl text-zinc-400 font-light leading-relaxed italic border-l-4 border-[#004aad] pl-10 opacity-70">"{selectedTrack.description || 'Sonic artifact derived from exhibition coordinates.'}"</p></div>
