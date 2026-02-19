@@ -1,16 +1,27 @@
 <!doctype html>
-<html lang="en">
+<html lang="ko">
   <head>
-    <link rel="manifest" href="/manifest.json">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-4.  아이폰(Safari) 테스트: 사파리에서 사이트 접속 후 하단의 '공유(Share)' 버튼을 누르고 '홈 화면에 추가(Add to Home Screen)'를 선택하세요.
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    
+    <!-- PWA & Mobile App Settings -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Unframe">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#050505">
+    
+    <!-- iOS Touch Icon (manifest의 아이콘과 일치하는 경로 권장) -->
+    <link rel="apple-touch-icon" href="https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=192&h=192&fit=crop">
+
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>unframe-playlist</title>
+    <title>Unframe. | Sonic Artifacts</title>
+
+    <!-- Preconnect to improve performance for fonts/images -->
+    <link rel="preconnect" href="https://images.unsplash.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
   </head>
-  <body>
+  <body style="margin: 0; background-color: #050505;">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
