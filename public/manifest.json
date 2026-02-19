@@ -1,26 +1,21 @@
 {
-"short_name": "Unframe",
-"name": "Unframe Art Playlist",
-"icons": [
-{
-"src": "https://grainy-gradients.vercel.app/noise.svg",
-"sizes": "64x64 32x32 24x24 16x16",
-"type": "image/svg+xml"
-},
-{
-"src": "https://www.google.com/search?q=https://via.placeholder.com/192/004aad/ffffff%3Ftext%3DU",
-"type": "image/png",
-"sizes": "192x192"
-},
-{
-"src": "https://www.google.com/search?q=https://via.placeholder.com/512/004aad/ffffff%3Ftext%3DUNFRAME",
-"type": "image/png",
-"sizes": "512x512"
-}
-],
-"start_url": ".",
-"display": "standalone",
-"theme_color": "#050505",
-"background_color": "#050505",
-"orientation": "portrait"
+  "short_name": "Unframe",
+  "name": "Unframe Art Playlist",
+  "icons": [
+    {
+      "src": "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=192&h=192&fit=crop",
+      "sizes": "192x192",
+      "type": "image/jpeg"
+    },
+    {
+      "src": "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=512&h=512&fit=crop",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#050505",
+  "background_color": "#050505",
+  "orientation": "portrait"
 }
