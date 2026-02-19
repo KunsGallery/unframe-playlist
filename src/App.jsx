@@ -50,6 +50,15 @@ const glass = "bg-white/[0.03] backdrop-blur-[40px] border border-white/10 shado
 const h1Title = "font-black uppercase tracking-[-0.07em] leading-[0.8] italic";
 const subTitle = "font-bold uppercase tracking-[0.4em] text-[#004aad]";
 
+// 드롭박스 링크를 모바일용 직링크로 변환하는 유틸리티
+const getDirectLink = (url) => {
+  if (!url) return "";
+  if (url.includes("dropbox.com")) {
+    return url.replace("www.dropbox.com", "dl.dropboxusercontent.com").replace(/\?dl=\d/, "").replace(/&dl=\d/, "");
+  }
+  return url;
+};
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -77,36 +86,56 @@ export default function App() {
   const audioRef = useRef(null);
   const audioIntensityRef = useRef(0);
 
-  // 1. [🔐 인증 로직]
+  // 1. [🔐 통합 인증 로직 - RULE 3]
   useEffect(() => {
     let isMounted = true;
-    const unsubscribe = onAuthStateChanged(auth, async (u) => {
-      if (isMounted) {
-        if (!u) {
-          try { await signInAnonymously(auth); } catch (e) { console.error(e); }
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else if (!auth.currentUser) {
+          await signInAnonymously(auth);
         }
+      } catch (err) {
+        console.error("Auth Fail:", err);
+      }
+    };
+
+    initAuth();
+
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      if (isMounted) {
         setUser(u);
         setIsAdmin(u && u.email && ADMIN_EMAILS.includes(u.email));
-        setLoading(false);
+        // 인증이 확인된 후 로딩 해제 (리스트가 안 보이는 현상 방지)
+        if (u) setLoading(false);
       }
     });
+
     return () => { isMounted = false; unsubscribe(); };
   }, []);
 
-  // 2. [📊 데이터 실시간 동기화]
+  // 2. [📊 데이터 실시간 동기화 - RULE 1, 2]
   useEffect(() => {
     if (!user) return;
+
+    // 공용 트랙 데이터
     const tracksRef = collection(db, 'artifacts', appId, 'public', 'data', 'tracks');
     const unsubTracks = onSnapshot(query(tracksRef), (snap) => {
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setTracks(data.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
+    }, (err) => {
+      console.error("Firestore Error:", err);
+      if (err.code === 'permission-denied') setAuthError("데이터 접근 권한이 없습니다.");
     });
 
+    // 개인 좋아요 데이터
     const likesRef = collection(db, 'artifacts', appId, 'users', user.uid, 'likes');
     const unsubLikes = onSnapshot(likesRef, (snap) => {
       setUserLikes(snap.docs.map(d => d.id));
     });
 
+    // 프로필 데이터
     const profileRef = doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'stats');
     const unsubProfile = onSnapshot(profileRef, (snap) => {
       if (snap.exists()) setUserProfile(snap.data());
@@ -116,7 +145,7 @@ export default function App() {
     return () => { unsubTracks(); unsubLikes(); unsubProfile(); };
   }, [user]);
 
-  // 3. [🔊 모바일 대응 핵심 오디오 제어]
+  // 3. [🔊 오디오 엔진 제어]
   const currentTrack = tracks[currentTrackIdx] || null;
 
   const unlockAudio = () => {
@@ -127,7 +156,6 @@ export default function App() {
     }
   };
 
-  // 모바일에서 끊김 없는 재생을 위해 Audio 객체에 직접 접근하는 함수
   const playTrack = async (idx) => {
     unlockAudio();
     const audio = audioRef.current;
@@ -137,9 +165,11 @@ export default function App() {
     const targetTrack = tracks[targetIdx];
     if (!targetTrack) return;
 
-    // 만약 다른 곡이라면 src를 먼저 교체
-    if (audio.src !== targetTrack.audioUrl) {
-      audio.src = targetTrack.audioUrl;
+    const directUrl = getDirectLink(targetTrack.audioUrl);
+
+    // 트랙 변경 시 강제 로드
+    if (audio.src !== directUrl) {
+      audio.src = directUrl;
       audio.load();
     }
 
@@ -147,11 +177,12 @@ export default function App() {
     setIsPlaying(true);
 
     try {
-      // 사용자의 클릭 이벤트 핸들러 내에서 즉시 호출되어야 함
       await audio.play();
+      setAuthError(null);
     } catch (e) {
-      console.error("Mobile Play Blocked:", e);
+      console.error("Playback Blocked:", e);
       setIsPlaying(false);
+      setAuthError("모바일에서 재생이 차단되었습니다. 화면을 한 번 터치한 후 다시 시도하세요.");
     }
   };
 
@@ -165,7 +196,6 @@ export default function App() {
     else playTrack();
   };
 
-  // 볼륨 동기화
   useEffect(() => {
     if (!audioRef.current) return;
     audioRef.current.volume = isMuted ? 0 : volume;
@@ -253,7 +283,7 @@ export default function App() {
     <div className="min-h-screen bg-[#050505] text-zinc-100 font-sans selection:bg-[#004aad] overflow-x-hidden relative" onClick={unlockAudio}>
       <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none z-0" />
       
-      {/* 🔊 네이티브 오디오 (가장 안쪽 레벨에서 상시 유지) */}
+      {/* 🔊 네이티브 오디오 (리다이렉트 차단 방지를 위해 직접 제어) */}
       <audio
         ref={audioRef}
         onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
@@ -262,7 +292,6 @@ export default function App() {
         onWaiting={() => setIsBuffering(true)}
         onPlaying={() => setIsBuffering(false)}
         onPlay={recordPlayHistory}
-        onError={() => setAuthError("재생 실패: 링크가 올바른지 확인하세요.")}
         playsInline
       />
 
@@ -317,7 +346,7 @@ export default function App() {
               <div className="max-w-2xl mx-auto py-20 text-center"><div className={`${glass} p-16 rounded-[4rem]`}><Smartphone className="w-16 h-16 mx-auto mb-8 text-[#004aad]" /><h2 className="text-4xl font-black uppercase italic tracking-tighter">Sync Archive</h2><button onClick={() => signInWithPopup(auth, new GoogleAuthProvider())} className="mt-12 bg-white text-black px-16 py-6 rounded-full font-black uppercase text-xs hover:bg-[#004aad] hover:text-white transition-all shadow-2xl">Connect Google Account</button></div></div>
             ) : (
               <div className="grid lg:grid-cols-12 gap-16">
-                <div className="lg:col-span-4 space-y-8"><div className={`${glass} p-10 rounded-[3rem] text-center`}><div className="w-24 h-24 bg-indigo-600 rounded-full mx-auto mb-6 flex items-center justify-center shadow-2xl"><User className="w-10 h-10 text-white" /></div><h2 className="text-2xl font-black uppercase italic tracking-tighter">{user?.displayName}</h2><div className="grid grid-cols-2 gap-4 mt-12 border-t border-white/5 pt-10"><div><p className="text-[9px] font-black text-zinc-600 uppercase">Records</p><p className="text-3xl font-black text-[#004aad]">{userProfile.listenCount || 0}</p></div><div><p className="text-[9px] font-black text-zinc-600 uppercase">Collection</p><p className="text-3xl font-black text-white">{userLikes.length}</p></div></div><button onClick={() => signOut(auth)} className="mt-10 text-[10px] uppercase underline opacity-30 hover:opacity-100 transition-opacity">Sign Out</button></div></div>
+                <div className="lg:col-span-4 space-y-8"><div className={`${glass} p-10 rounded-[3rem] text-center`}><div className="w-24 h-24 bg-indigo-600 rounded-full mx-auto mb-6 flex items-center justify-center shadow-2xl"><User className="w-10 h-10 text-white" /></div><h2 className="text-2xl font-black uppercase italic tracking-tighter">{user?.displayName}</h2><div className="grid grid-cols-2 gap-4 mt-12 border-t border-white/5 pt-10"><div><p className="text-[9px] font-black text-zinc-600 uppercase">Records</p><p className="text-3xl font-black text-[#004aad]">{userProfile.listenCount || 0}</p></div><div><p className="text-[9px] font-black text-zinc-600 uppercase">Liked</p><p className="text-3xl font-black text-white">{userLikes.length}</p></div></div><button onClick={() => signOut(auth)} className="mt-10 text-[10px] uppercase underline opacity-30 hover:opacity-100 transition-opacity">Sign Out</button></div></div>
                 <div className="lg:col-span-8 space-y-12"><h2 className={`${h1Title} text-7xl lg:text-9xl`}>Personal Library</h2><div className="grid gap-4">
                   {likedTracks.map(t => (
                     <div key={t.id} onClick={() => setSelectedTrack(t)} className={`${glass} p-8 rounded-[2.5rem] flex justify-between items-center group cursor-pointer`}><p className="text-2xl font-black uppercase">{t.title} <span className="text-xs opacity-30 ml-4">{t.artist}</span></p><button onClick={(e) => handleToggleLike(e, t.id)} className="p-4 text-red-500"><Heart className="w-6 h-6 fill-current" /></button></div>
