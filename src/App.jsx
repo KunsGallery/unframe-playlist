@@ -24,7 +24,8 @@ import {
 import { 
   Play, Pause, SkipBack, SkipForward, 
   Trash2, LogIn, ShieldCheck, AlertCircle,
-  Loader2, Music, X, Heart, Award, User, Smartphone, Globe, Share, ExternalLink
+  Loader2, Music, X, Heart, Award, User, Smartphone, Globe, Share, ExternalLink,
+  Volume2, VolumeX, Volume1
 } from 'lucide-react';
 import ReactPlayer from 'react-player';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -43,7 +44,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = 'unframe-playlist-v1';
-const ADMIN_EMAILS = ['gallerykuns@gmail.com', 'sylove887@gmail.com']; 
+const ADMIN_EMAILS = ['gallerykuns@gmail.com', 'cybog2004@gmail.com', 'sylove887@gmail.com']; 
 
 // --- [🎨 디자인 시스템 상수] ---
 const glass = "bg-white/[0.03] backdrop-blur-[40px] border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]";
@@ -65,8 +66,9 @@ export default function App() {
   const [currentTrackIdx, setCurrentTrackIdx] = useState(0);
   const [played, setPlayed] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(0.8); // 0 to 1
+  const [isMuted, setIsMuted] = useState(false);
   
-  // 관리자 트랙 추가 상태 (Storage 제거 후 단순 URL 입력 방식)
   const [newTrack, setNewTrack] = useState({ 
     title: '', artist: '', image: '', description: '', tag: 'Artifact', audioUrl: '' 
   });
@@ -77,7 +79,7 @@ export default function App() {
   const canvasRef = useRef(null);
   const audioIntensityRef = useRef(0);
 
-  // 1. [🔐 인증 로직 - RULE 3 준수]
+  // 1. [🔐 인증 로직]
   useEffect(() => {
     let isMounted = true;
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
@@ -99,27 +101,23 @@ export default function App() {
     return () => { isMounted = false; unsubscribe(); };
   }, []);
 
-  // 2. [📊 데이터 실시간 동기화 - RULE 1, 2 준수]
+  // 2. [📊 데이터 실시간 동기화]
   useEffect(() => {
     if (!user) return;
 
-    // 공용 트랙 리스트 가져오기
     const tracksRef = collection(db, 'artifacts', appId, 'public', 'data', 'tracks');
     const unsubTracks = onSnapshot(query(tracksRef), (snap) => {
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      // 클라이언트 측 메모리 정렬 (Rule 2 준수)
       setTracks(data.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
     }, (err) => { 
-      if (err.code === 'permission-denied') setAuthError("Database Access Denied. Check Rules."); 
+      if (err.code === 'permission-denied') setAuthError("데이터 접근 권한이 없습니다."); 
     });
 
-    // 사용자 개인 좋아요 리스트
     const likesRef = collection(db, 'artifacts', appId, 'users', user.uid, 'likes');
     const unsubLikes = onSnapshot(query(likesRef), (snap) => {
       setUserLikes(snap.docs.map(d => d.id));
     });
 
-    // 사용자 프로필 및 리워드 통계
     const profileRef = doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'stats');
     const unsubProfile = onSnapshot(profileRef, (snap) => {
       if (snap.exists()) setUserProfile(snap.data());
@@ -129,7 +127,7 @@ export default function App() {
     return () => { unsubTracks(); unsubLikes(); unsubProfile(); };
   }, [user]);
 
-  // 3. [🔊 미디어 세션 설정 - 잠금 화면 및 백그라운드 재생 제어]
+  // 3. [🔊 미디어 세션 설정]
   useEffect(() => {
     const currentTrack = tracks[currentTrackIdx];
     if ('mediaSession' in navigator && currentTrack) {
@@ -167,8 +165,6 @@ export default function App() {
     const draw = () => {
       ctx.fillStyle = '#050505';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
-      // 음악 재생 상태에 따른 입자 반응도 설정
       const intensity = isPlaying ? 0.4 : 0;
       audioIntensityRef.current = intensity;
 
@@ -180,10 +176,8 @@ export default function App() {
         
         ctx.fillStyle = grad;
         ctx.beginPath(); ctx.arc(p.x, p.y, currentR, 0, Math.PI * 2); ctx.fill();
-        
         p.x += p.vx * (1 + intensity * 6);
         p.y += p.vy * (1 + intensity * 6);
-
         if (p.x < -currentR) p.x = canvas.width + currentR;
         if (p.x > canvas.width + currentR) p.x = -currentR;
         if (p.y < -currentR) p.y = canvas.height + currentR;
@@ -192,7 +186,12 @@ export default function App() {
       animationFrameId = requestAnimationFrame(draw);
     };
 
-    const handleResize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; createParticles(); };
+    const handleResize = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      createParticles();
+    };
+
     handleResize(); draw();
     window.addEventListener('resize', handleResize);
     window.addEventListener('scroll', () => setScrolled(window.scrollY > 50));
@@ -214,7 +213,6 @@ export default function App() {
     const newCount = (userProfile.listenCount || 0) + 1;
     let newRewards = [...(userProfile.rewards || [])];
 
-    // 리워드 로직 (10회, 50회 청취 시 칭호 부여)
     if (newCount === 10 && !newRewards.includes('Aesthetic Ear')) newRewards.push('Aesthetic Ear');
     if (newCount === 50 && !newRewards.includes('Artifact Master')) newRewards.push('Artifact Master');
 
@@ -233,9 +231,8 @@ export default function App() {
         ...newTrack, 
         createdAt: Date.now() 
       });
-      // 입력 폼 초기화
       setNewTrack({ title: '', artist: '', image: '', description: '', tag: 'Artifact', audioUrl: '' });
-    } catch (err) { setAuthError("Failed to deploy track."); }
+    } catch (err) { setAuthError("트랙 등록에 실패했습니다."); }
   };
 
   const currentTrack = tracks[currentTrackIdx] || null;
@@ -249,19 +246,29 @@ export default function App() {
       <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none z-0" />
       <div className="fixed inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.03] pointer-events-none z-10 mix-blend-overlay"></div>
 
-      {currentTrack && (
-        <ReactPlayer
-          url={currentTrack.audioUrl} 
-          playing={isPlaying} 
-          width="0" height="0" 
-          playsinline={true}
-          onProgress={(s) => setPlayed(s.played)} 
-          onDuration={setDuration}
-          onStart={recordPlayHistory} 
-          onEnded={() => setCurrentTrackIdx(p => (p + 1) % tracks.length)}
-          config={{ youtube: { playerVars: { origin: window.location.origin } } }}
-        />
-      )}
+      {/* 오디오 플레이어 */}
+      <div className="fixed opacity-0 pointer-events-none" style={{ left: '-9999px' }}>
+        {currentTrack && (
+          <ReactPlayer
+            url={currentTrack.audioUrl} 
+            playing={isPlaying} 
+            volume={volume}
+            muted={isMuted}
+            width="64px" 
+            height="64px" 
+            playsinline={true}
+            onProgress={(s) => setPlayed(s.played)} 
+            onDuration={setDuration}
+            onStart={recordPlayHistory} 
+            onEnded={() => setCurrentTrackIdx(p => (p + 1) % tracks.length)}
+            onError={() => setAuthError("오디오 재생 오류: 링크를 확인해주세요.")}
+            config={{ 
+              youtube: { playerVars: { origin: window.location.origin, autoplay: 1 } },
+              soundcloud: { options: { auto_play: true } }
+            }}
+          />
+        )}
+      </div>
 
       {/* --- Navigation --- */}
       <header className={`fixed top-0 w-full z-[100] transition-all duration-500 ${scrolled ? 'py-4 bg-black/40 backdrop-blur-xl border-b border-white/5' : 'py-10'}`}>
@@ -302,7 +309,6 @@ export default function App() {
                   </div>
                 </motion.div>
               ))}
-              {tracks.length === 0 && <div className="py-40 text-center opacity-20"><Music className="w-16 h-16 mx-auto mb-6" /><p className="font-black uppercase tracking-widest">Waiting for artifacts...</p></div>}
             </section>
           </motion.div>
         )}
@@ -325,17 +331,8 @@ export default function App() {
                     <div className="w-24 h-24 bg-indigo-600 rounded-full mx-auto mb-6 flex items-center justify-center shadow-indigo-500/20 shadow-2xl"><User className="w-10 h-10 text-white" /></div>
                     <h2 className="text-2xl font-black uppercase italic tracking-tighter">{user?.displayName}</h2>
                     <div className="grid grid-cols-2 gap-4 mt-12 border-t border-white/5 pt-10">
-                      <div><p className="text-[9px] font-black text-zinc-600 uppercase">Listen Records</p><p className="text-3xl font-black text-[#004aad]">{userProfile.listenCount || 0}</p></div>
+                      <div><p className="text-[9px] font-black text-zinc-600 uppercase">Records</p><p className="text-3xl font-black text-[#004aad]">{userProfile.listenCount || 0}</p></div>
                       <div><p className="text-[9px] font-black text-zinc-600 uppercase">Collection</p><p className="text-3xl font-black text-white">{userLikes.length}</p></div>
-                    </div>
-                    <button onClick={() => signOut(auth)} className="mt-10 text-[10px] uppercase underline opacity-30 hover:opacity-100">Sign Out</button>
-                  </div>
-                  <div className={`${glass} p-10 rounded-[3rem]`}>
-                    <h3 className="text-xs font-black uppercase tracking-[0.4em] text-[#004aad] mb-8 flex items-center gap-3"><Award className="w-4 h-4" /> Rewards</h3>
-                    <div className="flex flex-wrap gap-3">
-                      {userProfile.rewards?.length > 0 ? userProfile.rewards.map(r => (
-                        <span key={r} className="px-4 py-2 bg-indigo-500/20 border border-indigo-500/30 rounded-full text-[9px] font-black uppercase tracking-widest text-indigo-300">{r}</span>
-                      )) : <p className="text-[10px] text-zinc-600 font-bold tracking-widest leading-relaxed">트랙을 감상하여 특별한 리워드를 해제하세요.</p>}
                     </div>
                   </div>
                 </div>
@@ -364,14 +361,13 @@ export default function App() {
                 {!isAdmin ? (
                    <div className={glass + " p-20 rounded-[4rem] text-center"}>
                      <ShieldCheck className="w-16 h-16 mx-auto mb-8 text-[#004aad]" />
-                     <h3 className="text-3xl font-black uppercase mb-10 italic">Authorized Identity Required</h3>
                      <button onClick={handleLogin} className="bg-[#004aad] text-white px-16 py-6 rounded-full font-black uppercase text-xs hover:bg-white hover:text-black transition-all">Verify via Google</button>
                    </div>
                 ) : (
                   <div className="space-y-4">
                     {tracks.map(t => (
                       <div key={t.id} className={`${glass} p-6 px-10 rounded-3xl flex justify-between items-center`}>
-                        <p className="font-black uppercase tracking-tight text-xl">{t.title} <span className="opacity-30 ml-4 text-xs font-bold tracking-widest">{t.artist}</span></p>
+                        <p className="font-black uppercase tracking-tight text-xl">{t.title}</p>
                         <button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tracks', t.id))} className="p-3 text-red-500/30 hover:text-red-500 transition-colors"><Trash2 className="w-5 h-5" /></button>
                       </div>
                     ))}
@@ -385,8 +381,8 @@ export default function App() {
                     <form onSubmit={handleAddTrack} className="space-y-6">
                        <input required placeholder="TITLE" value={newTrack.title} onChange={e => setNewTrack({...newTrack, title: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-2 font-black uppercase outline-none focus:border-black" />
                        <input required placeholder="ARTIST" value={newTrack.artist} onChange={e => setNewTrack({...newTrack, artist: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-2 font-black uppercase outline-none focus:border-black" />
-                       <input required placeholder="AUDIO URL (DIRECT LINK)" value={newTrack.audioUrl} onChange={e => setNewTrack({...newTrack, audioUrl: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-2 font-black outline-none focus:border-black" />
-                       <input placeholder="IMAGE URL (DIRECT LINK)" value={newTrack.image} onChange={e => setNewTrack({...newTrack, image: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-2 font-black outline-none focus:border-black" />
+                       <input required placeholder="AUDIO URL" value={newTrack.audioUrl} onChange={e => setNewTrack({...newTrack, audioUrl: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-2 font-black outline-none focus:border-black" />
+                       <input placeholder="IMAGE URL" value={newTrack.image} onChange={e => setNewTrack({...newTrack, image: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-2 font-black outline-none focus:border-black" />
                        <textarea placeholder="DESCRIPTION" value={newTrack.description} onChange={e => setNewTrack({...newTrack, description: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-2 font-medium text-sm outline-none focus:border-black h-24 resize-none" />
                        <button type="submit" className="w-full bg-black text-white py-6 mt-10 rounded-3xl font-black uppercase text-xs hover:bg-zinc-900 transition-all shadow-xl">Artifact Sync</button>
                     </form>
@@ -400,29 +396,49 @@ export default function App() {
 
       {/* Floating Player Bar */}
       {currentTrack && (
-        <motion.div initial={{ y: 120 }} animate={{ y: 0 }} className="fixed bottom-10 left-0 w-full z-[200] px-8 flex justify-center pointer-events-none">
-          <div className={`${glass} w-full max-w-3xl p-5 px-10 rounded-full flex items-center justify-between pointer-events-auto border-white/20 shadow-2xl`}>
-            <div className="flex items-center gap-6 min-w-0">
+        <motion.div initial={{ y: 120 }} animate={{ y: 0 }} className="fixed bottom-10 left-0 w-full z-[200] px-4 lg:px-8 flex justify-center pointer-events-none">
+          <div className={`${glass} w-full max-w-4xl p-5 px-6 lg:px-10 rounded-full flex flex-col lg:flex-row items-center gap-4 lg:gap-10 pointer-events-auto border-white/20 shadow-2xl`}>
+            
+            {/* Info & Core Controls */}
+            <div className="flex items-center gap-6 min-w-0 flex-1">
               <div className="w-14 h-14 rounded-full bg-zinc-800 overflow-hidden flex-shrink-0 relative shadow-2xl group cursor-pointer" onClick={() => setSelectedTrack(currentTrack)}>
                 <img src={currentTrack.image || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17"} className={`w-full h-full object-cover ${isPlaying ? 'animate-[spin_20s_linear_infinite]' : ''}`} />
                 <div className={`absolute inset-0 bg-[#004aad]/20 mix-blend-overlay transition-opacity ${isPlaying ? 'opacity-100' : 'opacity-0'}`} />
               </div>
-              <div className="truncate pr-4">
+              <div className="truncate pr-4 flex-1">
                 <p className="text-lg font-black uppercase truncate leading-none">{currentTrack.title}</p>
                 <div className="flex items-center gap-2 mt-2">
                   <p className="text-[11px] text-[#004aad] font-bold uppercase tracking-[0.2em]">{currentTrack.artist}</p>
                   {isPlaying && <span className="flex gap-0.5 items-end h-2 w-4"><span className="w-1 bg-[#004aad] animate-[wave_0.8s_ease-in-out_infinite]"></span><span className="w-1 bg-[#004aad] animate-[wave_1.1s_ease-in-out_infinite]"></span><span className="w-1 bg-[#004aad] animate-[wave_0.9s_ease-in-out_infinite]"></span></span>}
                 </div>
               </div>
+              
+              <div className="flex items-center gap-3">
+                <button onClick={() => setCurrentTrackIdx(p => (p - 1 + tracks.length) % tracks.length)} className="p-2 text-zinc-600 hover:text-white transition-colors"><SkipBack className="w-5 h-5 fill-current" /></button>
+                <button onClick={() => setIsPlaying(!isPlaying)} className="w-14 h-14 bg-white text-black rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-2xl">
+                  {isPlaying ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 fill-current ml-1" />}
+                </button>
+                <button onClick={() => setCurrentTrackIdx(p => (p + 1) % tracks.length)} className="p-2 text-zinc-600 hover:text-white transition-colors"><SkipForward className="w-5 h-5 fill-current" /></button>
+              </div>
             </div>
-            <div className="flex items-center gap-6">
-              <button onClick={(e) => handleToggleLike(e, currentTrack.id)} className={`p-2 transition-transform hover:scale-110 ${userLikes.includes(currentTrack.id) ? 'text-red-500' : 'text-zinc-600'}`}><Heart className={`w-6 h-6 ${userLikes.includes(currentTrack.id) ? 'fill-current' : ''}`} /></button>
-              <button onClick={() => setCurrentTrackIdx(p => (p - 1 + tracks.length) % tracks.length)} className="p-2 text-zinc-600 hover:text-white transition-colors"><SkipBack className="w-6 h-6 fill-current" /></button>
-              <button onClick={() => setIsPlaying(!isPlaying)} className="w-16 h-16 bg-white text-black rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-2xl">
-                {isPlaying ? <Pause className="w-7 h-7 fill-current" /> : <Play className="w-7 h-7 fill-current ml-1" />}
+
+            {/* Volume Control */}
+            <div className="flex items-center gap-4 w-full lg:w-40 px-4 lg:px-0 border-t lg:border-t-0 lg:border-l border-white/10 pt-4 lg:pt-0">
+              <button onClick={() => setIsMuted(!isMuted)} className="text-zinc-500 hover:text-white transition-colors">
+                {isMuted || volume === 0 ? <VolumeX className="w-5 h-5" /> : volume < 0.5 ? <Volume1 className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
               </button>
-              <button onClick={() => setCurrentTrackIdx(p => (p + 1) % tracks.length)} className="p-2 text-zinc-600 hover:text-white transition-colors"><SkipForward className="w-6 h-6 fill-current" /></button>
+              <input 
+                type="range" min="0" max="1" step="0.01" 
+                value={volume} 
+                onChange={(e) => { setVolume(parseFloat(e.target.value)); if(isMuted) setIsMuted(false); }}
+                className="flex-1 h-1 bg-white/10 rounded-full appearance-none cursor-pointer accent-[#004aad]"
+              />
             </div>
+
+            {/* Like Button */}
+            <button onClick={(e) => handleToggleLike(e, currentTrack.id)} className={`p-2 transition-transform hover:scale-110 hidden lg:block ${userLikes.includes(currentTrack.id) ? 'text-red-500' : 'text-zinc-600'}`}>
+              <Heart className={`w-6 h-6 ${userLikes.includes(currentTrack.id) ? 'fill-current' : ''}`} />
+            </button>
           </div>
         </motion.div>
       )}
@@ -433,8 +449,9 @@ export default function App() {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[300] bg-black/80 backdrop-blur-xl flex items-center justify-center p-6" onClick={() => setSelectedTrack(null)}>
             <motion.div initial={{ scale: 0.9, y: 30 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 30 }} className={`${glass} w-full max-w-6xl rounded-[5rem] overflow-hidden flex flex-col lg:flex-row shadow-2xl`} onClick={e => e.stopPropagation()}>
               <button onClick={() => setSelectedTrack(null)} className="absolute top-10 right-10 p-4 rounded-full bg-white/5 hover:bg-[#004aad] text-white transition-all z-50"><X className="w-6 h-6" /></button>
-              <div className="lg:w-1/2 h-96 lg:h-auto bg-zinc-950 flex items-center justify-center">
+              <div className="lg:w-1/2 h-96 lg:h-auto bg-zinc-950 flex items-center justify-center relative">
                 <img src={selectedTrack.image || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe"} className="w-full h-full object-cover opacity-50" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
               </div>
               <div className="lg:w-1/2 p-12 lg:p-24 flex flex-col justify-between">
                 <div className="space-y-12">
@@ -443,7 +460,7 @@ export default function App() {
                     <h3 className={h1Title} style={{ fontSize: '4.5rem' }}>{selectedTrack.title}</h3>
                   </div>
                   <p className="text-xl lg:text-2xl text-zinc-400 font-light leading-relaxed italic border-l-4 border-[#004aad] pl-10 opacity-70">
-                    "{selectedTrack.description || 'Reactive audio artifact derived from exhibition coordinates.'}"
+                    "{selectedTrack.description || '전시 좌표 데이터를 사운드로 변환한 디지털 아티팩트입니다.'}"
                   </p>
                 </div>
                 <button 
@@ -458,15 +475,6 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Auth Error Toast */}
-      <AnimatePresence>
-        {authError && (
-          <motion.div initial={{ opacity: 0, y: -20, x: '-50%' }} animate={{ opacity: 1, y: 0, x: '-50%' }} exit={{ opacity: 0 }} className="fixed top-24 left-1/2 z-[500] bg-red-600 px-8 py-4 rounded-3xl font-black uppercase text-[10px] flex items-center gap-4 shadow-2xl">
-            <AlertCircle className="w-4 h-4" /> {authError} <button onClick={() => setAuthError(null)} className="ml-4 opacity-50">X</button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       <style>{`
         .italic-outline { -webkit-text-stroke: 1px rgba(255,255,255,0.15); color: transparent; }
         @keyframes wave { 0%, 100% { height: 2px; } 50% { height: 12px; } }
@@ -475,6 +483,16 @@ export default function App() {
         ::-webkit-scrollbar-track { background: #050505; }
         ::-webkit-scrollbar-thumb { background: #1a1a1a; border-radius: 10px; }
         ::-webkit-scrollbar-thumb:hover { background: #004aad; }
+        
+        input[type=range]::-webkit-slider-thumb {
+          appearance: none;
+          height: 12px;
+          width: 12px;
+          border-radius: 50%;
+          background: white;
+          box-shadow: 0 0 10px rgba(0,74,173,0.5);
+          cursor: pointer;
+        }
       `}</style>
     </div>
   );
