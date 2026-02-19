@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { initializeApp } from 'firebase/app';
 import { 
   getAuth, 
@@ -25,7 +25,7 @@ import {
   Play, Pause, SkipBack, SkipForward, 
   Trash2, LogIn, ShieldCheck, AlertCircle,
   Loader2, Music, X, Heart, Award, User, Smartphone, Globe, Share,
-  Volume2, VolumeX, Volume1, ImageIcon, Upload
+  Volume2, VolumeX, Volume1, ImageIcon, Upload, Download, ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -90,21 +90,26 @@ export default function App() {
   const [authError, setAuthError] = useState(null);
   const [isBuffering, setIsBuffering] = useState(false);
   
-  const canvasRef = useRef(null);
+  // PWA 설치 관련 상태
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [showInstallGuide, setShowInstallGuide] = useState(false);
+  
   const audioRef = useRef(null);
 
-  // 🔊 [중요] ReferenceError 방지를 위해 tracks 선언 이후 즉시 정의
+  // 🔊 현재 트랙 데이터 계산 (오류 방지를 위해 상단 배치)
   const currentTrack = tracks.length > 0 ? tracks[currentTrackIdx] : null;
 
-  // 🔐 인증
+  // 🔐 인증 및 PWA 설치 이벤트 리스너
   useEffect(() => {
     let isMounted = true;
+    
     const initAuth = async () => {
       try {
         if (!auth.currentUser) await signInAnonymously(auth);
       } catch (err) { console.error(err); }
     };
     initAuth();
+
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       if (isMounted) {
         setUser(u);
@@ -112,7 +117,19 @@ export default function App() {
         if (u) setLoading(false);
       }
     });
-    return () => { isMounted = false; unsubscribe(); };
+
+    // 안드로이드/크롬 설치 프롬프트 캡처
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => { 
+      isMounted = false; 
+      unsubscribe(); 
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
   }, []);
 
   // 📊 데이터 연동
@@ -129,16 +146,22 @@ export default function App() {
     return () => { unsubTracks(); unsubLikes(); unsubProfile(); };
   }, [user]);
 
-  // 🔊 [잠금화면 커버 대응] MediaSession 업데이트
-  useEffect(() => {
+  // 🔊 [잠금화면 고도화] MediaSession 업데이트 함수
+  const updateMediaMetadata = useCallback(() => {
     if ('mediaSession' in navigator && currentTrack) {
+      const artworkUrl = currentTrack.image || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17";
+      
       navigator.mediaSession.metadata = new MediaMetadata({
         title: currentTrack.title,
         artist: currentTrack.artist,
         album: 'Unframe Artifacts',
         artwork: [
-          { src: currentTrack.image || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17", sizes: '512x512', type: 'image/png' },
-          { src: currentTrack.image || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17", sizes: '192x192', type: 'image/png' }
+          { src: artworkUrl, sizes: '96x96',   type: 'image/png' },
+          { src: artworkUrl, sizes: '128x128', type: 'image/png' },
+          { src: artworkUrl, sizes: '192x192', type: 'image/png' },
+          { src: artworkUrl, sizes: '256x256', type: 'image/png' },
+          { src: artworkUrl, sizes: '384x384', type: 'image/png' },
+          { src: artworkUrl, sizes: '512x512', type: 'image/png' },
         ]
       });
 
@@ -146,9 +169,22 @@ export default function App() {
       navigator.mediaSession.setActionHandler('pause', () => pauseTrack());
       navigator.mediaSession.setActionHandler('previoustrack', () => playTrack((currentTrackIdx - 1 + tracks.length) % tracks.length));
       navigator.mediaSession.setActionHandler('nexttrack', () => playTrack((currentTrackIdx + 1) % tracks.length));
+      
+      if ('setPositionState' in navigator.mediaSession) {
+        navigator.mediaSession.setPositionState({
+          duration: isFinite(duration) ? duration : 0,
+          playbackRate: 1,
+          position: isFinite(currentTime) ? currentTime : 0,
+        });
+      }
     }
-  }, [currentTrack, tracks.length]);
+  }, [currentTrack, currentTrackIdx, tracks.length, duration, currentTime]);
 
+  useEffect(() => {
+    updateMediaMetadata();
+  }, [currentTrackIdx, tracks.length, isPlaying, updateMediaMetadata]);
+
+  // --- [🚀 오디오 제어] ---
   const unlockAudio = () => {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (AudioContext) {
@@ -168,7 +204,6 @@ export default function App() {
 
     const directUrl = getDirectLink(targetTrack.audioUrl);
     
-    // 모바일 대응: 클릭 시 즉시 src 교체 및 load
     if (audio.src !== directUrl) {
       audio.src = directUrl;
       audio.load();
@@ -179,10 +214,11 @@ export default function App() {
 
     try {
       await audio.play();
+      updateMediaMetadata(); 
     } catch (e) {
-      console.error("Playback Blocked:", e);
+      console.error("Play Blocked:", e);
       setIsPlaying(false);
-      setAuthError("재생이 차단되었습니다. 화면을 터치한 후 다시 시도하세요.");
+      setAuthError("재생이 차단되었습니다. 화면을 터치하세요.");
     }
   };
 
@@ -197,7 +233,29 @@ export default function App() {
     if (audioRef.current) audioRef.current.volume = isMuted ? 0 : volume;
   }, [volume, isMuted]);
 
-  // 🖼️ ImgBB 업로드 핸들러
+  // --- [📱 PWA 설치 핸들러] ---
+  const handleInstallApp = async () => {
+    // iOS Safari 체크
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+
+    if (isStandalone) {
+      setAuthError("이미 앱으로 설치되어 있습니다.");
+      return;
+    }
+
+    if (isIOS) {
+      setShowInstallGuide(true);
+    } else if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') setDeferredPrompt(null);
+    } else {
+      setAuthError("사용 중인 브라우저에서는 직접 설치를 지원하지 않습니다. 메뉴에서 '홈 화면에 추가'를 찾아주세요.");
+    }
+  };
+
+  // --- [🖼️ ImgBB 업로드] ---
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -239,14 +297,21 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#050505] text-zinc-100 font-sans selection:bg-[#004aad] overflow-x-hidden relative" onClick={unlockAudio}>
-      {/* 🔊 네이티브 오디오 객체 */}
       <audio 
         ref={audioRef} 
         onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)} 
         onDurationChange={(e) => setDuration(e.currentTarget.duration)} 
         onEnded={() => playTrack((currentTrackIdx + 1) % tracks.length)} 
         onWaiting={() => setIsBuffering(true)} 
-        onPlaying={() => setIsBuffering(false)} 
+        onPlaying={() => {
+          setIsBuffering(false);
+          updateMediaMetadata(); 
+        }} 
+        onPlay={() => {
+          if (!isPlaying) setIsPlaying(true);
+          updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'stats'), { listenCount: increment(1) }).catch(()=>{});
+        }}
+        onPause={() => { if (isPlaying) setIsPlaying(false); }}
         playsInline 
       />
       
@@ -256,9 +321,10 @@ export default function App() {
             <h1 className="text-3xl font-black tracking-tighter uppercase italic leading-none group-hover:text-[#004aad] transition-colors">Unframe<span className="text-[#004aad]">.</span></h1>
             <p className={subTitle + " text-[10px] mt-1"}>Reactive Art Collective</p>
           </div>
-          <nav className="flex items-center gap-10">
+          <nav className="flex items-center gap-6 lg:gap-10">
              <button onClick={() => setView('gallery')} className={`text-[11px] font-black uppercase tracking-widest ${view === 'gallery' ? 'text-[#004aad]' : 'opacity-30'}`}>Gallery</button>
              <button onClick={() => setView('library')} className={`text-[11px] font-black uppercase tracking-widest ${view === 'library' ? 'text-[#004aad]' : 'opacity-30'}`}>Archive</button>
+             <button onClick={handleInstallApp} className="flex items-center gap-2 text-[11px] font-black uppercase tracking-widest opacity-30 hover:opacity-100 transition-all text-indigo-400"><Download className="w-3.5 h-3.5" /> App</button>
              <button onClick={() => setView('admin')} className={`text-[11px] font-black uppercase tracking-widest ${view === 'admin' ? 'text-[#004aad]' : 'opacity-30'}`}>Console</button>
           </nav>
         </div>
@@ -278,7 +344,7 @@ export default function App() {
                   <div className="flex items-center gap-10">
                     <span className="text-5xl font-thin italic text-white/5 group-hover:text-[#004aad]/20 transition-colors">{(idx + 1).toString().padStart(2, '0')}</span>
                     <div className="space-y-2">
-                      <h4 className="text-4xl lg:text-7xl font-black uppercase group-hover:italic transition-all duration-500">{track.title}</h4>
+                      <h4 className="text-3xl lg:text-7xl font-black uppercase group-hover:italic transition-all duration-500">{track.title}</h4>
                       <p className="text-xs text-zinc-500 font-bold tracking-[0.4em] uppercase">{track.artist}</p>
                     </div>
                   </div>
@@ -344,7 +410,7 @@ export default function App() {
                          </div>
                          <input placeholder="Image URL (Manual)" value={newTrack.image} onChange={e => setNewTrack({...newTrack, image: e.target.value})} className="w-full bg-black/5 border-b border-black/10 p-2 text-[10px] font-medium outline-none" />
                        </div>
-                       <input required placeholder="AUDIO URL (?dl=1)" value={newTrack.audioUrl} onChange={e => setNewTrack({...newTrack, audioUrl: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-2 font-black outline-none focus:border-black" />
+                       <input required placeholder="AUDIO URL (Archive.org/GDrive)" value={newTrack.audioUrl} onChange={e => setNewTrack({...newTrack, audioUrl: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-2 font-black outline-none focus:border-black" />
                        <textarea placeholder="DESCRIPTION" value={newTrack.description} onChange={e => setNewTrack({...newTrack, description: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-2 font-medium text-sm outline-none focus:border-black h-24 resize-none" />
                        <button type="submit" disabled={isUploadingImg} className="w-full bg-black text-white py-5 mt-6 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-zinc-900 transition-all disabled:opacity-50">Artifact Sync</button>
                     </form>
@@ -411,6 +477,36 @@ export default function App() {
                   <button onClick={(e) => handleToggleLike(e, selectedTrack.id)} className={`p-4 lg:p-8 rounded-[1.5rem] lg:rounded-[2rem] border border-white/10 mt-8 lg:mt-12 ${userLikes.includes(selectedTrack.id) ? 'text-red-500 bg-red-500/5' : 'text-zinc-500'}`}><Heart className={`w-6 h-6 ${userLikes.includes(selectedTrack.id) ? 'fill-current' : ''}`} /></button>
                 </div>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* --- 📱 iOS Install Guide Modal --- */}
+      <AnimatePresence>
+        {showInstallGuide && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[500] bg-black/90 backdrop-blur-2xl flex items-end justify-center p-6" onClick={() => setShowInstallGuide(false)}>
+            <motion.div initial={{ y: 100 }} animate={{ y: 0 }} exit={{ y: 100 }} className={`${glass} w-full max-w-md rounded-[3rem] p-10 text-center space-y-8`} onClick={e => e.stopPropagation()}>
+              <div className="w-20 h-20 bg-indigo-600 rounded-3xl mx-auto flex items-center justify-center shadow-2xl shadow-indigo-500/20">
+                <Smartphone className="w-10 h-10 text-white" />
+              </div>
+              <div className="space-y-3">
+                <h3 className="text-2xl font-black uppercase italic italic-outline tracking-tighter">Install Unframe.</h3>
+                <p className="text-xs text-zinc-400 font-bold uppercase tracking-widest leading-relaxed">
+                  아이폰에서 최상의 경험을 위해<br/>앱으로 추가하세요.
+                </p>
+              </div>
+              <div className="space-y-6 pt-4">
+                <div className="flex items-center gap-6 bg-white/5 p-4 rounded-2xl">
+                  <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-xl">1</div>
+                  <p className="text-[10px] font-black uppercase text-left">하단 메뉴 바에서 <span className="text-[#004aad]">[공유 버튼]</span>을 누르세요.</p>
+                </div>
+                <div className="flex items-center gap-6 bg-white/5 p-4 rounded-2xl">
+                  <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-xl">2</div>
+                  <p className="text-[10px] font-black uppercase text-left"><span className="text-[#004aad]">[홈 화면에 추가]</span> 메뉴를 선택하세요.</p>
+                </div>
+              </div>
+              <button onClick={() => setShowInstallGuide(false)} className="w-full py-5 bg-white text-black rounded-2xl font-black uppercase text-[10px] tracking-widest mt-4">확인했습니다</button>
             </motion.div>
           </motion.div>
         )}
