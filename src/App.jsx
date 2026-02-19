@@ -116,7 +116,7 @@ export default function App() {
     return () => { unsubTracks(); unsubLikes(); unsubProfile(); };
   }, [user]);
 
-  // 3. [🔊 오디오 제어 함수 - 모바일 대응 강화]
+  // 3. [🔊 모바일 대응 핵심 오디오 제어]
   const currentTrack = tracks[currentTrackIdx] || null;
 
   const unlockAudio = () => {
@@ -127,17 +127,31 @@ export default function App() {
     }
   };
 
+  // 모바일에서 끊김 없는 재생을 위해 Audio 객체에 직접 접근하는 함수
   const playTrack = async (idx) => {
     unlockAudio();
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const targetIdx = idx !== undefined ? idx : currentTrackIdx;
+    const targetTrack = tracks[targetIdx];
+    if (!targetTrack) return;
+
+    // 만약 다른 곡이라면 src를 먼저 교체
+    if (audio.src !== targetTrack.audioUrl) {
+      audio.src = targetTrack.audioUrl;
+      audio.load();
+    }
+
     if (idx !== undefined) setCurrentTrackIdx(idx);
     setIsPlaying(true);
-    // iOS 대응을 위해 즉시 오디오 태그에 명령을 내립니다.
-    if (audioRef.current) {
-      try {
-        await audioRef.current.play();
-      } catch (e) {
-        console.error("Play Failed", e);
-      }
+
+    try {
+      // 사용자의 클릭 이벤트 핸들러 내에서 즉시 호출되어야 함
+      await audio.play();
+    } catch (e) {
+      console.error("Mobile Play Blocked:", e);
+      setIsPlaying(false);
     }
   };
 
@@ -151,6 +165,7 @@ export default function App() {
     else playTrack();
   };
 
+  // 볼륨 동기화
   useEffect(() => {
     if (!audioRef.current) return;
     audioRef.current.volume = isMuted ? 0 : volume;
@@ -238,16 +253,16 @@ export default function App() {
     <div className="min-h-screen bg-[#050505] text-zinc-100 font-sans selection:bg-[#004aad] overflow-x-hidden relative" onClick={unlockAudio}>
       <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none z-0" />
       
-      {/* 🔊 네이티브 오디오 (CORS 방지를 위해 crossOrigin 제거) */}
+      {/* 🔊 네이티브 오디오 (가장 안쪽 레벨에서 상시 유지) */}
       <audio
         ref={audioRef}
-        src={currentTrack?.audioUrl || ''}
         onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
         onDurationChange={(e) => setDuration(e.currentTarget.duration)}
         onEnded={() => playTrack((currentTrackIdx + 1) % tracks.length)}
         onWaiting={() => setIsBuffering(true)}
         onPlaying={() => setIsBuffering(false)}
-        onError={() => setAuthError("오디오를 재생할 수 없습니다. 링크 주소를 확인하세요.")}
+        onPlay={recordPlayHistory}
+        onError={() => setAuthError("재생 실패: 링크가 올바른지 확인하세요.")}
         playsInline
       />
 
@@ -258,9 +273,9 @@ export default function App() {
             <p className={subTitle + " text-[10px] mt-1"}>Reactive Art Collective</p>
           </div>
           <nav className="flex items-center gap-10">
-             <button onClick={() => setView('gallery')} className={`text-[11px] font-black uppercase tracking-widest ${view === 'gallery' ? 'text-[#004aad]' : 'opacity-30'}`}>Gallery</button>
-             <button onClick={() => setView('library')} className={`text-[11px] font-black uppercase tracking-widest ${view === 'library' ? 'text-[#004aad]' : 'opacity-30'}`}>Archive</button>
-             <button onClick={() => setView('admin')} className={`text-[11px] font-black uppercase tracking-widest ${view === 'admin' ? 'text-[#004aad]' : 'opacity-30'}`}>Console</button>
+             <button onClick={() => setView('gallery')} className={`text-[11px] font-black uppercase tracking-widest transition-all ${view === 'gallery' ? 'text-[#004aad]' : 'opacity-30 hover:opacity-100'}`}>Gallery</button>
+             <button onClick={() => setView('library')} className={`text-[11px] font-black uppercase tracking-widest transition-all ${view === 'library' ? 'text-[#004aad]' : 'opacity-30 hover:opacity-100'}`}>Archive</button>
+             <button onClick={() => setView('admin')} className={`text-[11px] font-black uppercase tracking-widest transition-all ${view === 'admin' ? 'text-[#004aad]' : 'opacity-30 hover:opacity-100'}`}>Console</button>
           </nav>
         </div>
       </header>
@@ -295,7 +310,7 @@ export default function App() {
           </motion.div>
         )}
 
-        {/* --- Archive View --- */}
+        {/* --- Archive (Library) View --- */}
         {view === 'library' && (
           <motion.div key="library" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="relative z-20 pt-40 px-8 container mx-auto pb-40">
             {user?.isAnonymous ? (
@@ -305,7 +320,7 @@ export default function App() {
                 <div className="lg:col-span-4 space-y-8"><div className={`${glass} p-10 rounded-[3rem] text-center`}><div className="w-24 h-24 bg-indigo-600 rounded-full mx-auto mb-6 flex items-center justify-center shadow-2xl"><User className="w-10 h-10 text-white" /></div><h2 className="text-2xl font-black uppercase italic tracking-tighter">{user?.displayName}</h2><div className="grid grid-cols-2 gap-4 mt-12 border-t border-white/5 pt-10"><div><p className="text-[9px] font-black text-zinc-600 uppercase">Records</p><p className="text-3xl font-black text-[#004aad]">{userProfile.listenCount || 0}</p></div><div><p className="text-[9px] font-black text-zinc-600 uppercase">Collection</p><p className="text-3xl font-black text-white">{userLikes.length}</p></div></div><button onClick={() => signOut(auth)} className="mt-10 text-[10px] uppercase underline opacity-30 hover:opacity-100 transition-opacity">Sign Out</button></div></div>
                 <div className="lg:col-span-8 space-y-12"><h2 className={`${h1Title} text-7xl lg:text-9xl`}>Personal Library</h2><div className="grid gap-4">
                   {likedTracks.map(t => (
-                    <div key={t.id} className={`${glass} p-8 rounded-[2.5rem] flex justify-between items-center group`}><p className="text-2xl font-black uppercase">{t.title}</p><button onClick={(e) => handleToggleLike(e, t.id)} className="p-4 text-red-500"><Heart className="w-6 h-6 fill-current" /></button></div>
+                    <div key={t.id} onClick={() => setSelectedTrack(t)} className={`${glass} p-8 rounded-[2.5rem] flex justify-between items-center group cursor-pointer`}><p className="text-2xl font-black uppercase">{t.title} <span className="text-xs opacity-30 ml-4">{t.artist}</span></p><button onClick={(e) => handleToggleLike(e, t.id)} className="p-4 text-red-500"><Heart className="w-6 h-6 fill-current" /></button></div>
                   ))}
                   {likedTracks.length === 0 && <div className="py-20 text-center opacity-20"><Music className="w-12 h-12 mx-auto mb-4" /><p className="font-black uppercase tracking-widest text-xs">수집된 아티팩트가 없습니다.</p></div>}
                 </div></div>
