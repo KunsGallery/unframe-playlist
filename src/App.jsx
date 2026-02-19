@@ -71,7 +71,7 @@ export default function App() {
   const [newTrack, setNewTrack] = useState({ title: '', artist: '', image: '', description: '', tag: 'Artifact', audioUrl: '' });
   const [scrolled, setScrolled] = useState(false);
   const [authError, setAuthError] = useState(null);
-  const [isBufferring, setIsBuffering] = useState(false);
+  const [isBuffering, setIsBuffering] = useState(false);
   
   const canvasRef = useRef(null);
   const audioRef = useRef(null);
@@ -103,7 +103,9 @@ export default function App() {
     });
 
     const likesRef = collection(db, 'artifacts', appId, 'users', user.uid, 'likes');
-    const unsubLikes = onSnapshot(query(likesRef), (snap) => setUserLikes(snap.docs.map(d => d.id)));
+    const unsubLikes = onSnapshot(likesRef, (snap) => {
+      setUserLikes(snap.docs.map(d => d.id));
+    });
 
     const profileRef = doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'stats');
     const unsubProfile = onSnapshot(profileRef, (snap) => {
@@ -114,45 +116,45 @@ export default function App() {
     return () => { unsubTracks(); unsubLikes(); unsubProfile(); };
   }, [user]);
 
-  // 3. [🔊 오디오 제어 로직]
+  // 3. [🔊 오디오 제어 함수 - 모바일 대응 강화]
   const currentTrack = tracks[currentTrackIdx] || null;
 
-  useEffect(() => {
-    if (!audioRef.current) return;
-    audioRef.current.volume = isMuted ? 0 : volume;
-  }, [volume, isMuted]);
-
-  // 곡 재생/일시정지 약속 처리 (AbortError 방지)
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio || !currentTrack?.audioUrl) return;
-
-    const handlePlay = async () => {
-      try {
-        if (isPlaying) {
-          await audio.play();
-        } else {
-          audio.pause();
-        }
-      } catch (err) {
-        // AbortError 무시 (사용자 상호작용 전 자동재생 방지 시 발생)
-        if (err.name !== 'AbortError') {
-          console.error("Playback error:", err);
-        }
-      }
-    };
-
-    handlePlay();
-  }, [isPlaying, currentTrackIdx, currentTrack?.audioUrl]);
-
-  const togglePlay = () => {
+  const unlockAudio = () => {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (AudioContext) {
       const ctx = new AudioContext();
       if (ctx.state === 'suspended') ctx.resume();
     }
-    setIsPlaying(!isPlaying);
   };
+
+  const playTrack = async (idx) => {
+    unlockAudio();
+    if (idx !== undefined) setCurrentTrackIdx(idx);
+    setIsPlaying(true);
+    // iOS 대응을 위해 즉시 오디오 태그에 명령을 내립니다.
+    if (audioRef.current) {
+      try {
+        await audioRef.current.play();
+      } catch (e) {
+        console.error("Play Failed", e);
+      }
+    }
+  };
+
+  const pauseTrack = () => {
+    setIsPlaying(false);
+    if (audioRef.current) audioRef.current.pause();
+  };
+
+  const togglePlay = () => {
+    if (isPlaying) pauseTrack();
+    else playTrack();
+  };
+
+  useEffect(() => {
+    if (!audioRef.current) return;
+    audioRef.current.volume = isMuted ? 0 : volume;
+  }, [volume, isMuted]);
 
   // 4. [✨ 배경 애니메이션]
   useEffect(() => {
@@ -197,13 +199,28 @@ export default function App() {
     return () => { cancelAnimationFrame(animationFrameId); window.removeEventListener('resize', handleResize); };
   }, [isPlaying]);
 
+  // --- [🚀 핸들러 로직] ---
+  const handleToggleLike = async (e, trackId) => {
+    e.stopPropagation();
+    if (!user) return;
+    const likeDoc = doc(db, 'artifacts', appId, 'users', user.uid, 'likes', trackId);
+    if (userLikes.includes(trackId)) await deleteDoc(likeDoc);
+    else await setDoc(likeDoc, { likedAt: Date.now() });
+  };
+
+  const recordPlayHistory = async () => {
+    if (!user || !tracks[currentTrackIdx]) return;
+    const profileRef = doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'stats');
+    await updateDoc(profileRef, { listenCount: increment(1) });
+  };
+
   const handleAddTrack = async (e) => {
     e.preventDefault();
     if (!isAdmin) return;
     try {
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tracks'), { ...newTrack, createdAt: Date.now() });
       setNewTrack({ title: '', artist: '', image: '', description: '', tag: 'Artifact', audioUrl: '' });
-    } catch (err) { setAuthError("등록 실패"); }
+    } catch (err) { setAuthError("Artifact 등록 실패"); }
   };
 
   const formatTime = (time) => {
@@ -213,30 +230,26 @@ export default function App() {
     return `${min}:${sec < 10 ? '0' : ''}${sec}`;
   };
 
+  const likedTracks = tracks.filter(t => userLikes.includes(t.id));
+
   if (loading) return <div className="min-h-screen bg-black flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-[#004aad]" /></div>;
 
   return (
-    <div className="min-h-screen bg-[#050505] text-zinc-100 font-sans selection:bg-[#004aad] overflow-x-hidden relative">
+    <div className="min-h-screen bg-[#050505] text-zinc-100 font-sans selection:bg-[#004aad] overflow-x-hidden relative" onClick={unlockAudio}>
       <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none z-0" />
       
-      {/* 🔊 [해결] 네이티브 오디오 태그 최적화
-          1. crossOrigin 제거: 외부 드롭박스 링크의 CORS 차단 방지
-          2. src 조건부 렌더링: 빈 문자열로 인한 브라우저 중복 호출 방지
-      */}
-      {currentTrack?.audioUrl && (
-        <audio
-          ref={audioRef}
-          src={currentTrack.audioUrl}
-          onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-          onDurationChange={(e) => setDuration(e.currentTarget.duration)}
-          onEnded={() => {
-            setCurrentTrackIdx(p => (p + 1) % tracks.length);
-          }}
-          onWaiting={() => setIsBuffering(true)}
-          onPlaying={() => setIsBuffering(false)}
-          onError={() => setAuthError("오디오를 재생할 수 없습니다. 링크 형식을 확인하세요.")}
-        />
-      )}
+      {/* 🔊 네이티브 오디오 (CORS 방지를 위해 crossOrigin 제거) */}
+      <audio
+        ref={audioRef}
+        src={currentTrack?.audioUrl || ''}
+        onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+        onDurationChange={(e) => setDuration(e.currentTarget.duration)}
+        onEnded={() => playTrack((currentTrackIdx + 1) % tracks.length)}
+        onWaiting={() => setIsBuffering(true)}
+        onPlaying={() => setIsBuffering(false)}
+        onError={() => setAuthError("오디오를 재생할 수 없습니다. 링크 주소를 확인하세요.")}
+        playsInline
+      />
 
       <header className={`fixed top-0 w-full z-[100] transition-all duration-500 ${scrolled ? 'py-4 bg-black/40 backdrop-blur-xl border-b border-white/5' : 'py-10'}`}>
         <div className="container mx-auto px-8 flex justify-between items-end">
@@ -253,6 +266,7 @@ export default function App() {
       </header>
 
       <AnimatePresence mode="wait">
+        {/* --- Gallery View --- */}
         {view === 'gallery' && (
           <motion.div key="gallery" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="relative z-20 pt-40 px-8 pb-40">
             <section className="container mx-auto mb-32 text-center lg:text-left">
@@ -270,8 +284,9 @@ export default function App() {
                     </div>
                   </div>
                   <div className="flex items-center gap-6">
-                    <div onClick={(e) => { e.stopPropagation(); setCurrentTrackIdx(idx); setIsPlaying(true); }} className={`w-16 h-16 rounded-full border border-white/10 flex items-center justify-center transition-all ${currentTrackIdx === idx && isPlaying ? 'bg-[#004aad] border-[#004aad]' : 'bg-white/5 group-hover:bg-white group-hover:text-black'}`}>
-                      {currentTrackIdx === idx && isPlaying ? (isBufferring ? <Loader2 className="w-6 h-6 animate-spin" /> : <Pause className="w-6 h-6 fill-current" />) : <Play className="w-6 h-6 fill-current ml-1" />}
+                    <button onClick={(e) => handleToggleLike(e, track.id)} className={`transition-all ${userLikes.includes(track.id) ? 'text-red-500 scale-125' : 'text-white/20 hover:text-white'}`}><Heart className={`w-6 h-6 ${userLikes.includes(track.id) ? 'fill-current' : ''}`} /></button>
+                    <div onClick={(e) => { e.stopPropagation(); if (currentTrackIdx === idx && isPlaying) pauseTrack(); else playTrack(idx); }} className={`w-16 h-16 rounded-full border border-white/10 flex items-center justify-center transition-all ${currentTrackIdx === idx && isPlaying ? 'bg-[#004aad] border-[#004aad]' : 'bg-white/5 group-hover:bg-white group-hover:text-black'}`}>
+                      {currentTrackIdx === idx && isPlaying ? (isBuffering ? <Loader2 className="w-6 h-6 animate-spin text-white" /> : <Pause className="w-6 h-6 fill-current" />) : <Play className="w-6 h-6 fill-current ml-1" />}
                     </div>
                   </div>
                 </div>
@@ -280,19 +295,26 @@ export default function App() {
           </motion.div>
         )}
 
+        {/* --- Archive View --- */}
         {view === 'library' && (
           <motion.div key="library" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="relative z-20 pt-40 px-8 container mx-auto pb-40">
             {user?.isAnonymous ? (
-              <div className="max-w-2xl mx-auto py-20 text-center"><div className={`${glass} p-16 rounded-[4rem]`}><Smartphone className="w-16 h-16 mx-auto mb-8 text-[#004aad]" /><h2 className="text-4xl font-black uppercase italic tracking-tighter">Stay Connected</h2><button onClick={() => signInWithPopup(auth, new GoogleAuthProvider())} className="mt-12 bg-white text-black px-16 py-6 rounded-full font-black uppercase text-xs hover:bg-[#004aad] hover:text-white transition-all shadow-2xl">Connect Google</button></div></div>
+              <div className="max-w-2xl mx-auto py-20 text-center"><div className={`${glass} p-16 rounded-[4rem]`}><Smartphone className="w-16 h-16 mx-auto mb-8 text-[#004aad]" /><h2 className="text-4xl font-black uppercase italic tracking-tighter">Sync Archive</h2><button onClick={() => signInWithPopup(auth, new GoogleAuthProvider())} className="mt-12 bg-white text-black px-16 py-6 rounded-full font-black uppercase text-xs hover:bg-[#004aad] hover:text-white transition-all shadow-2xl">Connect Google Account</button></div></div>
             ) : (
               <div className="grid lg:grid-cols-12 gap-16">
-                <div className="lg:col-span-4 space-y-8"><div className={`${glass} p-10 rounded-[3rem] text-center`}><div className="w-24 h-24 bg-indigo-600 rounded-full mx-auto mb-6 flex items-center justify-center shadow-2xl"><User className="w-10 h-10 text-white" /></div><h2 className="text-2xl font-black uppercase italic tracking-tighter">{user?.displayName}</h2><div className="grid grid-cols-2 gap-4 mt-12 border-t border-white/5 pt-10"><div><p className="text-[9px] font-black text-zinc-600 uppercase">Records</p><p className="text-3xl font-black text-[#004aad]">{userProfile.listenCount || 0}</p></div><div><p className="text-[9px] font-black text-zinc-600 uppercase">Liked</p><p className="text-3xl font-black text-white">{userLikes.length}</p></div></div><button onClick={() => signOut(auth)} className="mt-10 text-[10px] uppercase underline opacity-30 hover:opacity-100 transition-opacity">Sign Out</button></div></div>
-                <div className="lg:col-span-8 space-y-12"><h2 className={`${h1Title} text-7xl lg:text-9xl`}>Personal Library</h2><div className="grid gap-4">{likedTracks.map(t => (<div key={t.id} className={`${glass} p-8 rounded-[2.5rem] flex justify-between items-center group`}><p className="text-2xl font-black uppercase">{t.title}</p></div>))}</div></div>
+                <div className="lg:col-span-4 space-y-8"><div className={`${glass} p-10 rounded-[3rem] text-center`}><div className="w-24 h-24 bg-indigo-600 rounded-full mx-auto mb-6 flex items-center justify-center shadow-2xl"><User className="w-10 h-10 text-white" /></div><h2 className="text-2xl font-black uppercase italic tracking-tighter">{user?.displayName}</h2><div className="grid grid-cols-2 gap-4 mt-12 border-t border-white/5 pt-10"><div><p className="text-[9px] font-black text-zinc-600 uppercase">Records</p><p className="text-3xl font-black text-[#004aad]">{userProfile.listenCount || 0}</p></div><div><p className="text-[9px] font-black text-zinc-600 uppercase">Collection</p><p className="text-3xl font-black text-white">{userLikes.length}</p></div></div><button onClick={() => signOut(auth)} className="mt-10 text-[10px] uppercase underline opacity-30 hover:opacity-100 transition-opacity">Sign Out</button></div></div>
+                <div className="lg:col-span-8 space-y-12"><h2 className={`${h1Title} text-7xl lg:text-9xl`}>Personal Library</h2><div className="grid gap-4">
+                  {likedTracks.map(t => (
+                    <div key={t.id} className={`${glass} p-8 rounded-[2.5rem] flex justify-between items-center group`}><p className="text-2xl font-black uppercase">{t.title}</p><button onClick={(e) => handleToggleLike(e, t.id)} className="p-4 text-red-500"><Heart className="w-6 h-6 fill-current" /></button></div>
+                  ))}
+                  {likedTracks.length === 0 && <div className="py-20 text-center opacity-20"><Music className="w-12 h-12 mx-auto mb-4" /><p className="font-black uppercase tracking-widest text-xs">수집된 아티팩트가 없습니다.</p></div>}
+                </div></div>
               </div>
             )}
           </motion.div>
         )}
 
+        {/* --- Console View --- */}
         {view === 'admin' && (
           <motion.div key="admin" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="pt-40 px-8 container mx-auto pb-40 relative z-20">
              <div className="grid lg:grid-cols-12 gap-20">
@@ -305,11 +327,11 @@ export default function App() {
                 ))}</div>)}
               </div>
               {isAdmin && (
-                <div className="lg:col-span-4"><div className="bg-indigo-600 p-12 rounded-[4rem] text-black shadow-2xl"><h3 className="text-4xl font-black uppercase italic mb-10 leading-none">Artifact Deployment</h3>
+                <div className="lg:col-span-4"><div className="bg-indigo-600 p-12 rounded-[4rem] text-black shadow-2xl"><h3 className="text-4xl font-black uppercase italic mb-10 leading-none">Deployment</h3>
                     <form onSubmit={handleAddTrack} className="space-y-6">
                        <input required placeholder="TITLE" value={newTrack.title} onChange={e => setNewTrack({...newTrack, title: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-2 font-black uppercase outline-none focus:border-black" />
                        <input required placeholder="ARTIST" value={newTrack.artist} onChange={e => setNewTrack({...newTrack, artist: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-2 font-black uppercase outline-none focus:border-black" />
-                       <input required placeholder="AUDIO URL (mp3/wav/Cloud)" value={newTrack.audioUrl} onChange={e => setNewTrack({...newTrack, audioUrl: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-2 font-black outline-none focus:border-black" />
+                       <input required placeholder="AUDIO URL (?dl=1)" value={newTrack.audioUrl} onChange={e => setNewTrack({...newTrack, audioUrl: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-2 font-black outline-none focus:border-black" />
                        <input placeholder="IMAGE URL" value={newTrack.image} onChange={e => setNewTrack({...newTrack, image: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-2 font-black outline-none focus:border-black" />
                        <textarea placeholder="DESCRIPTION" value={newTrack.description} onChange={e => setNewTrack({...newTrack, description: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-2 font-medium text-sm outline-none focus:border-black h-24 resize-none" />
                        <button type="submit" className="w-full bg-black text-white py-5 mt-6 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-zinc-900 transition-all">Artifact Sync</button>
@@ -321,7 +343,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Floating Player Bar */}
+      {/* --- Floating Player Bar --- */}
       <AnimatePresence>
       {currentTrack && (
         <motion.div initial={{ y: 120 }} animate={{ y: 0 }} exit={{ y: 120 }} className="fixed bottom-10 left-0 w-full z-[200] px-4 lg:px-8 flex justify-center pointer-events-none">
@@ -335,21 +357,18 @@ export default function App() {
                 <p className="text-[11px] text-[#004aad] font-bold uppercase tracking-[0.2em] mt-1">{currentTrack.artist}</p>
               </div>
               <div className="flex items-center gap-3">
-                <button onClick={() => setCurrentTrackIdx(p => (p - 1 + tracks.length) % tracks.length)} className="p-2 text-zinc-600 hover:text-white transition-colors"><SkipBack className="w-5 h-5 fill-current" /></button>
+                <button onClick={() => playTrack((currentTrackIdx - 1 + tracks.length) % tracks.length)} className="p-2 text-zinc-600 hover:text-white transition-colors"><SkipBack className="w-5 h-5 fill-current" /></button>
                 <button onClick={togglePlay} className="w-14 h-14 bg-white text-black rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-2xl">
-                  {isPlaying ? (isBufferring ? <Loader2 className="w-6 h-6 animate-spin" /> : <Pause className="w-6 h-6 fill-current" />) : <Play className="w-6 h-6 fill-current ml-1" />}
+                  {isPlaying ? (isBuffering ? <Loader2 className="w-6 h-6 animate-spin" /> : <Pause className="w-6 h-6 fill-current" />) : <Play className="w-6 h-6 fill-current ml-1" />}
                 </button>
-                <button onClick={() => setCurrentTrackIdx(p => (p + 1) % tracks.length)} className="p-2 text-zinc-600 hover:text-white transition-colors"><SkipForward className="w-5 h-5 fill-current" /></button>
+                <button onClick={() => playTrack((currentTrackIdx + 1) % tracks.length)} className="p-2 text-zinc-600 hover:text-white transition-colors"><SkipForward className="w-5 h-5 fill-current" /></button>
               </div>
             </div>
             <div className="flex items-center gap-4 w-full lg:w-64 px-4 lg:px-0 border-t lg:border-t-0 lg:border-l border-white/10 pt-4 lg:pt-0">
                <div className="flex-1 flex flex-col gap-1">
-                 <div className="flex justify-between text-[8px] font-black uppercase opacity-40">
-                    <span>{formatTime(currentTime)}</span>
-                    <span>{formatTime(duration)}</span>
-                 </div>
-                 <div className="h-1 bg-white/10 rounded-full relative overflow-hidden group">
-                   <div className="absolute inset-y-0 left-0 bg-[#004aad]" style={{ width: `${(currentTime/duration)*100}%` }} />
+                 <div className="flex justify-between text-[8px] font-black uppercase opacity-40"><span>{formatTime(currentTime)}</span><span>{formatTime(duration)}</span></div>
+                 <div className="h-1.5 bg-white/10 rounded-full relative overflow-hidden group">
+                   <div className="absolute inset-y-0 left-0 bg-[#004aad] rounded-full" style={{ width: `${(currentTime/duration)*100}%` }} />
                    <input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => { if(audioRef.current) audioRef.current.currentTime = parseFloat(e.target.value); }} className="absolute inset-0 w-full opacity-0 cursor-pointer" />
                  </div>
                </div>
@@ -358,6 +377,7 @@ export default function App() {
                    {isMuted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                  </button>
                  <input type="range" min="0" max="1" step="0.01" value={volume} onChange={(e) => setVolume(parseFloat(e.target.value))} className="w-20 h-1 bg-white/10 rounded-full appearance-none accent-[#004aad]" />
+                 <button onClick={(e) => handleToggleLike(e, currentTrack.id)} className={`ml-4 transition-all ${userLikes.includes(currentTrack.id) ? 'text-red-500' : 'text-zinc-600'}`}><Heart className={`w-5 h-5 ${userLikes.includes(currentTrack.id) ? 'fill-current' : ''}`} /></button>
                </div>
             </div>
           </div>
@@ -365,7 +385,7 @@ export default function App() {
       )}
       </AnimatePresence>
 
-      {/* Track Detail Modal */}
+      {/* --- Detail Modal --- */}
       <AnimatePresence>
         {selectedTrack && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[300] bg-black/80 backdrop-blur-xl flex items-center justify-center p-6" onClick={() => setSelectedTrack(null)}>
@@ -374,7 +394,10 @@ export default function App() {
               <div className="lg:w-1/2 h-96 lg:h-auto bg-zinc-950 flex items-center justify-center relative"><img src={selectedTrack.image || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe"} className="w-full h-full object-cover opacity-50" /><div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" /></div>
               <div className="lg:w-1/2 p-12 lg:p-24 flex flex-col justify-between">
                 <div className="space-y-12"><div><span className={subTitle + " text-sm"}>{selectedTrack.artist}</span><h3 className={h1Title} style={{ fontSize: '4.5rem' }}>{selectedTrack.title}</h3></div><p className="text-xl lg:text-2xl text-zinc-400 font-light leading-relaxed italic border-l-4 border-[#004aad] pl-10 opacity-70">"{selectedTrack.description || 'Sonic artifact derived from exhibition coordinates.'}"</p></div>
-                <button onClick={() => { const idx = tracks.findIndex(t => t.id === selectedTrack.id); setCurrentTrackIdx(idx); setIsPlaying(true); setSelectedTrack(null); }} className="bg-[#004aad] text-white w-full py-8 rounded-[2rem] font-black uppercase text-sm mt-12 hover:bg-white hover:text-black transition-all shadow-2xl">Launch Artifact</button>
+                <div className="flex gap-4 items-center">
+                  <button onClick={() => { const idx = tracks.findIndex(t => t.id === selectedTrack.id); playTrack(idx); setSelectedTrack(null); }} className="flex-1 bg-[#004aad] text-white py-8 rounded-[2rem] font-black uppercase text-sm mt-12 hover:bg-white hover:text-black transition-all shadow-2xl">Launch Artifact</button>
+                  <button onClick={(e) => handleToggleLike(e, selectedTrack.id)} className={`p-8 rounded-[2rem] border border-white/10 mt-12 ${userLikes.includes(selectedTrack.id) ? 'text-red-500 bg-red-500/5' : 'text-zinc-500'}`}><Heart className={`w-6 h-6 ${userLikes.includes(selectedTrack.id) ? 'fill-current' : ''}`} /></button>
+                </div>
               </div>
             </motion.div>
           </motion.div>
