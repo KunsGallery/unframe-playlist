@@ -66,6 +66,7 @@ const getDirectLink = (url) => {
 };
 
 export default function App() {
+  // --- [상태 관리] ---
   const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -91,7 +92,9 @@ export default function App() {
   
   const canvasRef = useRef(null);
   const audioRef = useRef(null);
-  const audioIntensityRef = useRef(0);
+
+  // 🔊 [중요] ReferenceError 방지를 위해 tracks 선언 이후 즉시 정의
+  const currentTrack = tracks.length > 0 ? tracks[currentTrackIdx] : null;
 
   // 🔐 인증
   useEffect(() => {
@@ -128,75 +131,91 @@ export default function App() {
 
   // 🔊 [잠금화면 커버 대응] MediaSession 업데이트
   useEffect(() => {
-    const track = tracks[currentTrackIdx];
-    if ('mediaSession' in navigator && track) {
+    if ('mediaSession' in navigator && currentTrack) {
       navigator.mediaSession.metadata = new MediaMetadata({
-        title: track.title,
-        artist: track.artist,
+        title: currentTrack.title,
+        artist: currentTrack.artist,
         album: 'Unframe Artifacts',
         artwork: [
-          { src: track.image || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17", sizes: '512x512', type: 'image/png' },
-          { src: track.image || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17", sizes: '192x192', type: 'image/png' }
+          { src: currentTrack.image || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17", sizes: '512x512', type: 'image/png' },
+          { src: currentTrack.image || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17", sizes: '192x192', type: 'image/png' }
         ]
       });
 
-      // 시스템 버튼 연동
       navigator.mediaSession.setActionHandler('play', () => playTrack());
       navigator.mediaSession.setActionHandler('pause', () => pauseTrack());
       navigator.mediaSession.setActionHandler('previoustrack', () => playTrack((currentTrackIdx - 1 + tracks.length) % tracks.length));
       navigator.mediaSession.setActionHandler('nexttrack', () => playTrack((currentTrackIdx + 1) % tracks.length));
     }
-  }, [currentTrackIdx, tracks]);
+  }, [currentTrack, tracks.length]);
+
+  const unlockAudio = () => {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (AudioContext) {
+      const ctx = new AudioContext();
+      if (ctx.state === 'suspended') ctx.resume();
+    }
+  };
 
   const playTrack = async (idx) => {
+    unlockAudio();
     const audio = audioRef.current;
     if (!audio) return;
+    
     const targetIdx = idx !== undefined ? idx : currentTrackIdx;
     const targetTrack = tracks[targetIdx];
     if (!targetTrack) return;
 
     const directUrl = getDirectLink(targetTrack.audioUrl);
-    if (audio.src !== directUrl) { audio.src = directUrl; audio.load(); }
+    
+    // 모바일 대응: 클릭 시 즉시 src 교체 및 load
+    if (audio.src !== directUrl) {
+      audio.src = directUrl;
+      audio.load();
+    }
+
     if (idx !== undefined) setCurrentTrackIdx(idx);
     setIsPlaying(true);
-    try { await audio.play(); } catch (e) { setIsPlaying(false); setAuthError("모바일 재생이 차단되었습니다. 터치 후 다시 시도하세요."); }
+
+    try {
+      await audio.play();
+    } catch (e) {
+      console.error("Playback Blocked:", e);
+      setIsPlaying(false);
+      setAuthError("재생이 차단되었습니다. 화면을 터치한 후 다시 시도하세요.");
+    }
   };
 
-  const pauseTrack = () => { setIsPlaying(false); audioRef.current?.pause(); };
+  const pauseTrack = () => {
+    setIsPlaying(false);
+    if (audioRef.current) audioRef.current.pause();
+  };
+
   const togglePlay = () => isPlaying ? pauseTrack() : playTrack();
 
-  useEffect(() => { if (audioRef.current) audioRef.current.volume = isMuted ? 0 : volume; }, [volume, isMuted]);
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.volume = isMuted ? 0 : volume;
+  }, [volume, isMuted]);
 
   // 🖼️ ImgBB 업로드 핸들러
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
     setIsUploadingImg(true);
     const formData = new FormData();
     formData.append("image", file);
-
     try {
-      const response = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
-        method: "POST",
-        body: formData,
-      });
+      const response = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, { method: "POST", body: formData });
       const result = await response.json();
       if (result.success) {
         setNewTrack(prev => ({ ...prev, image: result.data.url }));
         setAuthError(null);
-      } else {
-        throw new Error("Upload Failed");
-      }
+      } else throw new Error("Upload Failed");
     } catch (err) {
-      console.error(err);
-      setAuthError("이미지 업로드 실패: API 키를 확인하세요.");
-    } finally {
-      setIsUploadingImg(false);
-    }
+      setAuthError("이미지 업로드 실패");
+    } finally { setIsUploadingImg(false); }
   };
 
-  // 🚀 비즈니스 로직
   const handleToggleLike = async (e, trackId) => {
     e.stopPropagation();
     if (!user) return;
@@ -211,7 +230,7 @@ export default function App() {
     try {
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tracks'), { ...newTrack, createdAt: Date.now() });
       setNewTrack({ title: '', artist: '', image: '', description: '', tag: 'Artifact', audioUrl: '' });
-    } catch (err) { setAuthError("Artifact 등록 실패"); }
+    } catch (err) { setAuthError("등록 실패"); }
   };
 
   const formatTime = (time) => isNaN(time) ? "0:00" : `${Math.floor(time / 60)}:${String(Math.floor(time % 60)).padStart(2, '0')}`;
@@ -219,8 +238,17 @@ export default function App() {
   if (loading) return <div className="min-h-screen bg-black flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-[#004aad]" /></div>;
 
   return (
-    <div className="min-h-screen bg-[#050505] text-zinc-100 font-sans selection:bg-[#004aad] overflow-x-hidden relative">
-      <audio ref={audioRef} onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)} onDurationChange={(e) => setDuration(e.currentTarget.duration)} onEnded={() => playTrack((currentTrackIdx + 1) % tracks.length)} onWaiting={() => setIsBuffering(true)} onPlaying={() => setIsBuffering(false)} playsInline />
+    <div className="min-h-screen bg-[#050505] text-zinc-100 font-sans selection:bg-[#004aad] overflow-x-hidden relative" onClick={unlockAudio}>
+      {/* 🔊 네이티브 오디오 객체 */}
+      <audio 
+        ref={audioRef} 
+        onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)} 
+        onDurationChange={(e) => setDuration(e.currentTarget.duration)} 
+        onEnded={() => playTrack((currentTrackIdx + 1) % tracks.length)} 
+        onWaiting={() => setIsBuffering(true)} 
+        onPlaying={() => setIsBuffering(false)} 
+        playsInline 
+      />
       
       <header className={`fixed top-0 w-full z-[100] transition-all duration-500 ${scrolled ? 'py-4 bg-black/40 backdrop-blur-xl border-b border-white/5' : 'py-10'}`}>
         <div className="container mx-auto px-8 flex justify-between items-end">
@@ -237,6 +265,7 @@ export default function App() {
       </header>
 
       <AnimatePresence mode="wait">
+        {/* --- Gallery View --- */}
         {view === 'gallery' && (
           <motion.div key="gallery" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="relative z-20 pt-40 px-8 pb-40">
             <section className="container mx-auto mb-32 text-center lg:text-left">
@@ -265,6 +294,7 @@ export default function App() {
           </motion.div>
         )}
 
+        {/* --- Archive View --- */}
         {view === 'library' && (
           <motion.div key="library" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="relative z-20 pt-40 px-8 container mx-auto pb-40">
             {user?.isAnonymous ? (
@@ -283,6 +313,7 @@ export default function App() {
           </motion.div>
         )}
 
+        {/* --- Console View --- */}
         {view === 'admin' && (
           <motion.div key="admin" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="pt-40 px-8 container mx-auto pb-40 relative z-20">
              <div className="grid lg:grid-cols-12 gap-20">
@@ -299,7 +330,6 @@ export default function App() {
                     <form onSubmit={handleAddTrack} className="space-y-6">
                        <input required placeholder="TITLE" value={newTrack.title} onChange={e => setNewTrack({...newTrack, title: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-2 font-black uppercase outline-none focus:border-black" />
                        <input required placeholder="ARTIST" value={newTrack.artist} onChange={e => setNewTrack({...newTrack, artist: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-2 font-black uppercase outline-none focus:border-black" />
-                       
                        <div className="space-y-2">
                          <label className="text-[9px] font-black uppercase opacity-60">Album Jacket</label>
                          <div className="flex gap-2">
@@ -314,10 +344,8 @@ export default function App() {
                          </div>
                          <input placeholder="Image URL (Manual)" value={newTrack.image} onChange={e => setNewTrack({...newTrack, image: e.target.value})} className="w-full bg-black/5 border-b border-black/10 p-2 text-[10px] font-medium outline-none" />
                        </div>
-
-                       <input required placeholder="AUDIO URL (GDrive/Dropbox)" value={newTrack.audioUrl} onChange={e => setNewTrack({...newTrack, audioUrl: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-2 font-black outline-none focus:border-black" />
+                       <input required placeholder="AUDIO URL (?dl=1)" value={newTrack.audioUrl} onChange={e => setNewTrack({...newTrack, audioUrl: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-2 font-black outline-none focus:border-black" />
                        <textarea placeholder="DESCRIPTION" value={newTrack.description} onChange={e => setNewTrack({...newTrack, description: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-2 font-medium text-sm outline-none focus:border-black h-24 resize-none" />
-                       
                        <button type="submit" disabled={isUploadingImg} className="w-full bg-black text-white py-5 mt-6 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-zinc-900 transition-all disabled:opacity-50">Artifact Sync</button>
                     </form>
                 </div></div>
@@ -379,8 +407,8 @@ export default function App() {
               <div className="lg:w-1/2 p-12 lg:p-24 flex flex-col justify-between">
                 <div className="space-y-12"><div><span className={subTitle + " text-sm"}>{selectedTrack.artist}</span><h3 className={h1Title} style={{ fontSize: '4.5rem' }}>{selectedTrack.title}</h3></div><p className="text-xl lg:text-2xl text-zinc-400 font-light leading-relaxed italic border-l-4 border-[#004aad] pl-10 opacity-70">"{selectedTrack.description || 'Sonic artifact derived from exhibition coordinates.'}"</p></div>
                 <div className="flex gap-4 items-center">
-                  <button onClick={() => { const idx = tracks.findIndex(t => t.id === selectedTrack.id); playTrack(idx); setSelectedTrack(null); }} className="flex-1 bg-[#004aad] text-white py-8 rounded-[2rem] font-black uppercase text-sm mt-12 hover:bg-white hover:text-black transition-all shadow-2xl">Launch Artifact</button>
-                  <button onClick={(e) => handleToggleLike(e, selectedTrack.id)} className={`p-8 rounded-[2rem] border border-white/10 mt-12 ${userLikes.includes(selectedTrack.id) ? 'text-red-500 bg-red-500/5' : 'text-zinc-500'}`}><Heart className={`w-6 h-6 ${userLikes.includes(selectedTrack.id) ? 'fill-current' : ''}`} /></button>
+                  <button onClick={() => { const idx = tracks.findIndex(t => t.id === selectedTrack.id); playTrack(idx); setSelectedTrack(null); }} className="flex-1 bg-[#004aad] text-white py-4 lg:py-8 rounded-[1.5rem] lg:rounded-[2rem] font-black uppercase text-sm mt-8 lg:mt-12 hover:bg-white hover:text-black transition-all shadow-2xl">Launch Artifact</button>
+                  <button onClick={(e) => handleToggleLike(e, selectedTrack.id)} className={`p-4 lg:p-8 rounded-[1.5rem] lg:rounded-[2rem] border border-white/10 mt-8 lg:mt-12 ${userLikes.includes(selectedTrack.id) ? 'text-red-500 bg-red-500/5' : 'text-zinc-500'}`}><Heart className={`w-6 h-6 ${userLikes.includes(selectedTrack.id) ? 'fill-current' : ''}`} /></button>
                 </div>
               </div>
             </motion.div>
