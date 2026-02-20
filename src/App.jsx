@@ -23,7 +23,7 @@ import {
 import { 
   Play, Pause, SkipBack, SkipForward, 
   Trash2, AlertCircle, Loader2, Music, X, Heart, Award, User, Share2,
-  Volume2, VolumeX, ImageIcon, Upload, ArrowDown, ChevronRight, Disc, Eye, Archive, Check, Trophy, Calendar, TrendingUp, Medal, Zap, Clock, Sparkles, Sun, Moon, Ghost, HelpCircle, Camera, CheckCircle2, Star, Coffee, Waves
+  Volume2, VolumeX, ImageIcon, Upload, ArrowDown, ChevronRight, Disc, Eye, Archive, Check, Trophy, Calendar, TrendingUp, Medal, Zap, Clock, Sparkles, Sun, Moon, Ghost, HelpCircle, Camera, CheckCircle2, Star, Coffee, Waves, ExternalLink, ShieldCheck
 } from 'lucide-react';
 import { motion, AnimatePresence, useScroll, useSpring } from 'framer-motion';
 
@@ -127,7 +127,6 @@ export default function App() {
           canvas.width = 512;
           canvas.height = 512;
           const ctx = canvas.getContext('2d');
-          // 정사각 크롭 및 리사이징 로직
           const minSide = Math.min(img.width, img.height);
           const sx = (img.width - minSide) / 2;
           const sy = (img.height - minSide) / 2;
@@ -138,7 +137,7 @@ export default function App() {
     });
   };
 
-  // 🔐 [인증]
+  // 🔐 [인증 및 관리자 권한 설정]
   useEffect(() => {
     let isMounted = true;
     const initAuth = async () => {
@@ -214,69 +213,60 @@ export default function App() {
     return { name: "Hello", color: "text-zinc-500", bg: "bg-white/5", icon: Ghost };
   }, [userProfile?.firstJoin]);
 
-  // 🔊 [핵심] 잠금화면 앨범아트 주입 (최적화 버전)
+  // 🔊 [잠금화면 앨범아트]
   const updateMediaMetadata = useCallback(() => {
     if ('mediaSession' in navigator && currentTrack) {
       const artworkUrl = currentTrack.image || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17";
-      
       navigator.mediaSession.metadata = new MediaMetadata({
         title: currentTrack.title,
         artist: currentTrack.artist,
         album: 'Unframe Project UP',
         artwork: [
           { src: artworkUrl, sizes: '96x96',   type: 'image/png' },
-          { src: artworkUrl, sizes: '128x128', type: 'image/png' },
-          { src: artworkUrl, sizes: '192x192', type: 'image/png' },
           { src: artworkUrl, sizes: '256x256', type: 'image/png' },
           { src: artworkUrl, sizes: '512x512', type: 'image/png' },
         ]
       });
-
-      // 재생 상태 동기화
       navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
-
-      // 시스템 컨트롤러 연결
       navigator.mediaSession.setActionHandler('play', () => playTrack());
       navigator.mediaSession.setActionHandler('pause', () => pauseTrack());
-      navigator.mediaSession.setActionHandler('previoustrack', () => playTrack((currentTrackIdx - 1 + tracks.length) % tracks.length));
-      navigator.mediaSession.setActionHandler('nexttrack', () => playTrack((currentTrackIdx + 1) % tracks.length));
     }
-  }, [currentTrack, currentTrackIdx, tracks.length, isPlaying]);
+  }, [currentTrack, isPlaying]);
 
   const handleToggleLike = async (e, trackId) => {
     e.stopPropagation();
     if (!user) return;
     const likeDoc = doc(db, 'artifacts', appId, 'users', user.uid, 'likes', trackId);
-    if (userLikes.includes(trackId)) {
-      await deleteDoc(likeDoc);
-    } else {
+    if (userLikes.includes(trackId)) await deleteDoc(likeDoc);
+    else {
       await setDoc(likeDoc, { likedAt: Date.now() });
       setToastMessage("아카이브에 기록되었습니다 💗");
       setTimeout(() => setToastMessage(null), 2000);
     }
   };
 
-  // 🚀 [공유/복사 기능 최종 안정화]
+  // 🚀 [공유 기능] - 임시 textarea 생성 방식으로 호환성 극대화
   const handleShare = async (e, item, type = 'track') => {
     if (e) e.stopPropagation();
     if (user && type === 'track') updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'stats'), { shareCount: increment(1) });
 
     const shareUrl = window.location.origin + window.location.pathname; 
-    const shareTitle = type === 'reward' ? `UP 성취: ${item.title}` : `Unframe 아티팩트: ${item.title}`;
-
+    
+    // 네이티브 공유 시도 (모바일 등)
     if (navigator.share) {
       try {
-        await navigator.share({ title: shareTitle, text: "Unframe에서 새로운 소리를 발견해 보세요.", url: shareUrl });
+        await navigator.share({ title: "Unframe UP", text: "Check this sound.", url: shareUrl });
         return;
       } catch (err) {}
     }
 
-    // 클립보드 강제 복사 로직 (Legacy 지원)
+    // 클립보드 강제 복사 폴백 (가장 확실한 방식)
     try {
       const copyArea = document.createElement("textarea");
       copyArea.value = shareUrl;
       copyArea.style.position = "fixed";
-      copyArea.style.opacity = "0";
+      copyArea.style.left = "-9999px";
+      copyArea.style.top = "0";
       document.body.appendChild(copyArea);
       copyArea.focus();
       copyArea.select();
@@ -303,16 +293,12 @@ export default function App() {
     if (audio.src !== directUrl) { audio.src = directUrl; audio.load(); }
     if (idx !== undefined) setCurrentTrackIdx(idx);
     setIsPlaying(true);
-    try { 
-      await audio.play(); 
-      updateMediaMetadata(); // 재생 시점에 확실히 주입
-    } catch (e) { setIsPlaying(false); }
+    try { await audio.play(); updateMediaMetadata(); } catch (e) { setIsPlaying(false); }
   };
 
-  const pauseTrack = () => { setIsPlaying(false); audioRef.current?.pause(); navigator.mediaSession.playbackState = "paused"; };
+  const pauseTrack = () => { setIsPlaying(false); audioRef.current?.pause(); if('mediaSession' in navigator) navigator.mediaSession.playbackState = "paused"; };
   const togglePlay = () => isPlaying ? pauseTrack() : playTrack();
 
-  // 🖼️ [리사이징 업로드] 512x512 압축 후 업로드
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -323,9 +309,7 @@ export default function App() {
       formData.append("image", compressedBlob);
       const response = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, { method: "POST", body: formData });
       const result = await response.json();
-      if (result.success) {
-        setNewTrack(prev => ({ ...prev, image: result.data.url }));
-      }
+      if (result.success) setNewTrack(prev => ({ ...prev, image: result.data.url }));
     } catch (err) { setAuthError("업로드 실패"); } finally { setIsUploadingImg(false); }
   };
 
@@ -349,8 +333,9 @@ export default function App() {
     try {
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tracks'), { ...newTrack, createdAt: Date.now() });
       setNewTrack({ title: '', artist: '', image: '', description: '', tag: 'Ambient', audioUrl: '' });
-      setToastMessage("공간에 소리가 배포되었습니다 🚀");
-    } catch (err) { setAuthError("권한 오류"); }
+      setToastMessage("성공적으로 배포되었습니다 🚀");
+      setTimeout(() => setToastMessage(null), 2000);
+    } catch (err) { setAuthError("등록 권한이 없습니다."); }
   };
 
   const closeGuide = async () => { setShowGuide(false); if (user) await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'stats'), { hasSeenGuide: true }); };
@@ -359,16 +344,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#050505] text-zinc-100 font-sans selection:bg-[#004aad] overflow-x-hidden relative">
-      <audio 
-        ref={audioRef} 
-        onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)} 
-        onDurationChange={(e) => setDuration(e.currentTarget.duration)} 
-        onEnded={() => playTrack((currentTrackIdx + 1) % tracks.length)} 
-        onWaiting={() => setIsBuffering(true)} 
-        onPlaying={() => { setIsBuffering(false); updateMediaMetadata(); }} 
-        onPlay={() => { if(user) updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'stats'), { listenCount: increment(1), lastActive: Date.now() }); }} 
-        playsInline 
-      />
+      <audio ref={audioRef} onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)} onDurationChange={(e) => setDuration(e.currentTarget.duration)} onEnded={() => playTrack((currentTrackIdx + 1) % tracks.length)} onWaiting={() => setIsBuffering(true)} onPlaying={() => { setIsBuffering(false); updateMediaMetadata(); }} onPlay={() => { if(user) updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'stats'), { listenCount: increment(1), lastActive: Date.now() }); }} playsInline />
       
       <motion.div className="fixed top-0 left-0 right-0 h-1 bg-[#004aad] z-[110] origin-left" style={{ scaleX }} />
 
@@ -424,7 +400,6 @@ export default function App() {
               </div>
             </section>
 
-            {/* [Section 4] Streaming Connect */}
             <section className="py-60 px-8 bg-black">
                <div className="container mx-auto text-center space-y-24">
                   <div className="space-y-6">
@@ -491,7 +466,7 @@ export default function App() {
                         return (
                           <div key={key} className={`aspect-square rounded-2xl flex items-center justify-center border transition-all duration-700 ${isActive ? 'border-[#004aad] bg-gradient-to-br from-[#004aad]/20 to-indigo-500/10 text-white shadow-[0_0_15px_rgba(0,74,173,0.3)]' : 'border-white/5 opacity-10'} relative group/badge`}>
                             <data.icon className={`w-6 h-6 ${isActive ? data.color : ''}`} />
-                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 p-5 bg-[#0a0a0a] border border-white/20 rounded-2xl text-[10px] font-bold uppercase tracking-widest whitespace-nowrap opacity-0 group-hover/badge:opacity-100 pointer-events-none transition-all scale-95 group-hover/badge:scale-100 z-50 shadow-[0_10px_40px_rgba(0,0,0,0.8)]">
+                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 p-5 bg-black border border-white/20 rounded-2xl text-[10px] font-bold uppercase tracking-widest whitespace-nowrap opacity-0 group-hover/badge:opacity-100 pointer-events-none transition-all scale-95 group-hover/badge:scale-100 z-50 shadow-[0_10px_40px_rgba(0,0,0,0.8)]">
                                <p className={isActive ? data.color : 'text-[#004aad]'} style={{fontSize: '12px'}}>{data.title}</p>
                                <p className="text-white mt-1.5 font-bold leading-relaxed lowercase opacity-100">{data.desc}</p>
                             </div>
@@ -568,7 +543,7 @@ export default function App() {
             <div className="flex items-center gap-8 w-full lg:w-[350px] px-4 lg:px-0 border-t lg:border-t-0 lg:border-l border-white/10 pt-6 lg:pt-0">
                <div className="flex-1 flex flex-col gap-2">
                  <div className="flex justify-between text-[10px] font-black uppercase opacity-30 tracking-widest"><span>{formatTime(currentTime)}</span><span>{formatTime(duration)}</span></div>
-                 <div className="h-2 bg-white/10 rounded-full relative overflow-hidden group/bar"><div className="absolute inset-y-0 left-0 bg-[#004aad] rounded-full" style={{ width: `${(currentTime/duration)*100}%` }} /><input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => { if(audioRef.current) audioRef.current.currentTime = parseFloat(e.target.value); }} className="absolute inset-0 w-full opacity-0 cursor-pointer h-full" /></div>
+                 <div className="h-2 bg-white/10 rounded-full relative overflow-hidden group/bar"><div className="absolute inset-y-0 left-0 bg-[#004aad] rounded-full shadow-[0_0_10px_rgba(0,74,173,0.8)]" style={{ width: `${(currentTime/duration)*100}%` }} /><input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => { if(audioRef.current) audioRef.current.currentTime = parseFloat(e.target.value); }} className="absolute inset-0 w-full opacity-0 cursor-pointer h-full" /></div>
                </div>
                <div className="flex items-center gap-5 ml-2">
                  <button onClick={() => setIsMuted(!isMuted)} className="text-zinc-500 hover:text-white transition-colors">{isMuted || volume === 0 ? <VolumeX className="w-6 h-6" /> : <Volume2 className="w-6 h-6" />}</button>
@@ -585,7 +560,7 @@ export default function App() {
       <AnimatePresence>
         {newReward && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[600] bg-black/95 flex items-center justify-center p-6 backdrop-blur-3xl" onClick={() => setNewReward(null)}>
-            <motion.div initial={{ scale: 0.8, y: 100 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.8, y: 100 }} className={`${glass} w-full max-w-md rounded-[5rem] p-12 text-center space-y-12 border-white/20`} onClick={e => e.stopPropagation()}>
+            <motion.div initial={{ scale: 0.8, y: 100 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.8, y: 100 }} className={`${glass} w-full max-w-md rounded-[5rem] p-12 text-center space-y-12 border-white/20 shadow-[0_0_100px_#004aad]/40`} onClick={e => e.stopPropagation()}>
               <div className="space-y-4"><Star className="w-16 h-16 text-yellow-400 mx-auto animate-bounce" /><h2 className="text-4xl font-black uppercase italic tracking-tighter text-[#004aad]">New Sticker!</h2><p className="text-sm text-zinc-500 font-bold uppercase tracking-[0.3em]">축하합니다! 새로운 기록이 해제되었습니다.</p></div>
               <div className="bg-zinc-950 p-8 rounded-[3rem] border border-white/5 space-y-6 relative"><div className="w-24 h-24 bg-white/5 rounded-3xl mx-auto flex items-center justify-center border border-white/10"><newReward.icon className="w-12 h-12 text-[#004aad]" /></div><div className="space-y-2"><h4 className="text-2xl font-black uppercase tracking-tighter text-white">[{newReward.title}]</h4><p className="text-white mt-1 font-bold leading-relaxed lowercase">{newReward.desc}</p></div></div>
               <div className="flex flex-col gap-4">
@@ -612,7 +587,7 @@ export default function App() {
               <button onClick={() => setSelectedTrack(null)} className="absolute top-12 right-12 p-6 rounded-full bg-white/5 hover:bg-[#004aad] text-white transition-all z-50 shadow-2xl"><X className="w-8 h-8" /></button>
               <div className="lg:w-1/2 h-[50vh] lg:h-auto bg-zinc-950 flex items-center justify-center relative group"><img src={selectedTrack.image} className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity duration-1000" /><div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" /></div>
               <div className="lg:w-1/2 p-12 lg:p-32 flex flex-col justify-between">
-                <div className="space-y-16"><div><span className={subTitle + " text-sm mb-6 block"}>{selectedTrack.artist}</span><h3 className={h1Title + " text-6xl lg:text-[7.5rem] tracking-tighter leading-[0.8]"}>{selectedTrack.title}</h3></div><p className="text-xl lg:text-3xl text-white font-bold leading-relaxed italic border-l-8 border-[#004aad] pl-12">"{selectedTrack.description || 'Reactive audio artifact derived from coordinates.'}"</p></div>
+                <div className="space-y-16"><div><span className={subTitle + " text-sm mb-6 block"}>{selectedTrack.artist}</span><h3 className={h1Title + " text-6xl lg:text-[7.5rem] tracking-tighter leading-[0.8]"}>{selectedTrack.title}</h3></div><p className="text-xl lg:text-3xl text-white font-bold leading-relaxed italic border-l-8 border-[#004aad] pl-12 opacity-100">"{selectedTrack.description || 'Reactive audio artifact derived from coordinates.'}"</p></div>
                 <div className="flex gap-8 items-center mt-20">
                   <button onClick={() => { const idx = tracks.findIndex(t => t.id === selectedTrack.id); playTrack(idx); setSelectedTrack(null); }} className="flex-1 bg-[#004aad] text-white py-10 rounded-[3rem] font-black uppercase text-sm hover:bg-white hover:text-black transition-all shadow-2xl flex items-center justify-center gap-4"><Play className="w-6 h-6 fill-current" /> Initialize Artifact</button>
                   <button onClick={(e) => handleShare(e, selectedTrack, 'track')} className="p-12 rounded-[3rem] border border-white/10 hover:text-[#004aad] transition-all"><Share2 className="w-10 h-10" /></button>
@@ -624,12 +599,33 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* --- [System Guide] --- */}
+      <AnimatePresence>
+        {showGuide && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[500] bg-black/95 flex items-center justify-center p-6 backdrop-blur-2xl" onClick={closeGuide}>
+            <motion.div initial={{ scale: 0.9, y: 50 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 50 }} className={`${glass} w-full max-w-4xl rounded-[4rem] p-12 lg:p-20 text-center space-y-12 relative overflow-hidden`} onClick={e => e.stopPropagation()}>
+              <div className="space-y-4"><h2 className="text-5xl font-black uppercase italic tracking-tighter text-[#004aad]">System Guide</h2><p className="text-sm text-zinc-500 font-bold uppercase tracking-[0.3em]">3초 안에 이해하는 Unframe 이용법</p></div>
+              <div className="grid md:grid-cols-3 gap-8">
+                 {[
+                   { icon: Ghost, title: "Relationship", desc: "머무른 시간이 쌓일수록 Hello에서 Family까지 우리의 관계는 깊어집니다." },
+                   { icon: Archive, title: "Stickers", desc: "첫 소리, 첫 하트, 첫 신호... 소중한 순간들을 스티커북에 기록해 보세요." },
+                   { icon: Sparkles, title: "Daily Play", desc: "하루 한 번, 소소한 놀이를 통해 Unframe의 세계관을 함께 완성합니다." }
+                 ].map((item, i) => (
+                   <div key={i} className="space-y-4 p-8 bg-white/5 rounded-3xl border border-white/5"><div className="w-12 h-12 bg-[#004aad]/10 rounded-2xl flex items-center justify-center mx-auto"><item.icon className="w-6 h-6 text-[#004aad]" /></div><h4 className="text-lg font-black uppercase tracking-tight">{item.title}</h4><p className="text-white font-bold leading-relaxed">{item.desc}</p></div>
+                 ))}
+              </div>
+              <button onClick={closeGuide} className="bg-white text-black px-16 py-6 rounded-full font-black uppercase text-xs tracking-widest hover:bg-[#004aad] hover:text-white transition-all shadow-2xl">가이드 종료</button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <style>{`
         .italic-outline { -webkit-text-stroke: 1px rgba(255,255,255,0.1); color: transparent; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         @keyframes wave { 0%, 100% { height: 4px; } 50% { height: 12px; } }
         ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: #050505; } ::-webkit-scrollbar-thumb { background: #1a1a1a; border-radius: 10px; } ::-webkit-scrollbar-thumb:hover { background: #004aad; }
-        input[type=range]::-webkit-slider-thumb { appearance: none; height: 16px; width: 16px; border-radius: 50%; background: white; cursor: pointer; }
+        input[type=range]::-webkit-slider-thumb { appearance: none; height: 16px; width: 16px; border-radius: 50%; background: white; box-shadow: 0 0 15px rgba(0,74,173,1); cursor: pointer; }
       `}</style>
     </div>
   );
