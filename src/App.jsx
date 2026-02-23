@@ -23,7 +23,7 @@ import {
 import { 
   Play, Pause, SkipBack, SkipForward, 
   Trash2, AlertCircle, Loader2, Music, X, Heart, Award, User, Share2,
-  Volume2, VolumeX, ImageIcon, Upload, ArrowDown, ChevronRight, Disc, Eye, Archive, Check, Trophy, Calendar, TrendingUp, Medal, Zap, Clock, Sparkles, Sun, Moon, Ghost, HelpCircle, Camera, CheckCircle2, Star, Coffee, Waves, ExternalLink, ShieldCheck, Smartphone, Download, ChevronDown, AlignTextLeft, Repeat
+  Volume2, VolumeX, ImageIcon, Upload, ArrowDown, ChevronRight, Disc, Eye, Archive, Check, Trophy, Calendar, TrendingUp, Medal, Zap, Clock, Sparkles, Sun, Moon, Ghost, HelpCircle, Camera, CheckCircle2, Star, Coffee, Waves, ExternalLink, ShieldCheck, Smartphone, Download, ChevronDown, AlignLeft, Repeat
 } from 'lucide-react';
 import { motion, AnimatePresence, useScroll, useSpring } from 'framer-motion';
 
@@ -637,7 +637,7 @@ export default function App() {
                   {/* 부가 기능 모음 (가사, 공유 등) */}
                   <div className="flex items-center justify-between pt-6 border-t border-white/5 opacity-80 px-4">
                     <button onClick={() => setShowLyrics(!showLyrics)} className={`flex flex-col items-center gap-2 transition-colors ${showLyrics ? 'text-[#004aad]' : 'text-zinc-400 hover:text-white'}`}>
-                      <AlignTextLeft className="w-6 h-6" />
+                      <AlignLeft className="w-6 h-6" />
                       <span className="text-[9px] font-black uppercase tracking-widest">Lyrics</span>
                     </button>
                     <button onClick={(e) => handleShare(e, currentTrack, 'track')} className="flex flex-col items-center gap-2 text-zinc-400 hover:text-white transition-colors">
