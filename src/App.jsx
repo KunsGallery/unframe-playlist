@@ -23,7 +23,7 @@ import {
 import { 
   Play, Pause, SkipBack, SkipForward, 
   Trash2, AlertCircle, Loader2, Music, X, Heart, Award, User, Share2,
-  Volume2, VolumeX, ImageIcon, Upload, ArrowDown, ChevronRight, Disc, Eye, Archive, Check, Trophy, Calendar, TrendingUp, Medal, Zap, Clock, Sparkles, Sun, Moon, Ghost, HelpCircle, Camera, CheckCircle2, Star, Coffee, Waves, ExternalLink, ShieldCheck, Smartphone, Download
+  Volume2, VolumeX, ImageIcon, Upload, ArrowDown, ChevronRight, Disc, Eye, Archive, Check, Trophy, Calendar, TrendingUp, Medal, Zap, Clock, Sparkles, Sun, Moon, Ghost, HelpCircle, Camera, CheckCircle2, Star, Coffee, Waves, ExternalLink, ShieldCheck, Smartphone, Download, ChevronDown, AlignTextLeft, Repeat
 } from 'lucide-react';
 import { motion, AnimatePresence, useScroll, useSpring } from 'framer-motion';
 
@@ -96,7 +96,9 @@ export default function App() {
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(0.8);
   const [isMuted, setIsMuted] = useState(false);
-  const [newTrack, setNewTrack] = useState({ title: '', artist: '', image: '', description: '', tag: 'Ambient', audioUrl: '' });
+  
+  // 📝 가사(lyrics) 필드 추가됨
+  const [newTrack, setNewTrack] = useState({ title: '', artist: '', image: '', description: '', tag: 'Ambient', audioUrl: '', lyrics: '' });
   const [isUploadingImg, setIsUploadingImg] = useState(false);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -106,6 +108,10 @@ export default function App() {
   const [copiedId, setCopiedId] = useState(null);
   const [showGuide, setShowGuide] = useState(false);
   const [newReward, setNewReward] = useState(null);
+  
+  // 📱 플레이어 확장 상태 관리
+  const [isPlayerExpanded, setIsPlayerExpanded] = useState(false);
+  const [showLyrics, setShowLyrics] = useState(false);
   
   const audioRef = useRef(null);
   const { scrollYProgress } = useScroll();
@@ -219,8 +225,10 @@ export default function App() {
       navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
       navigator.mediaSession.setActionHandler('play', () => playTrack());
       navigator.mediaSession.setActionHandler('pause', () => pauseTrack());
+      navigator.mediaSession.setActionHandler('previoustrack', () => playTrack((currentTrackIdx - 1 + tracks.length) % tracks.length));
+      navigator.mediaSession.setActionHandler('nexttrack', () => playTrack((currentTrackIdx + 1) % tracks.length));
     }
-  }, [currentTrack, isPlaying]);
+  }, [currentTrack, isPlaying, currentTrackIdx, tracks.length]);
 
   const handleToggleLike = async (e, trackId) => {
     if (e) e.stopPropagation();
@@ -262,7 +270,10 @@ export default function App() {
   };
 
   const pauseTrack = () => { setIsPlaying(false); audioRef.current?.pause(); if('mediaSession' in navigator) navigator.mediaSession.playbackState = "paused"; };
-  const togglePlay = () => isPlaying ? pauseTrack() : playTrack();
+  const togglePlay = (e) => { 
+    if(e) e.stopPropagation(); 
+    isPlaying ? pauseTrack() : playTrack(); 
+  };
 
   const handleImageUpload = async (e) => {
     const file = e.target.files[0]; if (!file) return;
@@ -291,8 +302,9 @@ export default function App() {
   const handleAddTrack = async (e) => {
     e.preventDefault(); if (!isAdmin) return;
     try {
+      // 가사(lyrics) 데이터 포함하여 저장
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tracks'), { ...newTrack, createdAt: Date.now() });
-      setNewTrack({ title: '', artist: '', image: '', description: '', tag: 'Ambient', audioUrl: '' });
+      setNewTrack({ title: '', artist: '', image: '', description: '', tag: 'Ambient', audioUrl: '', lyrics: '' });
       setToastMessage("배포 성공 🚀");
     } catch (err) { setAuthError("권한 오류"); }
   };
@@ -302,85 +314,96 @@ export default function App() {
   if (loading) return <div className="min-h-screen bg-black flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-[#004aad]" /></div>;
 
   return (
-    <div className="min-h-screen bg-[#050505] text-zinc-100 font-sans selection:bg-[#004aad] overflow-x-hidden relative">
+    <div className={`min-h-screen bg-[#050505] text-zinc-100 font-sans selection:bg-[#004aad] relative overflow-x-hidden ${isPlayerExpanded ? 'h-screen overflow-hidden' : ''}`}>
       <audio ref={audioRef} onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)} onDurationChange={(e) => setDuration(e.currentTarget.duration)} onEnded={() => playTrack((currentTrackIdx + 1) % tracks.length)} onWaiting={() => setIsBuffering(true)} onPlaying={() => { setIsBuffering(false); updateMediaMetadata(); }} onPlay={() => { if(user) updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'stats'), { listenCount: increment(1), lastActive: Date.now() }); }} playsInline />
       <motion.div className="fixed top-0 left-0 right-0 h-1 bg-[#004aad] z-110 origin-left" style={{ scaleX }} />
 
-      <header className={`fixed top-0 w-full z-100 transition-all duration-500 ${scrolled ? 'py-4 bg-black/40 backdrop-blur-xl border-b border-white/5' : 'py-10'}`}>
-        <div className="container mx-auto px-8 flex justify-between items-end">
+      <header className={`fixed top-0 w-full z-100 transition-all duration-500 ${scrolled ? 'py-4 bg-black/40 backdrop-blur-xl border-b border-white/5' : 'py-6 lg:py-10'}`}>
+        <div className="container mx-auto px-6 lg:px-8 flex justify-between items-end">
           <div className="group cursor-pointer" onClick={() => setView('gallery')}>
-            <h1 className="text-3xl font-black tracking-tighter uppercase italic leading-none group-hover:text-[#004aad] transition-colors">Unframe<span className="text-[#004aad]">.</span></h1>
-            <p className={subTitle + " text-[10px] mt-1 hidden lg:block"}>Reactive Art Collective</p>
+            <h1 className="text-2xl lg:text-3xl font-black tracking-tighter uppercase italic leading-none group-hover:text-[#004aad] transition-colors">Unframe<span className="text-[#004aad]">.</span></h1>
+            <p className={subTitle + " text-[8px] lg:text-[10px] mt-1 hidden lg:block"}>Reactive Art Collective</p>
           </div>
           <nav className="flex items-center gap-4 lg:gap-10">
-             <button onClick={() => setView('gallery')} className={`text-[11px] font-black uppercase tracking-widest ${view === 'gallery' ? 'text-[#004aad]' : 'opacity-30'}`}>Exhibit</button>
-             <button onClick={() => setView('library')} className={`text-[11px] font-black uppercase tracking-widest ${view === 'library' ? 'text-[#004aad]' : 'opacity-30'}`}>Archive</button>
-             <button onClick={() => setShowGuide(true)} className="p-2 text-zinc-600 hover:text-[#004aad] transition-all"><HelpCircle className="w-4 h-4" /></button>
-             {isAdmin && <button onClick={() => setView('admin')} className={`text-[11px] font-black uppercase tracking-widest ${view === 'admin' ? 'text-[#004aad]' : 'opacity-30'}`}>Console</button>}
+             <button onClick={() => setView('gallery')} className={`text-[10px] lg:text-[11px] font-black uppercase tracking-widest ${view === 'gallery' ? 'text-[#004aad]' : 'opacity-30'}`}>Exhibit</button>
+             <button onClick={() => setView('library')} className={`text-[10px] lg:text-[11px] font-black uppercase tracking-widest ${view === 'library' ? 'text-[#004aad]' : 'opacity-30'}`}>Archive</button>
+             <button onClick={() => setShowGuide(true)} className="p-2 text-zinc-600 hover:text-[#004aad] transition-all"><HelpCircle className="w-4 h-4 lg:w-5 lg:h-5" /></button>
+             {isAdmin && <button onClick={() => setView('admin')} className={`text-[10px] lg:text-[11px] font-black uppercase tracking-widest ${view === 'admin' ? 'text-[#004aad]' : 'opacity-30'}`}>Console</button>}
           </nav>
         </div>
       </header>
 
       <AnimatePresence mode="wait">
         {view === 'gallery' && (
-          <motion.div key="gallery" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+          <motion.div key="gallery" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="pb-24 lg:pb-0">
             {/* [Section 1] Hero */}
-            <section className="h-screen flex flex-col justify-center items-center relative px-8 overflow-hidden">
+            <section className="h-screen flex flex-col justify-center items-center relative px-6 lg:px-8 overflow-hidden">
                <div className="absolute inset-0 z-0"><motion.div animate={{ scale: isPlaying ? [1, 1.2, 1] : 1, opacity: isPlaying ? [0.1, 0.2, 0.1] : 0.1 }} transition={{ duration: 4, repeat: Infinity }} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[95vw] h-[95vw] bg-[#004aad] blur-[150px] rounded-full" /></div>
                <motion.div initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="z-10 text-center">
-                 <span className="inline-block px-4 py-1.5 border border-white/20 text-white/60 font-bold tracking-[0.5em] uppercase mb-10 backdrop-blur-md rounded-full text-[9px]">Listening Gallery</span>
-                 <h2 className={`${h1Title} text-[18vw] lg:text-[14rem] italic-outline`}>Project<br/><span className="not-italic text-[#004aad]">UP</span></h2>
-                 <p className="mt-12 text-zinc-500 uppercase tracking-[0.6em] font-bold text-[10px] max-w-sm mx-auto leading-loose opacity-60">전시의 공기를 음악으로 치환하여<br/>당신의 일상으로 연결합니다.</p>
+                 <span className="inline-block px-4 py-1.5 border border-white/20 text-white/60 font-bold tracking-[0.5em] uppercase mb-6 lg:mb-10 backdrop-blur-md rounded-full text-[8px] lg:text-[9px]">Listening Gallery</span>
+                 <h2 className={`${h1Title} text-[20vw] lg:text-[14rem] italic-outline`}>Project<br/><span className="not-italic text-[#004aad]">UP</span></h2>
+                 <p className="mt-8 lg:mt-12 text-zinc-500 uppercase tracking-[0.4em] lg:tracking-[0.6em] font-bold text-[9px] lg:text-[10px] max-w-sm mx-auto leading-loose opacity-60">전시의 공기를 음악으로 치환하여<br/>당신의 일상으로 연결합니다.</p>
                </motion.div>
-               <motion.div animate={{ y: [0, 10, 0] }} transition={{ repeat: Infinity, duration: 2 }} className="absolute bottom-16 left-1/2 -translate-x-1/2 opacity-20"><ArrowDown className="w-6 h-6" /></motion.div>
+               <motion.div animate={{ y: [0, 10, 0] }} transition={{ repeat: Infinity, duration: 2 }} className="absolute bottom-24 lg:bottom-16 left-1/2 -translate-x-1/2 opacity-20"><ArrowDown className="w-6 h-6" /></motion.div>
             </section>
 
             {/* [Section 2] Philosophy */}
-            <section className="py-60 bg-[#fdfbf7] text-black relative z-20 shadow-[0_-50px_100px_rgba(0,0,0,0.5)]">
-               <div className="container mx-auto px-8 grid lg:grid-cols-12 gap-20">
+            <section className="py-32 lg:py-60 bg-[#fdfbf7] text-black relative z-20 shadow-[0_-50px_100px_rgba(0,0,0,0.5)]">
+               <div className="container mx-auto px-6 lg:px-8 grid lg:grid-cols-12 gap-12 lg:gap-20">
                   <div className="lg:col-span-7">
-                     <span className="text-[#004aad] text-[10px] font-black uppercase tracking-[0.4em] mb-6 block">Philosophy</span>
-                     <h2 className="text-[10vw] lg:text-[8rem] font-black uppercase tracking-tighter leading-[0.8] mb-12">Watching<br/><span className="text-[#004aad]">Beyond</span> Listening</h2>
-                     <div className="h-2 w-40 bg-black rounded-full" />
+                     <span className="text-[#004aad] text-[9px] lg:text-[10px] font-black uppercase tracking-[0.4em] mb-4 lg:mb-6 block">Philosophy</span>
+                     <h2 className="text-[14vw] lg:text-[8rem] font-black uppercase tracking-tighter leading-[0.8] mb-8 lg:mb-12">Watching<br/><span className="text-[#004aad]">Beyond</span> Listening</h2>
+                     <div className="h-2 w-24 lg:w-40 bg-black rounded-full" />
                   </div>
-                  <div className="lg:col-span-5 flex flex-col justify-end space-y-10">
-                     <p className="text-2xl lg:text-3xl font-medium leading-tight text-zinc-800"><b>'UP'</b>은 전시장의 잔향을 일상의 이어폰 속으로 옮겨오는 프로젝트입니다.</p>
-                     <p className="text-lg text-zinc-500 font-light leading-relaxed italic border-l-4 border-zinc-200 pl-8">"전시장의 공기는 눈으로만 보는 것이 아니라, 귀로 들리고 피부로 느껴지는 입체적인 경험입니다. 우리는 전시와 일상을 이어주는 통로를 설계합니다."</p>
+                  <div className="lg:col-span-5 flex flex-col justify-end space-y-6 lg:space-y-10">
+                     <p className="text-xl lg:text-3xl font-medium leading-tight text-zinc-800"><b>'UP'</b>은 전시장의 잔향을 일상의 이어폰 속으로 옮겨오는 프로젝트입니다.</p>
+                     <p className="text-base lg:text-lg text-zinc-500 font-light leading-relaxed italic border-l-4 border-zinc-200 pl-6 lg:pl-8">"전시장의 공기는 눈으로만 보는 것이 아니라, 귀로 들리고 피부로 느껴지는 입체적인 경험입니다. 우리는 전시와 일상을 이어주는 통로를 설계합니다."</p>
                   </div>
                </div>
             </section>
 
             {/* [Section 3] Curation Blueprint */}
-            <section className="py-40 bg-black/40 relative">
-               <div className="container mx-auto px-8 text-center mb-24">
+            <section className="py-32 lg:py-40 bg-black/40 relative">
+               <div className="container mx-auto px-6 lg:px-8 text-center mb-16 lg:mb-24">
                   <h3 className={subTitle}>Curation Blueprint</h3>
-                  <p className="text-4xl lg:text-7xl font-black uppercase mt-4 italic italic-outline">Methodology</p>
+                  <p className="text-3xl lg:text-7xl font-black uppercase mt-4 italic italic-outline">Methodology</p>
                </div>
-               <div className="container mx-auto px-8 grid md:grid-cols-3 gap-8">
+               <div className="container mx-auto px-6 lg:px-8 grid md:grid-cols-3 gap-6 lg:gap-8">
                   {[
                     { icon: Disc, title: "Exhibition OST", desc: "전시 기획 의도를 담아 공간의 페르소나를 완성하는 공식 플레이리스트입니다." },
                     { icon: Eye, title: "Director's Pick", desc: "디렉터가 매일 아침 공간을 정돈하며 듣는, 계절과 무드에 어울리는 선곡입니다." },
                     { icon: Archive, title: "Sound Archive", desc: "전시 종료 후에도 그 공간의 온기를 언제든 다시 꺼낼 수 있는 단단한 기록입니다." }
                   ].map((item, idx) => (
-                    <motion.div key={idx} whileHover={{ y: -10 }} className="p-12 rounded-[4rem] bg-white/5 border border-white/10 space-y-8">
-                       <div className="w-16 h-16 rounded-3xl bg-[#004aad] flex items-center justify-center shadow-lg shadow-[#004aad]/20"><item.icon className="w-7 h-7 text-white" /></div>
-                       <h4 className="text-2xl font-black uppercase tracking-tight italic">{item.title}</h4>
-                       <p className="text-sm text-zinc-500 font-medium leading-relaxed">{item.desc}</p>
+                    <motion.div key={idx} whileHover={{ y: -10 }} className="p-8 lg:p-12 rounded-[2rem] lg:rounded-[4rem] bg-white/5 border border-white/10 space-y-6 lg:space-y-8">
+                       <div className="w-14 h-14 lg:w-16 lg:h-16 rounded-3xl bg-[#004aad] flex items-center justify-center shadow-lg shadow-[#004aad]/20"><item.icon className="w-6 h-6 lg:w-7 lg:h-7 text-white" /></div>
+                       <h4 className="text-xl lg:text-2xl font-black uppercase tracking-tight italic">{item.title}</h4>
+                       <p className="text-xs lg:text-sm text-zinc-500 font-medium leading-relaxed">{item.desc}</p>
                     </motion.div>
                   ))}
                </div>
             </section>
 
             {/* [Section 4] Archive Collections */}
-            <section className="py-60 px-8 container mx-auto">
-              <div className="mb-24 flex justify-between items-end border-b border-white/5 pb-12"><div><h3 className={subTitle}>Archive Collections</h3><p className="text-6xl lg:text-[8rem] font-black uppercase mt-6 italic italic-outline tracking-tighter leading-none">Sound Artifacts</p></div></div>
-              <div className="grid grid-cols-1 gap-6">
+            <section className="py-32 lg:py-60 px-6 lg:px-8 container mx-auto">
+              <div className="mb-16 lg:mb-24 flex flex-col lg:flex-row justify-between lg:items-end border-b border-white/5 pb-8 lg:pb-12 gap-4">
+                 <div><h3 className={subTitle}>Archive Collections</h3><p className="text-5xl lg:text-[8rem] font-black uppercase mt-4 lg:mt-6 italic italic-outline tracking-tighter leading-none">Sound Artifacts</p></div>
+              </div>
+              <div className="grid grid-cols-1 gap-4 lg:gap-6">
                 {tracks.map((track, idx) => (
-                  <motion.div key={track.id} initial={{ opacity: 0, x: -30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} onClick={() => setSelectedTrack(track)} className={`${glass} p-10 lg:p-14 rounded-[4rem] flex items-center justify-between group cursor-pointer hover:bg-white/10 transition-all border-white/5 relative shadow-xl`}>
-                    <div className="flex items-center gap-12 relative z-10"><span className="text-6xl lg:text-7xl font-thin italic text-white/5 group-hover:text-[#004aad]/30 transition-colors">{(idx + 1).toString().padStart(2, '0')}</span><div className="space-y-3"><h4 className="text-4xl lg:text-8xl font-black uppercase group-hover:italic transition-all duration-700 tracking-tighter leading-none">{track.title}</h4><div className="flex items-center gap-4"><p className="text-[11px] text-zinc-500 font-bold tracking-[0.5em] uppercase">{track.artist}</p><button onClick={(e) => handleShare(e, track, 'track')} className="p-3 opacity-0 group-hover:opacity-100 hover:text-[#004aad] transition-all bg-white/5 rounded-full"><Share2 className="w-4 h-4" /></button></div></div></div>
-                    <div className="flex items-center gap-8 relative z-10">
-                      <button onClick={(e) => handleToggleLike(e, track.id)} className={`transition-all ${userLikes.includes(track.id) ? 'text-red-500 scale-125' : 'text-white/20 hover:text-white'}`}><Heart className={`w-8 h-8 ${userLikes.includes(track.id) ? 'fill-current' : ''}`} /></button>
-                      <div onClick={(e) => { e.stopPropagation(); if (currentTrackIdx === idx && isPlaying) pauseTrack(); else playTrack(idx); }} className={`w-20 h-20 lg:w-24 lg:h-24 rounded-full border border-white/10 flex items-center justify-center transition-all ${currentTrackIdx === idx && isPlaying ? 'bg-[#004aad] border-[#004aad] shadow-2xl' : 'bg-white/5 group-hover:bg-white group-hover:text-black shadow-2xl'}`}>{currentTrackIdx === idx && isPlaying ? (isBuffering ? <Loader2 className="w-8 h-8 animate-spin text-white" /> : <Pause className="w-8 h-8 fill-current" />) : <Play className="w-8 h-8 fill-current ml-1.5" />}</div>
+                  <motion.div key={track.id} initial={{ opacity: 0, x: -30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} onClick={() => setSelectedTrack(track)} className={`${glass} p-6 lg:p-14 rounded-[2rem] lg:rounded-[4rem] flex flex-col md:flex-row md:items-center justify-between group cursor-pointer hover:bg-white/10 transition-all border-white/5 relative shadow-xl gap-6`}>
+                    <div className="flex items-center gap-6 lg:gap-12 relative z-10 w-full md:w-auto">
+                       <span className="text-4xl lg:text-7xl font-thin italic text-white/10 lg:text-white/5 group-hover:text-[#004aad]/30 transition-colors">{(idx + 1).toString().padStart(2, '0')}</span>
+                       <div className="space-y-2 lg:space-y-3 flex-1">
+                          <h4 className="text-2xl lg:text-8xl font-black uppercase group-hover:italic transition-all duration-700 tracking-tighter leading-tight lg:leading-none">{track.title}</h4>
+                          <div className="flex items-center gap-4">
+                             <p className="text-[9px] lg:text-[11px] text-zinc-500 font-bold tracking-[0.3em] lg:tracking-[0.5em] uppercase">{track.artist}</p>
+                             <button onClick={(e) => handleShare(e, track, 'track')} className="p-2 lg:p-3 opacity-100 lg:opacity-0 group-hover:opacity-100 hover:text-[#004aad] transition-all bg-white/5 rounded-full"><Share2 className="w-3 h-3 lg:w-4 lg:h-4" /></button>
+                          </div>
+                       </div>
+                    </div>
+                    <div className="flex items-center justify-between md:justify-end gap-6 lg:gap-8 w-full md:w-auto border-t md:border-t-0 border-white/5 pt-4 md:pt-0">
+                      <button onClick={(e) => handleToggleLike(e, track.id)} className={`transition-all ${userLikes.includes(track.id) ? 'text-red-500 scale-125' : 'text-white/20 hover:text-white'}`}><Heart className={`w-6 h-6 lg:w-8 lg:h-8 ${userLikes.includes(track.id) ? 'fill-current' : ''}`} /></button>
+                      <div onClick={(e) => { e.stopPropagation(); if (currentTrackIdx === idx && isPlaying) pauseTrack(); else playTrack(idx); }} className={`w-14 h-14 lg:w-24 lg:h-24 rounded-full border border-white/10 flex items-center justify-center transition-all ${currentTrackIdx === idx && isPlaying ? 'bg-[#004aad] border-[#004aad] shadow-2xl' : 'bg-white/5 group-hover:bg-white group-hover:text-black shadow-2xl'}`}>{currentTrackIdx === idx && isPlaying ? (isBuffering ? <Loader2 className="w-6 h-6 lg:w-8 lg:h-8 animate-spin text-white" /> : <Pause className="w-6 h-6 lg:w-8 lg:h-8 fill-current" />) : <Play className="w-6 h-6 lg:w-8 lg:h-8 fill-current ml-1 lg:ml-1.5" />}</div>
                     </div>
                   </motion.div>
                 ))}
@@ -388,45 +411,45 @@ export default function App() {
             </section>
 
             {/* [Section 5] Exhibition Gallery */}
-            <section className="py-60 px-8 container mx-auto">
-               <div className="flex flex-col md:flex-row justify-between items-end mb-24">
-                  <div><h3 className={subTitle}>Sound Archive</h3><p className="text-6xl lg:text-[7rem] font-black uppercase mt-4 italic italic-outline leading-none">Exhibitions</p></div>
-                  <p className="text-zinc-600 font-bold text-[10px] uppercase tracking-widest pb-2">Click to Explore Space</p>
+            <section className="py-32 lg:py-60 px-6 lg:px-8 container mx-auto">
+               <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-16 lg:mb-24 gap-4">
+                  <div><h3 className={subTitle}>Sound Archive</h3><p className="text-5xl lg:text-[7rem] font-black uppercase mt-4 italic italic-outline leading-none">Exhibitions</p></div>
+                  <p className="text-zinc-600 font-bold text-[9px] lg:text-[10px] uppercase tracking-widest pb-2">Click to Explore Space</p>
                </div>
-               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-10">
                   {EXHIBITIONS.map((ex, idx) => (
                     <motion.div key={ex.id} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: idx * 0.1 }} className="group cursor-pointer">
-                      <div className="relative aspect-4/5 rounded-[3.5rem] overflow-hidden mb-8 shadow-2xl bg-zinc-900 border border-white/5">
+                      <div className="relative aspect-4/5 rounded-[2rem] lg:rounded-[3.5rem] overflow-hidden mb-6 lg:mb-8 shadow-2xl bg-zinc-900 border border-white/5">
                         <img src={ex.img} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000 opacity-60 group-hover:opacity-100" alt={ex.title} />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"><div className="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center shadow-2xl scale-75 group-hover:scale-100 transition-transform duration-500"><ExternalLink className="w-6 h-6" /></div></div>
-                        <div className="absolute top-8 right-8 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-[9px] font-black uppercase tracking-widest text-white">{ex.tag}</div>
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"><div className="w-12 h-12 lg:w-16 lg:h-16 rounded-full bg-white text-black flex items-center justify-center shadow-2xl scale-75 group-hover:scale-100 transition-transform duration-500"><ExternalLink className="w-5 h-5 lg:w-6 lg:h-6" /></div></div>
+                        <div className="absolute top-6 right-6 lg:top-8 lg:right-8 px-3 lg:px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-[8px] lg:text-[9px] font-black uppercase tracking-widest text-white">{ex.tag}</div>
                       </div>
-                      <div className="px-6 space-y-2"><p className="text-[#004aad] text-[10px] font-black uppercase tracking-[0.3em]">{ex.sub}</p><h4 className="text-2xl font-black uppercase tracking-tighter group-hover:text-[#004aad] transition-colors">{ex.title}</h4></div>
+                      <div className="px-4 lg:px-6 space-y-2"><p className="text-[#004aad] text-[9px] lg:text-[10px] font-black uppercase tracking-[0.3em]">{ex.sub}</p><h4 className="text-xl lg:text-2xl font-black uppercase tracking-tighter group-hover:text-[#004aad] transition-colors">{ex.title}</h4></div>
                     </motion.div>
                   ))}
                </div>
             </section>
 
             {/* [Section 6] Streaming Connect */}
-            <section className="py-60 px-8 bg-black relative overflow-hidden">
-               <div className="container mx-auto text-center space-y-24 relative z-10">
-                  <div className="space-y-6">
+            <section className="py-32 lg:py-60 px-6 lg:px-8 bg-black relative overflow-hidden">
+               <div className="container mx-auto text-center space-y-16 lg:space-y-24 relative z-10">
+                  <div className="space-y-4 lg:space-y-6">
                      <span className={subTitle}>Streaming Connection</span>
-                     <h2 className={`${h1Title} text-[8vw] lg:text-[7.5rem] leading-none`}>Carry the<br/><span className="text-[#004aad]">Vibe Outside</span></h2>
+                     <h2 className={`${h1Title} text-[12vw] lg:text-[7.5rem] leading-none`}>Carry the<br/><span className="text-[#004aad]">Vibe Outside</span></h2>
                   </div>
-                  <div className="flex flex-col lg:flex-row justify-center gap-12 max-w-5xl mx-auto w-full">
-                     <a href="https://music.youtube.com" target="_blank" rel="noopener noreferrer" className="flex-1 py-16 rounded-[4rem] bg-zinc-900/50 border border-white/5 hover:border-red-600 transition-all group flex flex-col items-center gap-8 shadow-xl"><div className="w-20 h-20 bg-red-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform shadow-red-600/20 shadow-2xl"><Play className="w-10 h-10 fill-white text-white" /></div><p className="text-2xl font-black uppercase tracking-tighter">YouTube Music</p></a>
-                     <a href="https://spotify.com" target="_blank" rel="noopener noreferrer" className="flex-1 py-16 rounded-[4rem] bg-zinc-900/50 border border-white/5 hover:border-green-500 transition-all group flex flex-col items-center gap-8 shadow-xl"><div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform shadow-green-500/20 shadow-2xl"><Disc className="w-10 h-10 text-black fill-black" /></div><p className="text-2xl font-black uppercase tracking-tighter">Spotify</p></a>
+                  <div className="flex flex-col lg:flex-row justify-center gap-6 lg:gap-12 max-w-5xl mx-auto w-full">
+                     <a href="https://music.youtube.com" target="_blank" rel="noopener noreferrer" className="flex-1 py-12 lg:py-16 rounded-[2rem] lg:rounded-[4rem] bg-zinc-900/50 border border-white/5 hover:border-red-600 transition-all group flex flex-col items-center gap-6 lg:gap-8 shadow-xl"><div className="w-16 h-16 lg:w-20 lg:h-20 bg-red-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform shadow-red-600/20 shadow-2xl"><Play className="w-8 h-8 lg:w-10 lg:h-10 fill-white text-white" /></div><p className="text-xl lg:text-2xl font-black uppercase tracking-tighter">YouTube Music</p></a>
+                     <a href="https://spotify.com" target="_blank" rel="noopener noreferrer" className="flex-1 py-12 lg:py-16 rounded-[2rem] lg:rounded-[4rem] bg-zinc-900/50 border border-white/5 hover:border-green-500 transition-all group flex flex-col items-center gap-6 lg:gap-8 shadow-xl"><div className="w-16 h-16 lg:w-20 lg:h-20 bg-green-500 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform shadow-green-500/20 shadow-2xl"><Disc className="w-8 h-8 lg:w-10 lg:h-10 text-black fill-black" /></div><p className="text-xl lg:text-2xl font-black uppercase tracking-tighter">Spotify</p></a>
                   </div>
                </div>
                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[#004aad]/5 blur-[150px] rounded-full z-0" />
             </section>
 
-            <footer className="py-40 bg-[#fdfbf7] text-black border-t border-zinc-200 px-8 relative z-30">
-               <div className="container mx-auto grid lg:grid-cols-4 gap-24 lg:gap-10 opacity-80">
-                  <div className="space-y-10"><h1 className="text-5xl font-black uppercase tracking-tighter text-[#004aad]">Unframe<span className="text-black">.</span></h1><p className="text-[11px] font-black uppercase leading-loose text-zinc-400">© 2026 UNFRAME ART COLLECTIVE.</p></div>
-                  <div className="space-y-8"><p className="text-[12px] font-black uppercase tracking-widest text-[#004aad] flex items-center gap-3"><span className="w-1.5 h-1.5 bg-[#004aad] rounded-full" /> VISIT US</p><ul className="text-sm font-bold opacity-60"><li>서울특별시 종로구 인사동4길 17, 108호</li></ul></div>
-                  <div className="space-y-8"><p className="text-[12px] font-black uppercase tracking-widest text-[#004aad] flex items-center gap-3"><span className="w-1.5 h-1.5 bg-[#004aad] rounded-full" /> SYSTEM</p><ul className="text-sm font-bold opacity-80 underline"><li onClick={() => setView('admin')} className="cursor-pointer">Console</li></ul></div>
+            <footer className="py-24 lg:py-40 bg-[#fdfbf7] text-black border-t border-zinc-200 px-6 lg:px-8 relative z-30">
+               <div className="container mx-auto grid lg:grid-cols-4 gap-12 lg:gap-10 opacity-80">
+                  <div className="space-y-6 lg:space-y-10"><h1 className="text-4xl lg:text-5xl font-black uppercase tracking-tighter text-[#004aad]">Unframe<span className="text-black">.</span></h1><p className="text-[9px] lg:text-[11px] font-black uppercase leading-loose text-zinc-400">© 2026 UNFRAME ART COLLECTIVE.</p></div>
+                  <div className="space-y-4 lg:space-y-8"><p className="text-[10px] lg:text-[12px] font-black uppercase tracking-widest text-[#004aad] flex items-center gap-3"><span className="w-1.5 h-1.5 bg-[#004aad] rounded-full" /> VISIT US</p><ul className="text-xs lg:text-sm font-bold opacity-60"><li>서울특별시 종로구 인사동4길 17, 108호</li></ul></div>
+                  <div className="space-y-4 lg:space-y-8"><p className="text-[10px] lg:text-[12px] font-black uppercase tracking-widest text-[#004aad] flex items-center gap-3"><span className="w-1.5 h-1.5 bg-[#004aad] rounded-full" /> SYSTEM</p><ul className="text-xs lg:text-sm font-bold opacity-80 underline"><li onClick={() => setView('admin')} className="cursor-pointer">Console</li></ul></div>
                </div>
             </footer>
           </motion.div>
@@ -434,42 +457,42 @@ export default function App() {
 
         {/* --- [Sonic Identity Card] Archive View --- */}
         {view === 'library' && (
-          <motion.div key="library" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="pt-40 px-8 container mx-auto pb-40 min-h-screen relative z-20">
-             <div className="grid lg:grid-cols-12 gap-12 lg:gap-20">
-                <div className="lg:col-span-4 space-y-8">
-                  <motion.div className={`${glass} p-12 rounded-[5rem] text-center space-y-10 relative border-white/20 shadow-2xl`}>
+          <motion.div key="library" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="pt-32 lg:pt-40 px-6 lg:px-8 container mx-auto pb-32 lg:pb-40 min-h-screen relative z-20">
+             <div className="grid lg:grid-cols-12 gap-8 lg:gap-20">
+                <div className="lg:col-span-4 space-y-6 lg:space-y-8">
+                  <motion.div className={`${glass} p-8 lg:p-12 rounded-[3rem] lg:rounded-[5rem] text-center space-y-8 lg:space-y-10 relative border-white/20 shadow-2xl`}>
                     <div className="absolute top-0 left-0 w-full h-1 bg-[#004aad] opacity-30 shadow-[0_0_20px_#004aad]" />
                     <div className="relative inline-block">
-                      <div className="w-40 h-40 bg-zinc-900 rounded-full mx-auto flex items-center justify-center shadow-2xl transition-transform duration-700 overflow-hidden border-4 border-white/10 relative group/profile">
-                        {isUploadingProfile ? <Loader2 className="w-10 h-10 animate-spin text-[#004aad]" /> : (userProfile?.profileImg ? <img src={userProfile.profileImg} className="w-full h-full object-cover" alt="profile" /> : <User className="w-14 h-14 text-white/10" />)}
-                        <label className="absolute inset-0 bg-black/60 opacity-0 group-hover/profile:opacity-100 flex flex-col items-center justify-center cursor-pointer transition-opacity"><Camera className="w-6 h-6 mb-2" /><span className="text-[10px] font-black uppercase">Change</span><input type="file" accept="image/*" className="hidden" onChange={handleProfileImageUpload} disabled={isUploadingProfile} /></label>
+                      <div className="w-32 h-32 lg:w-40 lg:h-40 bg-zinc-900 rounded-full mx-auto flex items-center justify-center shadow-2xl transition-transform duration-700 overflow-hidden border-4 border-white/10 relative group/profile">
+                        {isUploadingProfile ? <Loader2 className="w-8 h-8 lg:w-10 lg:h-10 animate-spin text-[#004aad]" /> : (userProfile?.profileImg ? <img src={userProfile.profileImg} className="w-full h-full object-cover" alt="profile" /> : <User className="w-10 h-10 lg:w-14 lg:h-14 text-white/10" />)}
+                        <label className="absolute inset-0 bg-black/60 opacity-0 group-hover/profile:opacity-100 flex flex-col items-center justify-center cursor-pointer transition-opacity"><Camera className="w-5 h-5 lg:w-6 lg:h-6 mb-1 lg:mb-2" /><span className="text-[9px] lg:text-[10px] font-black uppercase">Change</span><input type="file" accept="image/*" className="hidden" onChange={handleProfileImageUpload} disabled={isUploadingProfile} /></label>
                       </div>
-                      <div className={`absolute -bottom-2 -right-2 px-6 py-2 rounded-full ${membership.bg} ${membership.color} text-[11px] font-black uppercase border border-white/10 shadow-2xl flex items-center gap-2`}>
-                        {React.createElement(membership.icon, { className: "w-4 h-4" })} {membership.name}
+                      <div className={`absolute -bottom-2 -right-2 px-4 lg:px-6 py-1.5 lg:py-2 rounded-full ${membership.bg} ${membership.color} text-[9px] lg:text-[11px] font-black uppercase border border-white/10 shadow-2xl flex items-center gap-1.5 lg:gap-2`}>
+                        {React.createElement(membership.icon, { className: "w-3 h-3 lg:w-4 lg:h-4" })} {membership.name}
                       </div>
                     </div>
-                    <div className="space-y-4">
-                      <div className="space-y-2"><h2 className="text-4xl font-black uppercase italic tracking-tighter leading-none">너는 지금 {membership.name}야</h2><p className="text-[11px] text-zinc-500 font-bold uppercase tracking-widest opacity-60">함께한 지 {Math.floor((Date.now() - (userProfile?.firstJoin || Date.now())) / 86400000) + 1}일째의 여행</p></div>
+                    <div className="space-y-3 lg:space-y-4">
+                      <div className="space-y-1.5 lg:space-y-2"><h2 className="text-2xl lg:text-4xl font-black uppercase italic tracking-tighter leading-none">너는 지금 {membership.name}야</h2><p className="text-[9px] lg:text-[11px] text-zinc-500 font-bold uppercase tracking-widest opacity-60">함께한 지 {Math.floor((Date.now() - (userProfile?.firstJoin || Date.now())) / 86400000) + 1}일째의 여행</p></div>
                     </div>
-                    <div className="grid grid-cols-4 gap-2 border-t border-white/10 pt-10">
-                      <div className="space-y-1"><Music className="w-4 h-4 mx-auto text-indigo-400"/><p className="text-[8px] font-black text-zinc-600 uppercase">순간</p><p className="text-xl font-black text-white">{userProfile?.listenCount || 0}</p></div>
-                      <div className="space-y-1"><Heart className="w-4 h-4 mx-auto text-red-400"/><p className="text-[8px] font-black text-zinc-600 uppercase">하트</p><p className="text-xl font-black text-white">{userLikes.length}</p></div>
-                      <div className="space-y-1"><Share2 className="w-4 h-4 mx-auto text-blue-400"/><p className="text-[8px] font-black text-zinc-600 uppercase">신호</p><p className="text-xl font-black text-white">{userProfile?.shareCount || 0}</p></div>
-                      <div className="space-y-1"><Zap className="w-4 h-4 mx-auto text-yellow-400"/><p className="text-[8px] font-black text-zinc-600 uppercase">연속</p><p className="text-xl font-black text-white">{Math.floor((Date.now() - (userProfile?.firstJoin || Date.now())) / 86400000) + 1}</p></div>
+                    <div className="grid grid-cols-4 gap-2 border-t border-white/10 pt-6 lg:pt-10">
+                      <div className="space-y-1"><Music className="w-3 h-3 lg:w-4 lg:h-4 mx-auto text-indigo-400"/><p className="text-[7px] lg:text-[8px] font-black text-zinc-600 uppercase">순간</p><p className="text-lg lg:text-xl font-black text-white">{userProfile?.listenCount || 0}</p></div>
+                      <div className="space-y-1"><Heart className="w-3 h-3 lg:w-4 lg:h-4 mx-auto text-red-400"/><p className="text-[7px] lg:text-[8px] font-black text-zinc-600 uppercase">하트</p><p className="text-lg lg:text-xl font-black text-white">{userLikes.length}</p></div>
+                      <div className="space-y-1"><Share2 className="w-3 h-3 lg:w-4 lg:h-4 mx-auto text-blue-400"/><p className="text-[7px] lg:text-[8px] font-black text-zinc-600 uppercase">신호</p><p className="text-lg lg:text-xl font-black text-white">{userProfile?.shareCount || 0}</p></div>
+                      <div className="space-y-1"><Zap className="w-3 h-3 lg:w-4 lg:h-4 mx-auto text-yellow-400"/><p className="text-[7px] lg:text-[8px] font-black text-zinc-600 uppercase">연속</p><p className="text-lg lg:text-xl font-black text-white">{Math.floor((Date.now() - (userProfile?.firstJoin || Date.now())) / 86400000) + 1}</p></div>
                     </div>
-                    <button onClick={() => signOut(auth)} className="text-[9px] font-black uppercase underline opacity-20 hover:opacity-100 mt-10">Sign Out</button>
+                    <button onClick={() => signOut(auth)} className="text-[8px] lg:text-[9px] font-black uppercase underline opacity-20 hover:opacity-100 mt-6 lg:mt-10">Sign Out</button>
                   </motion.div>
-                  <div className={`${glass} p-12 rounded-[5rem] space-y-10 border-white/10`}>
-                    <h3 className="text-[11px] font-black uppercase tracking-[0.4em] flex items-center gap-4 text-zinc-400"><Archive className="w-4 h-4 text-[#004aad]" /> Sticker Book</h3>
-                    <div className="grid grid-cols-4 gap-4">
+                  <div className={`${glass} p-8 lg:p-12 rounded-[3rem] lg:rounded-[5rem] space-y-6 lg:space-y-10 border-white/10`}>
+                    <h3 className="text-[9px] lg:text-[11px] font-black uppercase tracking-[0.4em] flex items-center gap-3 lg:gap-4 text-zinc-400"><Archive className="w-3 h-3 lg:w-4 lg:h-4 text-[#004aad]" /> Sticker Book</h3>
+                    <div className="grid grid-cols-4 gap-3 lg:gap-4">
                       {Object.entries(STICKER_LIBRARY).map(([key, data]) => {
                         const isActive = userProfile.rewards?.includes(key);
                         return (
-                          <div key={key} className={`aspect-square rounded-2xl flex items-center justify-center border transition-all duration-700 ${isActive ? 'border-[#004aad] bg-linear-to-br from-[#004aad]/20 to-indigo-500/10 text-white shadow-[0_0_15px_rgba(0,74,173,0.3)]' : 'border-white/5 opacity-10'} relative group/badge`}>
-                            <data.icon className={`w-6 h-6 ${isActive ? data.color : ''}`} />
-                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 p-5 bg-black border border-white/10 rounded-2xl text-[10px] font-bold uppercase tracking-widest whitespace-nowrap opacity-0 group-hover/badge:opacity-100 pointer-events-none transition-all scale-95 group-hover/badge:scale-100 z-50 shadow-2xl">
-                               <p className={isActive ? data.color : 'text-[#004aad]'} style={{fontSize: '12px'}}>{data.title}</p>
-                               <p className="text-white mt-1.5 font-bold leading-relaxed lowercase opacity-100">{data.desc}</p>
+                          <div key={key} className={`aspect-square rounded-[1rem] lg:rounded-2xl flex items-center justify-center border transition-all duration-700 ${isActive ? 'border-[#004aad] bg-linear-to-br from-[#004aad]/20 to-indigo-500/10 text-white shadow-[0_0_15px_rgba(0,74,173,0.3)]' : 'border-white/5 opacity-10'} relative group/badge`}>
+                            <data.icon className={`w-4 h-4 lg:w-6 lg:h-6 ${isActive ? data.color : ''}`} />
+                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 lg:mb-4 p-3 lg:p-5 bg-black border border-white/10 rounded-xl lg:rounded-2xl text-[8px] lg:text-[10px] font-bold uppercase tracking-widest whitespace-nowrap opacity-0 group-hover/badge:opacity-100 pointer-events-none transition-all scale-95 group-hover/badge:scale-100 z-50 shadow-2xl">
+                               <p className={isActive ? data.color : 'text-[#004aad]'} style={{fontSize: '10px'}}>{data.title}</p>
+                               <p className="text-white mt-1 lg:mt-1.5 font-bold leading-relaxed lowercase opacity-100 hidden lg:block">{data.desc}</p>
                             </div>
                           </div>
                         );
@@ -477,9 +500,9 @@ export default function App() {
                     </div>
                   </div>
                 </div>
-                <div className="lg:col-span-8 space-y-16">
-                   <section className={`${glass} p-12 rounded-[5rem] space-y-10 border-[#004aad]/20`}><div className="space-y-6"><div className="flex items-center gap-4"><span className="px-5 py-2 rounded-full bg-[#004aad]/20 text-[#004aad] text-[10px] font-black uppercase tracking-widest border border-[#004aad]/30">오늘의 UP 놀이</span>{userProfile?.listenCount > 0 && <span className="text-[10px] font-bold text-green-400 uppercase tracking-widest flex items-center gap-2"><CheckCircle2 className="w-3 h-3"/> 오늘도 들러줘서 고마워 💙</span>}</div><h3 className="text-4xl font-black uppercase italic tracking-tighter leading-none text-white">오늘 노래 1번 듣기</h3></div><div className="pt-8 border-t border-white/5 flex items-center gap-6"><div className="w-16 h-16 rounded-3xl bg-white/5 flex flex-col items-center justify-center border border-white/10 shadow-xl"><p className="text-[8px] font-black uppercase opacity-40">Rank</p><p className="text-2xl font-black italic tracking-tighter text-white">#3</p></div><p className="text-sm font-medium text-zinc-400">너는 지금 <span className="text-white font-black italic">조용히 자주 오는 사람들</span> 중 3번째야 🌙</p></div></section>
-                   <section className="space-y-12"><h2 className={`${h1Title} text-7xl lg:text-[9rem] tracking-tighter`}>My<br/>Hearts</h2><div className="grid gap-6">{tracks.filter(t => userLikes.includes(t.id)).map(t => (<div key={t.id} onClick={() => setSelectedTrack(t)} className={`${glass} p-12 rounded-[4rem] flex justify-between items-center group cursor-pointer border-white/5 hover:bg-[#004aad]/5 transition-all shadow-xl`}><div className="flex items-center gap-10"><div className="w-20 h-20 rounded-4xl overflow-hidden shadow-2xl"><img src={t.image} className="w-full h-full object-cover" alt="" onerror={(e)=>e.target.src='https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17'} /></div><div className="space-y-2"><p className="text-4xl font-black uppercase tracking-tighter leading-none">{t.title}</p><p className="text-[11px] font-bold text-[#004aad] tracking-[0.2em] uppercase">{t.artist}</p></div></div><div className="flex items-center gap-4"><button onClick={(e) => handleShare(e, t, 'track')} className="p-4 opacity-0 group-hover:opacity-100 hover:text-[#004aad] transition-all bg-white/5 rounded-full"><Share2 className="w-5 h-5" /></button><Heart className="w-10 h-10 fill-red-500 text-red-500 drop-shadow-[0_0_10px_rgba(239,68,68,0.5)]" /></div></div>))}</div></section>
+                <div className="lg:col-span-8 space-y-10 lg:space-y-16">
+                   <section className={`${glass} p-8 lg:p-12 rounded-[3rem] lg:rounded-[5rem] space-y-6 lg:space-y-10 border-[#004aad]/20`}><div className="space-y-4 lg:space-y-6"><div className="flex flex-wrap items-center gap-3 lg:gap-4"><span className="px-4 lg:px-5 py-1.5 lg:py-2 rounded-full bg-[#004aad]/20 text-[#004aad] text-[8px] lg:text-[10px] font-black uppercase tracking-widest border border-[#004aad]/30">오늘의 UP 놀이</span>{userProfile?.listenCount > 0 && <span className="text-[8px] lg:text-[10px] font-bold text-green-400 uppercase tracking-widest flex items-center gap-1.5 lg:gap-2"><CheckCircle2 className="w-3 h-3"/> 오늘도 들러줘서 고마워 💙</span>}</div><h3 className="text-3xl lg:text-4xl font-black uppercase italic tracking-tighter leading-none text-white">오늘 노래 1번 듣기</h3></div><div className="pt-6 lg:pt-8 border-t border-white/5 flex flex-col md:flex-row md:items-center gap-4 lg:gap-6"><div className="w-14 h-14 lg:w-16 lg:h-16 rounded-2xl lg:rounded-3xl bg-white/5 flex flex-col items-center justify-center border border-white/10 shadow-xl shrink-0"><p className="text-[7px] lg:text-[8px] font-black uppercase opacity-40">Rank</p><p className="text-xl lg:text-2xl font-black italic tracking-tighter text-white">#3</p></div><p className="text-xs lg:text-sm font-medium text-zinc-400">너는 지금 <span className="text-white font-black italic">조용히 자주 오는 사람들</span> 중 3번째야 🌙</p></div></section>
+                   <section className="space-y-8 lg:space-y-12"><h2 className={`${h1Title} text-5xl lg:text-[9rem] tracking-tighter`}>My<br/>Hearts</h2><div className="grid gap-4 lg:gap-6">{tracks.filter(t => userLikes.includes(t.id)).map(t => (<div key={t.id} onClick={() => setSelectedTrack(t)} className={`${glass} p-6 lg:p-12 rounded-[2rem] lg:rounded-[4rem] flex justify-between items-center group cursor-pointer border-white/5 hover:bg-[#004aad]/5 transition-all shadow-xl`}><div className="flex items-center gap-6 lg:gap-10"><div className="w-14 h-14 lg:w-20 lg:h-20 rounded-[1.2rem] lg:rounded-4xl overflow-hidden shadow-2xl shrink-0"><img src={t.image} className="w-full h-full object-cover" alt="" onError={(e)=>e.target.src='https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17'} /></div><div className="space-y-1 lg:space-y-2 truncate"><p className="text-2xl lg:text-4xl font-black uppercase tracking-tighter leading-none truncate">{t.title}</p><p className="text-[9px] lg:text-[11px] font-bold text-[#004aad] tracking-[0.2em] uppercase truncate">{t.artist}</p></div></div><div className="flex items-center gap-3 lg:gap-4 shrink-0"><button onClick={(e) => handleShare(e, t, 'track')} className="p-2 lg:p-4 opacity-100 lg:opacity-0 group-hover:opacity-100 hover:text-[#004aad] transition-all bg-white/5 rounded-full hidden md:block"><Share2 className="w-4 h-4 lg:w-5 lg:h-5" /></button><Heart className="w-6 h-6 lg:w-10 lg:h-10 fill-red-500 text-red-500 drop-shadow-[0_0_10px_rgba(239,68,68,0.5)]" /></div></div>))}</div></section>
                 </div>
              </div>
           </motion.div>
@@ -487,57 +510,188 @@ export default function App() {
 
         {/* --- [Console View] --- */}
         {view === 'admin' && (
-          <motion.div key="admin" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="pt-40 px-8 container mx-auto pb-40 relative z-20 min-h-screen">
-             <div className="grid lg:grid-cols-12 gap-24">
-              <div className="lg:col-span-8 space-y-16"><h2 className={h1Title + " text-8xl lg:text-[10rem]"}>Console</h2>{!isAdmin ? (<div className={glass + " p-32 rounded-[6rem] text-center space-y-10"}><ShieldCheck className="w-24 h-24 mx-auto text-[#004aad]" /><button onClick={() => signInWithPopup(auth, new GoogleAuthProvider())} className="bg-white text-black px-20 py-6 rounded-full font-black uppercase text-sm tracking-widest shadow-2xl">Verify Admin</button></div>) : (<div className="space-y-6">{tracks.map(t => (<div key={t.id} className={`${glass} p-10 px-16 rounded-[4rem] flex justify-between items-center group shadow-xl`}><p className="font-black uppercase tracking-tight text-3xl">{t.title}</p><button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tracks', t.id))} className="p-6 text-red-500/20 hover:text-red-500 transition-colors bg-red-500/5 rounded-full"><Trash2 className="w-8 h-8" /></button></div>))}</div>)}</div>
-              {isAdmin && (<div className="lg:col-span-4"><div className="bg-indigo-600 p-16 rounded-[6rem] text-black shadow-2xl shadow-indigo-500/20"><form onSubmit={handleAddTrack} className="space-y-8"><input required placeholder="TITLE" value={newTrack.title} onChange={e => setNewTrack({...newTrack, title: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-3 font-black uppercase outline-none focus:border-black text-xl" /><input required placeholder="ARTIST" value={newTrack.artist} onChange={e => setNewTrack({...newTrack, artist: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-3 font-black uppercase outline-none focus:border-black text-xl" /><div className="space-y-4"><div className="relative"><input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer z-10" /><div className={`p-8 rounded-[3rem] border-2 border-dashed border-black/20 flex flex-col items-center justify-center gap-4`}>{isUploadingImg ? <Loader2 className="w-10 h-10 animate-spin" /> : <Upload className="w-10 h-10" />}<span className="text-xs font-black uppercase tracking-widest text-center">Jacket Image<br/>(512x512 Auto-Fit)</span></div></div>{newTrack.image && <div className="w-full aspect-square rounded-[3rem] overflow-hidden border-2 border-black shadow-2xl"><img src={newTrack.image} className="w-full h-full object-cover" alt="preview" /></div>}</div><input required placeholder="AUDIO SOURCE (URL)" value={newTrack.audioUrl} onChange={e => setNewTrack({...newTrack, audioUrl: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-3 font-black outline-none focus:border-black" /><textarea placeholder="DESCRIPTION" value={newTrack.description} onChange={e => setNewTrack({...newTrack, description: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-3 font-medium text-sm outline-none focus:border-black h-32 resize-none" /><button type="submit" disabled={isUploadingImg} className="w-full bg-black text-white py-8 mt-10 rounded-[2.5rem] font-black uppercase tracking-widest text-xs shadow-2xl disabled:opacity-50">Sync Artifact</button></form></div></div>)}
+          <motion.div key="admin" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="pt-32 lg:pt-40 px-6 lg:px-8 container mx-auto pb-32 lg:pb-40 relative z-20 min-h-screen">
+             <div className="grid lg:grid-cols-12 gap-12 lg:gap-24">
+              <div className="lg:col-span-8 space-y-10 lg:space-y-16"><h2 className={h1Title + " text-6xl lg:text-[10rem]"}>Console</h2>{!isAdmin ? (<div className={glass + " p-16 lg:p-32 rounded-[3rem] lg:rounded-[6rem] text-center space-y-8 lg:space-y-10"}><ShieldCheck className="w-16 h-16 lg:w-24 lg:h-24 mx-auto text-[#004aad]" /><button onClick={() => signInWithPopup(auth, new GoogleAuthProvider())} className="bg-white text-black px-12 lg:px-20 py-4 lg:py-6 rounded-full font-black uppercase text-xs lg:text-sm tracking-widest shadow-2xl">Verify Admin</button></div>) : (<div className="space-y-4 lg:space-y-6">{tracks.map(t => (<div key={t.id} className={`${glass} p-6 lg:p-10 px-8 lg:px-16 rounded-[2rem] lg:rounded-[4rem] flex justify-between items-center group shadow-xl`}><p className="font-black uppercase tracking-tight text-xl lg:text-3xl truncate pr-4">{t.title}</p><button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tracks', t.id))} className="p-4 lg:p-6 text-red-500/20 hover:text-red-500 transition-colors bg-red-500/5 rounded-full shrink-0"><Trash2 className="w-5 h-5 lg:w-8 lg:h-8" /></button></div>))}</div>)}</div>
+              {isAdmin && (<div className="lg:col-span-4"><div className="bg-indigo-600 p-8 lg:p-16 rounded-[3rem] lg:rounded-[6rem] text-black shadow-2xl shadow-indigo-500/20"><form onSubmit={handleAddTrack} className="space-y-6 lg:space-y-8"><input required placeholder="TITLE" value={newTrack.title} onChange={e => setNewTrack({...newTrack, title: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-3 font-black uppercase outline-none focus:border-black text-lg lg:text-xl placeholder:text-black/40" /><input required placeholder="ARTIST" value={newTrack.artist} onChange={e => setNewTrack({...newTrack, artist: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-3 font-black uppercase outline-none focus:border-black text-lg lg:text-xl placeholder:text-black/40" /><div className="space-y-4"><div className="relative"><input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer z-10" /><div className={`p-6 lg:p-8 rounded-[2rem] lg:rounded-[3rem] border-2 border-dashed border-black/20 flex flex-col items-center justify-center gap-3 lg:gap-4`}>{isUploadingImg ? <Loader2 className="w-8 h-8 lg:w-10 lg:h-10 animate-spin" /> : <Upload className="w-8 h-8 lg:w-10 lg:h-10 text-black/60" />}<span className="text-[10px] lg:text-xs font-black uppercase tracking-widest text-center text-black/60">Jacket Image<br/>(512x512 Auto-Fit)</span></div></div>{newTrack.image && <div className="w-full aspect-square rounded-[2rem] lg:rounded-[3rem] overflow-hidden border-2 border-black shadow-2xl"><img src={newTrack.image} className="w-full h-full object-cover" alt="preview" /></div>}</div><input required placeholder="AUDIO SOURCE (URL)" value={newTrack.audioUrl} onChange={e => setNewTrack({...newTrack, audioUrl: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-3 font-black outline-none focus:border-black placeholder:text-black/40" /><textarea placeholder="DESCRIPTION" value={newTrack.description} onChange={e => setNewTrack({...newTrack, description: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-3 font-medium text-xs lg:text-sm outline-none focus:border-black h-20 lg:h-32 resize-none placeholder:text-black/40" />
+              {/* 가사 입력 텍스트 에어리어 추가됨 */}
+              <textarea placeholder="LYRICS (가사 입력)" value={newTrack.lyrics} onChange={e => setNewTrack({...newTrack, lyrics: e.target.value})} className="w-full bg-black/10 border-b-2 border-black/30 p-3 font-medium text-xs lg:text-sm outline-none focus:border-black h-32 lg:h-48 resize-none placeholder:text-black/40" />
+              <button type="submit" disabled={isUploadingImg} className="w-full bg-black text-white py-6 lg:py-8 mt-6 lg:mt-10 rounded-[2rem] lg:rounded-[2.5rem] font-black uppercase tracking-widest text-[10px] lg:text-xs shadow-2xl disabled:opacity-50">Sync Artifact</button></form></div></div>)}
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* --- [Floating Player] --- */}
+      {/* --- [제2의 유튜브 뮤직 듀얼 플레이어] --- */}
       <AnimatePresence>
       {currentTrack && view !== 'admin' && (
-        <motion.div initial={{ y: 150 }} animate={{ y: 0 }} exit={{ y: 150 }} transition={{ type: "spring", stiffness: 150, damping: 20 }} className="fixed bottom-10 left-0 w-full z-200 px-4 lg:px-8 flex justify-center pointer-events-none">
-          <div className={`${glass} w-full max-w-5xl p-6 px-8 lg:px-16 rounded-full flex flex-col lg:flex-row items-center gap-6 lg:gap-16 pointer-events-auto border-white/20 shadow-2xl relative group/player`}>
-            <div className="flex items-center gap-8 min-w-0 flex-1"><div className="w-20 h-20 rounded-full bg-zinc-800 overflow-hidden shrink-0 relative shadow-2xl group cursor-pointer" onClick={() => setSelectedTrack(currentTrack)}><img src={currentTrack.image || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17"} className={`w-full h-full object-cover ${isPlaying ? 'animate-[spin_20s_linear_infinite]' : ''}`} alt="" /><div className={`absolute inset-0 bg-[#004aad]/20 transition-opacity ${isPlaying ? 'opacity-100' : 'opacity-0'}`} /></div><div className="truncate pr-4 flex-1"><p className="text-2xl font-black uppercase truncate tracking-tighter leading-none">{currentTrack.title}</p><div className="flex items-center gap-4 mt-3"><p className="text-[13px] text-[#004aad] font-bold uppercase tracking-[0.2em]">{currentTrack.artist}</p>{isPlaying && <div className="flex gap-1 h-3 items-end"><span className="w-1 bg-[#004aad] animate-[wave_0.8s_infinite]" /><span className="w-1 bg-[#004aad] animate-[wave_1.2s_infinite]" /><span className="w-1 bg-[#004aad] animate-[wave_1.0s_infinite]" /></div>}</div></div><div className="flex items-center gap-4"><button onClick={() => playTrack((currentTrackIdx - 1 + tracks.length) % tracks.length)} className="p-2 text-zinc-600 hover:text-white transition-colors"><SkipBack className="w-7 h-7 fill-current" /></button><button onClick={togglePlay} className="w-16 h-16 lg:w-20 lg:h-20 bg-white text-black rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-2xl">{isPlaying ? (isBuffering ? <Loader2 className="w-8 h-8 animate-spin" /> : <Pause className="w-8 h-8 fill-current" />) : <Play className="w-8 h-8 fill-current ml-1.5" />}</button><button onClick={() => playTrack((currentTrackIdx + 1) % tracks.length)} className="p-2 text-zinc-600 hover:text-white transition-colors"><SkipForward className="w-7 h-7 fill-current" /></button></div></div>
-            <div className="flex items-center gap-8 w-full lg:w-87.5 px-4 lg:px-0 border-t lg:border-t-0 lg:border-l border-white/10 pt-6 lg:pt-0"><div className="flex-1 flex flex-col gap-2"><div className="flex justify-between text-[10px] font-black uppercase opacity-30 tracking-widest"><span>{formatTime(currentTime)}</span><span>{formatTime(duration)}</span></div><div className="h-2 bg-white/10 rounded-full relative overflow-hidden group/bar"><div className="absolute inset-y-0 left-0 bg-[#004aad] rounded-full shadow-[0_0_10px_rgba(0,74,173,0.8)]" style={{ width: `${(currentTime/duration)*100}%` }} /><input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => { if(audioRef.current) audioRef.current.currentTime = parseFloat(e.target.value); }} className="absolute inset-0 w-full opacity-0 cursor-pointer h-full" /></div></div><div className="flex items-center gap-5 ml-2"><button onClick={() => setIsMuted(!isMuted)} className="text-zinc-500 hover:text-white transition-colors">{isMuted || volume === 0 ? <VolumeX className="w-6 h-6" /> : <Volume2 className="w-6 h-6" />}</button><button onClick={(e) => handleShare(e, currentTrack, 'track')} className="text-zinc-600 hover:text-[#004aad] transition-all"><Share2 className="w-5 h-5" /></button><button onClick={(e) => handleToggleLike(e, currentTrack.id)} className={`ml-2 transition-all ${userLikes.includes(currentTrack.id) ? 'text-red-500 scale-110' : 'text-zinc-600 hover:text-white'}`}><Heart className={`w-7 h-7 ${userLikes.includes(currentTrack.id) ? 'fill-current' : ''}`} /></button></div></div>
-          </div>
-        </motion.div>
+        <>
+          {/* 미니 플레이어 (모바일 & 데스크탑 하단) */}
+          <motion.div 
+            initial={{ y: 150 }} 
+            animate={{ y: isPlayerExpanded ? 150 : 0 }} // 풀스크린일 땐 아래로 숨김
+            exit={{ y: 150 }} 
+            transition={{ type: "spring", stiffness: 150, damping: 20 }} 
+            className="fixed bottom-4 lg:bottom-10 left-0 w-full z-[200] px-4 lg:px-8 flex justify-center cursor-pointer"
+            onClick={() => setIsPlayerExpanded(true)}
+          >
+            <div className={`${glass} w-full max-w-5xl p-3 px-4 lg:p-6 lg:px-8 rounded-[2rem] lg:rounded-full flex items-center justify-between border-white/20 shadow-2xl bg-zinc-900/90 lg:bg-white/[0.03] backdrop-blur-2xl group/mini`}>
+              
+              {/* 왼쪽 썸네일 및 곡 정보 */}
+              <div className="flex items-center gap-4 min-w-0 flex-1">
+                <div className="w-12 h-12 lg:w-16 lg:h-16 rounded-full bg-zinc-800 overflow-hidden shrink-0 relative shadow-lg">
+                  <img src={currentTrack.image || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17"} className={`w-full h-full object-cover ${isPlaying ? 'animate-[spin_20s_linear_infinite]' : ''}`} alt="" />
+                  <div className={`absolute inset-0 bg-[#004aad]/20 transition-opacity ${isPlaying ? 'opacity-100' : 'opacity-0'}`} />
+                </div>
+                <div className="truncate pr-2">
+                  <p className="text-sm lg:text-xl font-black uppercase truncate tracking-tight leading-none text-white">{currentTrack.title}</p>
+                  <p className="text-[10px] lg:text-xs text-zinc-400 font-bold uppercase tracking-widest mt-1 truncate">{currentTrack.artist}</p>
+                </div>
+              </div>
+              
+              {/* 오른쪽 컨트롤 (stopPropagation으로 미니 플레이어 확장 방지) */}
+              <div className="flex items-center gap-2 lg:gap-6 shrink-0" onClick={(e) => e.stopPropagation()}>
+                <button onClick={(e) => handleToggleLike(e, currentTrack.id)} className={`p-2 transition-all hidden lg:block ${userLikes.includes(currentTrack.id) ? 'text-red-500 scale-110' : 'text-zinc-400 hover:text-white'}`}><Heart className={`w-5 h-5 lg:w-6 lg:h-6 ${userLikes.includes(currentTrack.id) ? 'fill-current' : ''}`} /></button>
+                <button onClick={() => playTrack((currentTrackIdx - 1 + tracks.length) % tracks.length)} className="p-2 text-zinc-300 hover:text-white transition-colors hidden md:block"><SkipBack className="w-5 h-5 lg:w-6 lg:h-6 fill-current" /></button>
+                <button onClick={togglePlay} className="w-10 h-10 lg:w-14 lg:h-14 bg-white text-black rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-xl">
+                  {isPlaying ? (isBuffering ? <Loader2 className="w-5 h-5 animate-spin" /> : <Pause className="w-5 h-5 lg:w-6 lg:h-6 fill-current" />) : <Play className="w-5 h-5 lg:w-6 lg:h-6 fill-current ml-1" />}
+                </button>
+                <button onClick={() => playTrack((currentTrackIdx + 1) % tracks.length)} className="p-2 text-zinc-300 hover:text-white transition-colors"><SkipForward className="w-5 h-5 lg:w-6 lg:h-6 fill-current" /></button>
+              </div>
+              
+            </div>
+          </motion.div>
+
+          {/* 풀스크린 재생 페이지 (유튜브 뮤직 스타일 모달) */}
+          <AnimatePresence>
+            {isPlayerExpanded && (
+              <motion.div 
+                initial={{ y: "100%", opacity: 0.5 }} 
+                animate={{ y: 0, opacity: 1 }} 
+                exit={{ y: "100%", opacity: 0.5 }} 
+                transition={{ type: "spring", damping: 25, stiffness: 200 }} 
+                className="fixed inset-0 z-[300] bg-zinc-950 flex flex-col pt-safe-top"
+              >
+                {/* 상단 헤더 영역 */}
+                <div className="flex items-center justify-between p-6 px-8 relative z-10">
+                  <button onClick={() => setIsPlayerExpanded(false)} className="p-2 -ml-2 text-white/70 hover:text-white"><ChevronDown className="w-8 h-8" /></button>
+                  <div className="text-center flex-1">
+                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.3em]">Now Playing</p>
+                    <p className="text-xs font-black uppercase text-white mt-1">Unframe Project UP</p>
+                  </div>
+                  <div className="w-8 h-8" /> {/* 레이아웃 맞춤용 빈 박스 */}
+                </div>
+
+                {/* 중앙 메인 콘텐츠 (앨범 커버 OR 가사 뷰) */}
+                <div className="flex-1 overflow-y-auto px-8 flex flex-col items-center justify-center relative w-full max-w-2xl mx-auto">
+                  <AnimatePresence mode="wait">
+                    {!showLyrics ? (
+                      <motion.div key="cover" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="w-full aspect-square max-w-md rounded-[2.5rem] lg:rounded-[4rem] overflow-hidden shadow-2xl shadow-black/50 border border-white/5 bg-zinc-900">
+                        <img src={currentTrack.image || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17"} className="w-full h-full object-cover" alt="Album Cover" />
+                      </motion.div>
+                    ) : (
+                      <motion.div key="lyrics" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="w-full h-full flex items-center justify-center py-10">
+                        <div className="text-xl lg:text-3xl text-center leading-loose font-bold text-zinc-300 whitespace-pre-wrap max-w-xl">
+                          {currentTrack.lyrics || <span className="text-zinc-600 italic">가사가 등록되지 않은 음원입니다.</span>}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* 하단 컨트롤 영역 */}
+                <div className="p-8 pb-12 lg:pb-16 w-full max-w-2xl mx-auto space-y-8 bg-gradient-to-t from-black via-zinc-950/90 to-transparent">
+                  
+                  {/* 곡 제목 및 아티스트 & 좋아요 */}
+                  <div className="flex items-end justify-between gap-4">
+                    <div className="min-w-0">
+                      <h2 className="text-3xl lg:text-4xl font-black uppercase tracking-tighter truncate text-white">{currentTrack.title}</h2>
+                      <p className="text-sm lg:text-lg font-bold text-[#004aad] uppercase tracking-widest mt-2 truncate">{currentTrack.artist}</p>
+                    </div>
+                    <button onClick={(e) => handleToggleLike(e, currentTrack.id)} className={`p-3 rounded-full transition-all ${userLikes.includes(currentTrack.id) ? 'bg-red-500/10 text-red-500' : 'bg-white/5 text-white'}`}>
+                      <Heart className={`w-7 h-7 ${userLikes.includes(currentTrack.id) ? 'fill-current' : ''}`} />
+                    </button>
+                  </div>
+
+                  {/* 진행률 바 (터치 영역 확대) */}
+                  <div className="space-y-3 relative py-2">
+                    <div className="h-2 bg-white/10 rounded-full relative overflow-hidden">
+                      <div className="absolute inset-y-0 left-0 bg-white rounded-full shadow-[0_0_15px_rgba(255,255,255,0.5)] transition-all duration-100 ease-linear" style={{ width: `${(currentTime/duration)*100}%` }} />
+                    </div>
+                    <input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => { if(audioRef.current) audioRef.current.currentTime = parseFloat(e.target.value); }} className="absolute inset-0 w-full opacity-0 cursor-pointer h-full z-10" />
+                    <div className="flex justify-between text-[11px] font-bold text-zinc-400">
+                      <span>{formatTime(currentTime)}</span>
+                      <span>{formatTime(duration)}</span>
+                    </div>
+                  </div>
+
+                  {/* 메인 재생 버튼들 */}
+                  <div className="flex items-center justify-between px-2">
+                    <button onClick={() => playTrack((currentTrackIdx - 1 + tracks.length) % tracks.length)} className="p-4 text-white hover:scale-110 transition-transform"><SkipBack className="w-10 h-10 fill-current" /></button>
+                    <button onClick={togglePlay} className="w-24 h-24 bg-white text-black rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shadow-2xl">
+                      {isPlaying ? (isBuffering ? <Loader2 className="w-10 h-10 animate-spin" /> : <Pause className="w-10 h-10 fill-current" />) : <Play className="w-10 h-10 fill-current ml-2" />}
+                    </button>
+                    <button onClick={() => playTrack((currentTrackIdx + 1) % tracks.length)} className="p-4 text-white hover:scale-110 transition-transform"><SkipForward className="w-10 h-10 fill-current" /></button>
+                  </div>
+
+                  {/* 부가 기능 모음 (가사, 공유 등) */}
+                  <div className="flex items-center justify-between pt-6 border-t border-white/5 opacity-80 px-4">
+                    <button onClick={() => setShowLyrics(!showLyrics)} className={`flex flex-col items-center gap-2 transition-colors ${showLyrics ? 'text-[#004aad]' : 'text-zinc-400 hover:text-white'}`}>
+                      <AlignTextLeft className="w-6 h-6" />
+                      <span className="text-[9px] font-black uppercase tracking-widest">Lyrics</span>
+                    </button>
+                    <button onClick={(e) => handleShare(e, currentTrack, 'track')} className="flex flex-col items-center gap-2 text-zinc-400 hover:text-white transition-colors">
+                      <Share2 className="w-6 h-6" />
+                      <span className="text-[9px] font-black uppercase tracking-widest">Share</span>
+                    </button>
+                    <button onClick={() => setIsMuted(!isMuted)} className="flex flex-col items-center gap-2 text-zinc-400 hover:text-white transition-colors hidden md:flex">
+                      {isMuted || volume === 0 ? <VolumeX className="w-6 h-6" /> : <Volume2 className="w-6 h-6" />}
+                      <span className="text-[9px] font-black uppercase tracking-widest">Mute</span>
+                    </button>
+                    <button className="flex flex-col items-center gap-2 text-zinc-400 hover:text-white transition-colors">
+                      <Repeat className="w-6 h-6" />
+                      <span className="text-[9px] font-black uppercase tracking-widest">Loop</span>
+                    </button>
+                  </div>
+
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </>
       )}
       </AnimatePresence>
 
       {/* --- [Reward Celebrate Popup] --- */}
-      <AnimatePresence>{newReward && (<motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-600 bg-black/95 flex items-center justify-center p-6 backdrop-blur-3xl" onClick={() => setNewReward(null)}><motion.div initial={{ scale: 0.8, y: 100 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.8, y: 100 }} className={`${glass} w-full max-w-md rounded-[5rem] p-12 text-center space-y-12 border-white/20 shadow-[0_0_100px_#004aad]/40`} onClick={e => e.stopPropagation()}><div className="space-y-4"><Star className="w-16 h-16 text-yellow-400 mx-auto animate-bounce" /><h2 className="text-4xl font-black uppercase italic tracking-tighter text-[#004aad]">New Sticker!</h2><p className="text-sm text-zinc-500 font-bold uppercase tracking-[0.3em]">축하합니다! 새로운 기록이 해제되었습니다.</p></div><div className="bg-zinc-950 p-8 rounded-[3rem] border border-white/5 space-y-6 relative"><div className="w-24 h-24 bg-white/5 rounded-3xl mx-auto flex items-center justify-center border border-white/10"><newReward.icon className="w-12 h-12 text-[#004aad]" /></div><div className="space-y-2"><h4 className="text-2xl font-black uppercase tracking-tighter text-white">[{newReward.title}]</h4><p className="text-white mt-1 font-bold leading-relaxed lowercase">{newReward.desc}</p></div></div><div className="flex flex-col gap-4"><button onClick={(e) => handleShare(e, newReward, 'reward')} className="w-full py-6 bg-white text-black rounded-3xl font-black uppercase text-xs tracking-widest hover:bg-[#004aad] hover:text-white transition-all shadow-2xl flex items-center justify-center gap-3">{copiedId === 'reward' ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />} SNS 공유하기</button><button onClick={() => setNewReward(null)} className="text-[10px] font-black uppercase text-zinc-500">나중에 하기</button></div></motion.div></motion.div>)}</AnimatePresence>
+      <AnimatePresence>{newReward && (<motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[600] bg-black/95 flex items-center justify-center p-6 backdrop-blur-3xl" onClick={() => setNewReward(null)}><motion.div initial={{ scale: 0.8, y: 100 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.8, y: 100 }} className={`${glass} w-full max-w-md rounded-[3rem] lg:rounded-[5rem] p-8 lg:p-12 text-center space-y-8 lg:space-y-12 border-white/20 shadow-[0_0_100px_#004aad]/40`} onClick={e => e.stopPropagation()}><div className="space-y-4"><Star className="w-12 h-12 lg:w-16 lg:h-16 text-yellow-400 mx-auto animate-bounce" /><h2 className="text-3xl lg:text-4xl font-black uppercase italic tracking-tighter text-[#004aad]">New Sticker!</h2><p className="text-[10px] lg:text-sm text-zinc-500 font-bold uppercase tracking-[0.2em] lg:tracking-[0.3em]">축하합니다! 새로운 기록이 해제되었습니다.</p></div><div className="bg-zinc-950 p-6 lg:p-8 rounded-[2rem] lg:rounded-[3rem] border border-white/5 space-y-4 lg:space-y-6 relative"><div className="w-16 h-16 lg:w-24 lg:h-24 bg-white/5 rounded-2xl lg:rounded-3xl mx-auto flex items-center justify-center border border-white/10"><newReward.icon className="w-8 h-8 lg:w-12 lg:h-12 text-[#004aad]" /></div><div className="space-y-1 lg:space-y-2"><h4 className="text-xl lg:text-2xl font-black uppercase tracking-tighter text-white">[{newReward.title}]</h4><p className="text-white mt-1 font-bold leading-relaxed lowercase text-sm">{newReward.desc}</p></div></div><div className="flex flex-col gap-3 lg:gap-4"><button onClick={(e) => handleShare(e, newReward, 'reward')} className="w-full py-4 lg:py-6 bg-white text-black rounded-2xl lg:rounded-3xl font-black uppercase text-[10px] lg:text-xs tracking-widest hover:bg-[#004aad] hover:text-white transition-all shadow-2xl flex items-center justify-center gap-3">{copiedId === 'reward' ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />} SNS 공유하기</button><button onClick={() => setNewReward(null)} className="text-[9px] lg:text-[10px] font-black uppercase text-zinc-500">나중에 하기</button></div></motion.div></motion.div>)}</AnimatePresence>
 
       {/* --- [System Guide] 모바일 스크롤 지원 버전 --- */}
       <AnimatePresence>
         {showGuide && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-500 bg-black/95 flex items-center justify-center p-4 lg:p-6 backdrop-blur-2xl" onClick={closeGuide}>
-            <motion.div initial={{ scale: 0.9, y: 50 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 50 }} className={`${glass} w-full max-w-4xl rounded-[4rem] flex flex-col relative overflow-hidden shadow-indigo-500/20 shadow-2xl max-h-[85vh]`} onClick={e => e.stopPropagation()}>
-              <button onClick={closeGuide} className="absolute top-8 right-8 p-4 rounded-full bg-white/5 hover:bg-[#004aad] text-white transition-all z-600"><X className="w-5 h-5" /></button>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[500] bg-black/95 flex items-center justify-center p-4 lg:p-6 backdrop-blur-2xl" onClick={closeGuide}>
+            <motion.div initial={{ scale: 0.9, y: 50 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 50 }} className={`${glass} w-full max-w-4xl rounded-[2.5rem] lg:rounded-[4rem] flex flex-col relative overflow-hidden shadow-indigo-500/20 shadow-2xl max-h-[85vh]`} onClick={e => e.stopPropagation()}>
+              <button onClick={closeGuide} className="absolute top-6 right-6 lg:top-8 lg:right-8 p-3 lg:p-4 rounded-full bg-white/5 hover:bg-[#004aad] text-white transition-all z-[600]"><X className="w-4 h-4 lg:w-5 lg:h-5" /></button>
               
-              <div className="flex-1 overflow-y-auto p-12 lg:p-20 space-y-12">
-                <div className="space-y-4"><h2 className="text-4xl lg:text-5xl font-black uppercase italic tracking-tighter text-[#004aad]">System Guide</h2><p className="text-[10px] lg:text-sm text-zinc-500 font-bold uppercase tracking-[0.3em]">Unframe: 당신을 위한 공간 이용법</p></div>
+              <div className="flex-1 overflow-y-auto p-8 lg:p-20 space-y-8 lg:space-y-12">
+                <div className="space-y-3 lg:space-y-4"><h2 className="text-3xl lg:text-5xl font-black uppercase italic tracking-tighter text-[#004aad]">System Guide</h2><p className="text-[9px] lg:text-sm text-zinc-500 font-bold uppercase tracking-[0.2em] lg:tracking-[0.3em]">Unframe: 당신을 위한 공간 이용법</p></div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-8">
                    {[
                      { icon: Ghost, title: "Relationship", desc: "머무른 시간이 쌓일수록 Hello에서 Family까지 우리의 관계는 깊어집니다." },
                      { icon: Archive, title: "Sticker Book", desc: "첫 소리, 첫 하트, 첫 신호... 소중한 순간들을 스티커로 기록해 보세요." },
                      { icon: Sparkles, title: "Daily Play", desc: "하루 한 번, 소소한 놀이를 통해 Unframe의 세계관을 함께 완성합니다." },
                      { icon: Smartphone, title: "Install App", desc: "Safari/Chrome 메뉴에서 [홈 화면에 추가]를 눌러 앱처럼 감상하세요." }
                    ].map((item, i) => (
-                     <div key={i} className="space-y-4 p-8 bg-white/5 rounded-[2.5rem] border border-white/5 hover:border-[#004aad]/30 transition-all flex flex-col items-center text-center">
-                        <div className="w-12 h-12 bg-[#004aad]/10 rounded-2xl flex items-center justify-center"><item.icon className="w-6 h-6 text-[#004aad]" /></div>
-                        <h4 className="text-lg font-black uppercase tracking-tight">{item.title}</h4>
-                        <p className="text-[11px] lg:text-xs text-white/70 font-bold leading-relaxed">{item.desc}</p>
+                     <div key={i} className="space-y-3 lg:space-y-4 p-6 lg:p-8 bg-white/5 rounded-[2rem] lg:rounded-[2.5rem] border border-white/5 hover:border-[#004aad]/30 transition-all flex flex-col items-center text-center">
+                        <div className="w-10 h-10 lg:w-12 lg:h-12 bg-[#004aad]/10 rounded-xl lg:rounded-2xl flex items-center justify-center"><item.icon className="w-5 h-5 lg:w-6 lg:h-6 text-[#004aad]" /></div>
+                        <h4 className="text-base lg:text-lg font-black uppercase tracking-tight">{item.title}</h4>
+                        <p className="text-[10px] lg:text-xs text-white/70 font-bold leading-relaxed">{item.desc}</p>
                      </div>
                    ))}
                 </div>
                 
-                <div className="pt-8 border-t border-white/5 text-center">
-                   <button onClick={closeGuide} className="bg-white text-black px-16 py-6 rounded-full font-black uppercase text-xs tracking-widest hover:bg-[#004aad] hover:text-white transition-all shadow-2xl shadow-indigo-500/30">가이드 종료</button>
+                <div className="pt-6 lg:pt-8 border-t border-white/5 text-center">
+                   <button onClick={closeGuide} className="bg-white text-black px-12 lg:px-16 py-4 lg:py-6 rounded-full font-black uppercase text-[10px] lg:text-xs tracking-widest hover:bg-[#004aad] hover:text-white transition-all shadow-2xl shadow-indigo-500/30">가이드 종료</button>
                 </div>
               </div>
             </motion.div>
@@ -545,11 +699,11 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      <AnimatePresence>{toastMessage && (<motion.div initial={{ opacity: 0, y: 20, x: '-50%' }} animate={{ opacity: 1, y: 0, x: '-50%' }} exit={{ opacity: 0 }} className="fixed bottom-32 left-1/2 z-500 bg-[#004aad] text-white px-8 py-4 rounded-full font-black uppercase text-[11px] shadow-2xl flex items-center gap-3 shadow-indigo-500/20"><CheckCircle2 className="w-4 h-4" /> {toastMessage}</motion.div>)}</AnimatePresence>
-      <AnimatePresence>{authError && (<motion.div initial={{ opacity: 0, y: -20, x: '-50%' }} animate={{ opacity: 1, y: 0, x: '-50%' }} exit={{ opacity: 0 }} className="fixed top-24 left-1/2 z-500 bg-red-600 px-8 py-5 rounded-3xl font-black uppercase text-[11px] flex items-center gap-4 shadow-2xl shadow-red-500/20"><AlertCircle className="w-4 h-4" /> {authError} <button onClick={() => setAuthError(null)} className="ml-6 opacity-60">X</button></motion.div>)}</AnimatePresence>
+      <AnimatePresence>{toastMessage && (<motion.div initial={{ opacity: 0, y: 20, x: '-50%' }} animate={{ opacity: 1, y: 0, x: '-50%' }} exit={{ opacity: 0 }} className="fixed bottom-32 lg:bottom-40 left-1/2 z-[500] bg-[#004aad] text-white px-6 lg:px-8 py-3 lg:py-4 rounded-full font-black uppercase text-[10px] lg:text-[11px] shadow-2xl flex items-center gap-2 lg:gap-3 shadow-indigo-500/20"><CheckCircle2 className="w-3 h-3 lg:w-4 lg:h-4" /> {toastMessage}</motion.div>)}</AnimatePresence>
+      <AnimatePresence>{authError && (<motion.div initial={{ opacity: 0, y: -20, x: '-50%' }} animate={{ opacity: 1, y: 0, x: '-50%' }} exit={{ opacity: 0 }} className="fixed top-20 lg:top-24 left-1/2 z-[500] bg-red-600 px-6 lg:px-8 py-4 lg:py-5 rounded-2xl lg:rounded-3xl font-black uppercase text-[10px] lg:text-[11px] flex items-center gap-3 lg:gap-4 shadow-2xl shadow-red-500/20"><AlertCircle className="w-4 h-4" /> {authError} <button onClick={() => setAuthError(null)} className="ml-4 lg:ml-6 opacity-60">X</button></motion.div>)}</AnimatePresence>
 
-      {/* [Track Detail Modal] */}
-      <AnimatePresence>{selectedTrack && (<motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-300 bg-black/95 backdrop-blur-2xl flex items-center justify-center p-6 lg:p-20" onClick={() => setSelectedTrack(null)}><motion.div initial={{ scale: 0.95, y: 50 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 50 }} className={`${glass} w-full max-w-7xl rounded-[6rem] overflow-hidden flex flex-col lg:flex-row shadow-2xl relative shadow-indigo-500/10`} onClick={e => e.stopPropagation()}><button onClick={() => setSelectedTrack(null)} className="absolute top-12 right-12 p-6 rounded-full bg-white/5 hover:bg-[#004aad] text-white transition-all z-50 shadow-2xl"><X className="w-8 h-8" /></button><div className="lg:w-1/2 h-[50vh] lg:h-auto bg-zinc-950 flex items-center justify-center relative group"><img src={selectedTrack.image || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe"} className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity duration-1000" /><div className="absolute inset-0 bg-linear-to-t from-black via-transparent to-transparent" /></div><div className="lg:w-1/2 p-12 lg:p-32 flex flex-col justify-between"><div className="space-y-16"><div><span className={subTitle + " text-sm mb-6 block"}>{selectedTrack.artist}</span><h3 className={h1Title} style={{fontSize: 'min(7rem, 12vw)'}}>{selectedTrack.title}</h3></div><p className="text-xl lg:text-3xl text-white font-bold leading-relaxed italic border-l-8 border-[#004aad] pl-12 opacity-100">"{selectedTrack.description || 'Reactive audio artifact derived from coordinates.'}"</p></div><div className="flex gap-8 items-center mt-20"><button onClick={() => { const idx = tracks.findIndex(t => t.id === selectedTrack.id); playTrack(idx); setSelectedTrack(null); }} className="flex-1 bg-[#004aad] text-white py-10 rounded-[3rem] font-black uppercase text-sm hover:bg-white hover:text-black transition-all shadow-2xl flex items-center justify-center gap-4"><Play className="w-6 h-6 fill-current" /> Initialize Artifact</button><button onClick={(e) => handleShare(e, selectedTrack, 'track')} className="p-12 rounded-[3rem] border border-white/10 hover:text-[#004aad] transition-all bg-white/5"><Share2 className="w-10 h-10" /></button><button onClick={(e) => handleToggleLike(e, selectedTrack.id)} className={`p-12 rounded-[3rem] border border-white/10 ${userLikes.includes(selectedTrack.id) ? 'text-red-500 bg-red-500/5' : 'text-zinc-500 hover:text-white'} transition-all bg-white/5`}><Heart className={`w-10 h-10 ${userLikes.includes(selectedTrack.id) ? 'fill-current' : ''}`} /></button></div></div></motion.div></motion.div>)}</AnimatePresence>
+      {/* [Track Detail Modal (Archive 전용)] */}
+      <AnimatePresence>{selectedTrack && (<motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[300] bg-black/95 backdrop-blur-2xl flex items-center justify-center p-4 lg:p-20" onClick={() => setSelectedTrack(null)}><motion.div initial={{ scale: 0.95, y: 50 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 50 }} className={`${glass} w-full max-w-7xl rounded-[3rem] lg:rounded-[6rem] overflow-hidden flex flex-col lg:flex-row shadow-2xl relative shadow-indigo-500/10 max-h-[90vh] lg:max-h-none`} onClick={e => e.stopPropagation()}><button onClick={() => setSelectedTrack(null)} className="absolute top-6 right-6 lg:top-12 lg:right-12 p-4 lg:p-6 rounded-full bg-white/5 hover:bg-[#004aad] text-white transition-all z-50 shadow-2xl"><X className="w-5 h-5 lg:w-8 lg:h-8" /></button><div className="h-[30vh] lg:w-1/2 lg:h-auto bg-zinc-950 flex items-center justify-center relative group shrink-0"><img src={selectedTrack.image || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe"} className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity duration-1000" /><div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" /></div><div className="flex-1 overflow-y-auto p-8 lg:p-32 flex flex-col justify-between"><div className="space-y-8 lg:space-y-16"><div><span className={subTitle + " text-[10px] lg:text-sm mb-4 lg:mb-6 block"}>{selectedTrack.artist}</span><h3 className={h1Title} style={{fontSize: 'min(4rem, 12vw)'}}>{selectedTrack.title}</h3></div><p className="text-base lg:text-3xl text-white font-bold leading-relaxed italic border-l-4 lg:border-l-8 border-[#004aad] pl-6 lg:pl-12 opacity-100">"{selectedTrack.description || 'Reactive audio artifact derived from coordinates.'}"</p></div><div className="flex flex-col md:flex-row gap-4 lg:gap-8 items-stretch md:items-center mt-12 lg:mt-20"><button onClick={() => { const idx = tracks.findIndex(t => t.id === selectedTrack.id); playTrack(idx); setSelectedTrack(null); }} className="flex-1 bg-[#004aad] text-white py-6 lg:py-10 rounded-[2rem] lg:rounded-[3rem] font-black uppercase text-xs lg:text-sm hover:bg-white hover:text-black transition-all shadow-2xl flex items-center justify-center gap-3 lg:gap-4"><Play className="w-5 h-5 lg:w-6 lg:h-6 fill-current" /> Initialize Artifact</button><div className="flex gap-4"><button onClick={(e) => handleShare(e, selectedTrack, 'track')} className="flex-1 md:flex-none p-6 lg:p-12 rounded-[2rem] lg:rounded-[3rem] border border-white/10 hover:text-[#004aad] transition-all bg-white/5 flex justify-center"><Share2 className="w-6 h-6 lg:w-10 lg:h-10" /></button><button onClick={(e) => handleToggleLike(e, selectedTrack.id)} className={`flex-1 md:flex-none p-6 lg:p-12 rounded-[2rem] lg:rounded-[3rem] border border-white/10 ${userLikes.includes(selectedTrack.id) ? 'text-red-500 bg-red-500/5' : 'text-zinc-500 hover:text-white'} transition-all bg-white/5 flex justify-center`}><Heart className={`w-6 h-6 lg:w-10 lg:h-10 ${userLikes.includes(selectedTrack.id) ? 'fill-current' : ''}`} /></button></div></div></div></motion.div></motion.div>)}</AnimatePresence>
 
       <style>{`
         .italic-outline { -webkit-text-stroke: 1px rgba(255,255,255,0.1); color: transparent; }
@@ -557,6 +711,8 @@ export default function App() {
         @keyframes wave { 0%, 100% { height: 4px; } 50% { height: 12px; } }
         ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: #050505; } ::-webkit-scrollbar-thumb { background: #1a1a1a; border-radius: 10px; } ::-webkit-scrollbar-thumb:hover { background: #004aad; }
         input[type=range]::-webkit-slider-thumb { appearance: none; height: 16px; width: 16px; border-radius: 50%; background: white; box-shadow: 0 0 15px rgba(0,74,173,1); cursor: pointer; }
+        /* iOS Safe Area 대응 */
+        .pt-safe-top { padding-top: env(safe-area-inset-top, 20px); }
       `}</style>
     </div>
   );
