@@ -155,7 +155,7 @@ const Archive = ({
         <div className="lg:col-span-8 space-y-10 lg:space-y-16">
             
             {/* 🚀 오늘의 UP 놀이 (Quest Card) - 실시간 랭킹 테마 및 등수 연동 */}
-            <section className="bg-gradient-to-br from-[#004aad] to-[#001f4d] p-8 lg:p-12 rounded-[3rem] lg:rounded-[5rem] relative overflow-hidden shadow-2xl">
+            <section className="bg-linear-to-br from-[#004aad] to-[#001f4d] p-8 lg:p-12 rounded-[3rem] lg:rounded-[5rem] relative overflow-hidden shadow-2xl">
                 <div className="absolute top-0 right-0 p-12 opacity-10 -rotate-12">
                     {rankingTheme && React.createElement(rankingTheme.icon, { size: 180, color: 'white' })}
                 </div>
@@ -173,7 +173,7 @@ const Archive = ({
                         </div>
                     </div>
 
-                    <div className="bg-black/20 p-6 rounded-[2rem] lg:rounded-4xl border border-white/10 space-y-4">
+                    <div className="bg-black/20 p-6 rounded-4xl lg:rounded-4xl border border-white/10 space-y-4">
                         <div className="flex justify-between items-center">
                             <p className="text-sm font-bold text-white">오늘 노래 1번 듣기 ({userProfile?.listenCount > 0 ? '1' : '0'}/1)</p>
                             <span className="text-[10px] font-black uppercase text-white/50">Reward: Tier Card</span>
