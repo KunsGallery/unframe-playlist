@@ -89,15 +89,18 @@ const AudioPlayer = ({
       >
         <div className={`${glass} w-full max-w-5xl p-2.5 px-3 lg:p-4 lg:px-6 rounded-[2rem] lg:rounded-full flex items-center justify-between border-white/20 shadow-2xl bg-zinc-900/90 lg:bg-white/[0.03] backdrop-blur-2xl group/mini relative`}>
           
-          {/* 🚀 은은한 배경 차오름 효과 */}
-          <div className="absolute top-[-1px] left-0 right-0 h-[2px] rounded-[2rem] lg:rounded-full overflow-hidden pointer-events-none z-10">
-            <div className="h-full bg-blue-400 rounded-full shadow-[0_0_15px_3px_rgba(59,130,246,0.8),0_0_30px_8px_rgba(0,74,173,0.6)] transition-all duration-300 ease-linear" style={{ width: `${progressPct}%` }} />
+          {/* 🚀 1. 은은한 배경 차오름 효과 (이게 빠져있었어요!) */}
+          <div className="absolute inset-0 rounded-[2rem] lg:rounded-full overflow-hidden pointer-events-none z-0">
+            <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-[#004aad]/10 via-[#004aad]/30 to-[#004aad]/50 transition-all duration-300 ease-linear" style={{ width: `${progressPct}%` }} />
           </div>
           
-          {/* 🚀 상단 네온 프로그레스 바 (양쪽 끝을 둥글게 rounded-full 적용) */}
-          <div className="absolute top-[-1px] left-0 h-[2px] bg-blue-400 rounded-full shadow-[0_0_15px_3px_rgba(59,130,246,0.8),0_0_30px_8px_rgba(0,74,173,0.6)] pointer-events-none transition-all duration-300 ease-linear z-10" style={{ width: `${progressPct}%` }} />
+          {/* 🚀 2. 상단 네온 프로그레스 바 (둥근 테두리 안으로 가두기) */}
+          <div className="absolute top-[-1px] left-0 right-0 h-[2px] rounded-t-[2rem] lg:rounded-t-full overflow-hidden pointer-events-none z-10">
+            <div className="h-full bg-blue-400 shadow-[0_0_15px_3px_rgba(59,130,246,0.8),0_0_30px_8px_rgba(0,74,173,0.6)] transition-all duration-300 ease-linear" style={{ width: `${progressPct}%` }} />
+          </div>
 
           <div className="flex items-center gap-3 lg:gap-4 min-w-0 flex-1 relative z-10">
+            {/* ... (이 아래 내용은 기존과 동일) ... */}
             <div className="w-12 h-12 lg:w-16 lg:h-16 rounded-full bg-zinc-800 overflow-hidden shrink-0 relative shadow-lg">
               <img src={currentTrack.image || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17"} loading="lazy" className={`w-full h-full object-cover ${isPlaying ? 'animate-[spin_20s_linear_infinite]' : ''}`} alt="" />
               <div className={`absolute inset-0 bg-[#004aad]/20 transition-opacity ${isPlaying ? 'opacity-100' : 'opacity-0'}`} />
@@ -109,7 +112,6 @@ const AudioPlayer = ({
           </div>
           
           <div className="flex items-center gap-1.5 lg:gap-5 shrink-0 relative z-10" onClick={(e) => e.stopPropagation()}>
-            
             <div className="relative group/vol flex items-center justify-center hidden md:flex">
               <button onClick={() => setIsMuted(!isMuted)} className="p-2 text-zinc-400 hover:text-white transition-colors">
                 {isMuted || volume === 0 ? <VolumeX className="w-5 h-5 lg:w-6 lg:h-6" /> : <Volume2 className="w-5 h-5 lg:w-6 lg:h-6" />}
