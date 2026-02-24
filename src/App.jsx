@@ -292,7 +292,7 @@ export default function App() {
             </div>
         </footer>
 
-        <AnimatePresence>{toastMessage && (<motion.div onClick={() => setToastMessage(null)} initial={{ opacity: 0, y: 20, x: '-50%' }} animate={{ opacity: 1, y: 0, x: '-50%' }} exit={{ opacity: 0 }} className="fixed bottom-32 lg:bottom-40 left-1/2 z-[1000] bg-[#004aad] text-white px-6 lg:px-8 py-3 lg:py-4 rounded-full font-black uppercase text-[10px] shadow-2xl flex items-center gap-2 transition-transform cursor-pointer"><CheckCircle2 className="w-3 h-3" /> {toastMessage}</motion.div>)}</AnimatePresence>
+        <AnimatePresence>{toastMessage && (<motion.div onClick={() => setToastMessage(null)} initial={{ opacity: 0, y: 20, x: '-50%' }} animate={{ opacity: 1, y: 0, x: '-50%' }} exit={{ opacity: 0 }} className="fixed bottom-32 lg:bottom-40 left-1/2 z-1000 bg-[#004aad] text-white px-6 lg:px-8 py-3 lg:py-4 rounded-full font-black uppercase text-[10px] shadow-2xl flex items-center gap-2 transition-transform cursor-pointer"><CheckCircle2 className="w-3 h-3" /> {toastMessage}</motion.div>)}</AnimatePresence>
         <style>{`.italic-outline { -webkit-text-stroke: 1px rgba(255,255,255,0.1); color: transparent; } @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } } @keyframes wave { 0%, 100% { height: 4px; } 50% { height: 12px; } } .no-scrollbar::-webkit-scrollbar { display: none; } .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; } input[type=range]::-webkit-slider-thumb { appearance: none; height: 16px; width: 16px; border-radius: 50%; background: white; box-shadow: 0 0 15px rgba(0,74,173,1); cursor: pointer; } .pt-safe-top { padding-top: env(safe-area-inset-top, 20px); }`}</style>
       </div>
     </Router>

@@ -110,7 +110,7 @@ const About = ({ siteConfig }) => {
         <section className="relative">
             <div className="absolute inset-0 bg-[#004aad]/10 blur-[120px] rounded-full" />
             <motion.div initial={{ scale: 0.95, opacity: 0 }} whileInView={{ scale: 1, opacity: 1 }} viewport={{ once: true }} className={`${glass} p-12 lg:p-32 rounded-[5rem] lg:rounded-[10rem] text-center space-y-12 relative overflow-hidden border-white/20`}>
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#004aad] to-transparent" />
+                <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-transparent via-[#004aad] to-transparent" />
                 
                 <div className="space-y-6">
                     <span className={subTitle}>Enter the Nexus</span>
