@@ -7,10 +7,10 @@ import {
   getAuth, onAuthStateChanged, signInAnonymously, signOut, signInWithPopup, GoogleAuthProvider 
 } from 'firebase/auth';
 import { 
-  getFirestore, doc, setDoc, collection, onSnapshot, query, updateDoc, increment, deleteDoc, getDoc
+  getFirestore, doc, setDoc, collection, onSnapshot, query, updateDoc, increment, deleteDoc, getDoc, orderBy 
 } from 'firebase/firestore';
 import { 
-  Loader2, Music, Heart, Share2, Zap, Trophy, Medal, Calendar, Star, Moon, Coffee, Ghost, HelpCircle, CheckCircle2, AlertCircle, X, Smartphone, Sparkles, Archive as ArchiveIcon, Play, Waves, ListMusic, Target, Headphones, User
+  Loader2, Music, Heart, Share2, Zap, Trophy, Medal, Calendar, Star, Moon, Coffee, Ghost, HelpCircle, CheckCircle2, AlertCircle, X, Smartphone, Sparkles, Archive as ArchiveIcon, Play, Waves, ListMusic, Target, Headphones, User, Disc
 } from 'lucide-react';
 import { motion, AnimatePresence, useScroll, useSpring } from 'framer-motion';
 
@@ -96,7 +96,7 @@ export default function App() {
   const [siteConfig, setSiteConfig] = useState(null);
   const [shareItem, setShareItem] = useState(null);
   const [allUsers, setAllUsers] = useState([]);
-  const [rankingTheme, setRankingTheme] = useState({ id: 'quiet_observer', title: '조용한 탐험가', desc: '흔적 없이 소리만 깊게 파고든 이들', icon: Headphones });
+  const [rankingTheme, setRankingTheme] = useState({ id: 'night_owl', title: '심야의 감상자', desc: '새벽 0시-4시, 정적 속에 머문 이들', icon: Moon });
 
   const audioRef = useRef(null);
   const shareCardRef = useRef(null);
@@ -118,13 +118,14 @@ export default function App() {
 
   const formatTime = useCallback((time) => { if (isNaN(time)) return "0:00"; const min = Math.floor(time / 60); const sec = Math.floor(time % 60); return `${min}:${String(sec).padStart(2, '0')}`; }, []);
 
-  // 🚀 [iOS 잠금화면 최적화 업데이트]
-  const updateMediaSession = useCallback(() => {
-    if (currentTrack && 'mediaSession' in navigator) {
-        const artUrl = currentTrack.image || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17';
+  // 🚀 [핵심 수정] Media Session 업데이트 로직 - 특정 트랙을 인자로 받아 즉시 업데이트
+  const updateMediaSession = useCallback((track) => {
+    if (!track) return;
+    if ('mediaSession' in navigator) {
+        const artUrl = track.image || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17';
         navigator.mediaSession.metadata = new MediaMetadata({
-            title: currentTrack.title,
-            artist: currentTrack.artist,
+            title: track.title,
+            artist: track.artist,
             album: 'UNFRAME PLAYLIST',
             artwork: [
                 { src: artUrl, sizes: '96x96',   type: 'image/jpeg' },
@@ -136,16 +137,12 @@ export default function App() {
             ]
         });
 
-        // iOS 제어 센터 핸들러 등록
+        // 핸들러 재등록 (클로저 문제 방지)
         navigator.mediaSession.setActionHandler('play', () => { setIsPlaying(true); audioRef.current?.play(); });
         navigator.mediaSession.setActionHandler('pause', () => { setIsPlaying(false); audioRef.current?.pause(); });
-        navigator.mediaSession.setActionHandler('previoustrack', () => { if(currentQueue.length > 0) playTrack((currentTrackIdx - 1 + currentQueue.length) % currentQueue.length); });
-        navigator.mediaSession.setActionHandler('nexttrack', () => { if(currentQueue.length > 0) playTrack((currentTrackIdx + 1) % currentQueue.length); });
-        
-        // 재생 상태 명시적 업데이트
-        navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
+        // 'previoustrack', 'nexttrack'은 playTrack 함수 내부에서 큐 제어를 하므로 생략하거나 아래처럼 연결
     }
-  }, [currentTrack, currentTrackIdx, currentQueue.length, isPlaying]);
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -155,15 +152,12 @@ export default function App() {
     const handleScroll = () => setScrolled(window.scrollY > 50);
     window.addEventListener('scroll', handleScroll);
     
-    // 🎲 랭킹 테마 랜덤 설정 (새로고침 시)
     const themes = [
         { id: 'night_owl', title: '심야의 감상자', desc: '새벽 0시-4시, 정적 속에 머문 이들', icon: Moon },
         { id: 'quiet_observer', title: '조용한 탐험가', desc: '흔적 없이 소리만 깊게 파고든 이들', icon: Headphones },
-        { id: 'signal_herald', title: '신호의 전령사', desc: '아티팩트의 파동을 널리 퍼뜨린 이들', icon: Share2 },
-        { id: 'early_pioneer', title: '초창기 개척자', desc: '공간의 시작부터 함께한 멤버들', icon: Target }
+        { id: 'signal_herald', title: '신호의 전령사', desc: '아티팩트의 파동을 널리 퍼뜨린 이들', icon: Share2 }
     ];
     setRankingTheme(themes[Math.floor(Math.random() * themes.length)]);
-
     return () => { isMounted = false; unsubscribe(); window.removeEventListener('scroll', handleScroll); };
   }, []);
 
@@ -211,19 +205,41 @@ export default function App() {
     }
   }, [shareItem]);
 
+  // 🚀 [수정됨] playTrack에서 즉각적으로 MediaSession 정보를 쏩니다.
   const playTrack = async (idx, queue = null) => { 
     const audio = audioRef.current; if (!audio) return;
+    
+    // 큐 교체 작업
+    const activeQueue = queue || currentQueue;
     if (queue) setCurrentQueue(queue);
+    
     const targetIdx = idx !== undefined ? idx : currentTrackIdx;
-    const activeList = queue || currentQueue;
-    const targetTrack = activeList[targetIdx]; if (!targetTrack) return;
+    const targetTrack = activeQueue[targetIdx]; 
+    if (!targetTrack) return;
+
     const directUrl = getDirectLink(targetTrack.audioUrl);
+    
+    // 1. 오디오 소스 설정 및 재생
     if (audio.src !== directUrl) { audio.src = directUrl; audio.load(); }
     if (idx !== undefined) setCurrentTrackIdx(idx);
-    setIsPlaying(true); try { await audio.play(); updateMediaSession(); } catch (e) { setIsPlaying(false); } 
+    
+    setIsPlaying(true); 
+    try { 
+        await audio.play(); 
+        // 🚀 [핵심] 오디오 재생 직후, '현재 재생할 곡 정보'를 즉시 MediaSession에 전달!
+        updateMediaSession(targetTrack);
+    } catch (e) { setIsPlaying(false); } 
   };
 
-  useEffect(() => { updateMediaSession(); }, [currentTrack, isPlaying, updateMediaSession]);
+  // 🚀 [수정됨] 곡이 자동으로 넘어갈 때도 정보를 갱신하도록 useEffect 보강
+  useEffect(() => {
+    if (currentTrack) {
+        updateMediaSession(currentTrack);
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
+        }
+    }
+  }, [currentTrack?.id, isPlaying, updateMediaSession]);
 
   if (loading) return <div className="min-h-screen bg-black flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-[#004aad]" /></div>;
 
@@ -231,7 +247,8 @@ export default function App() {
     <Router>
       <ScrollToTop />
       <div className={`min-h-screen bg-[#050505] text-zinc-100 font-sans selection:bg-[#004aad] relative overflow-x-hidden ${isPlayerExpanded ? 'h-screen overflow-hidden' : ''}`}>
-        <audio ref={audioRef} muted={isMuted} onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)} onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)} onEnded={() => playTrack((currentTrackIdx + 1) % currentQueue.length)} onWaiting={() => setIsBuffering(true)} onPlaying={() => setIsBuffering(false)} onPlay={() => { if(user) updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'stats'), { listenCount: increment(1) }); }} playsInline />
+        {/* onPlay에서도 메타데이터 업데이트 호출 */}
+        <audio ref={audioRef} muted={isMuted} onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)} onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)} onEnded={() => playTrack((currentTrackIdx + 1) % currentQueue.length)} onWaiting={() => setIsBuffering(true)} onPlaying={() => setIsBuffering(false)} onPlay={() => { if(user) updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'stats'), { listenCount: increment(1) }); updateMediaSession(currentTrack); }} playsInline />
         
         <header className={`fixed top-0 w-full z-100 transition-all duration-500 ${scrolled ? 'py-4 bg-black/40 backdrop-blur-xl border-b border-white/5' : 'py-6 lg:py-10'}`}>
           <div className="container mx-auto px-6 lg:px-8 flex justify-between items-end">
@@ -255,7 +272,7 @@ export default function App() {
 
         <AudioPlayer currentTrack={currentTrack} isPlayerExpanded={isPlayerExpanded} setIsPlayerExpanded={setIsPlayerExpanded} isPlaying={isPlaying} progressPct={duration ? (currentTime / duration) * 100 : 0} volume={volume} isMuted={isMuted} setIsMuted={setIsMuted} setVolume={setVolume} handleShare={handleShare} handleToggleLike={handleToggleLike} userLikes={userLikes} togglePlay={(e) => { if(e) e.stopPropagation(); isPlaying ? (setIsPlaying(false), audioRef.current?.pause()) : playTrack(); }} playTrack={playTrack} currentTrackIdx={currentTrackIdx} publicTracks={currentQueue} isBuffering={isBuffering} playerView={playerView} setPlayerView={setPlayerView} parsedLyrics={parsedLyrics} setParsedLyrics={setParsedLyrics} duration={duration} currentTime={currentTime} audioRef={audioRef} formatTime={formatTime} loopMode={loopMode} toggleLoop={() => setLoopMode(p => (p+1)%3)} isShuffle={isShuffle} toggleShuffle={() => setIsShuffle(!isShuffle)} />
 
-        {/* Share Card Design */}
+        {/* Share Card Design (Hidden) */}
         {shareItem && (
             <div ref={shareCardRef} style={{ position: 'fixed', left: '-9999px', top: 0, width: '400px', height: '700px', backgroundColor: '#09090b', border: '12px solid #18181b', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', padding: '60px', textAlign: 'center', fontFamily: 'sans-serif', color: '#ffffff' }}>
                 <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(0,74,173,0.15), rgba(147,51,234,0.05))', zIndex: 0 }} />
@@ -280,6 +297,7 @@ export default function App() {
             </div>
         )}
 
+        {/* Footer 복구 */}
         <footer className="py-24 lg:py-40 bg-[#fdfbf7] text-black border-t border-zinc-200 px-6 lg:px-8 relative z-30">
             <div className="container mx-auto grid lg:grid-cols-4 gap-12 lg:gap-10 opacity-80">
               <div className="space-y-6 lg:space-y-10">
@@ -304,7 +322,7 @@ export default function App() {
             </div>
         </footer>
 
-        <AnimatePresence>{toastMessage && (<motion.div onClick={() => setToastMessage(null)} initial={{ opacity: 0, y: 20, x: '-50%' }} animate={{ opacity: 1, y: 0, x: '-50%' }} exit={{ opacity: 0 }} className="fixed bottom-32 lg:bottom-40 left-1/2 z-1000 bg-[#004aad] text-white px-6 lg:px-8 py-3 lg:py-4 rounded-full font-black uppercase text-[10px] shadow-2xl flex items-center gap-2 transition-transform cursor-pointer"><CheckCircle2 className="w-3 h-3" /> {toastMessage}</motion.div>)}</AnimatePresence>
+        <AnimatePresence>{toastMessage && (<motion.div onClick={() => setToastMessage(null)} initial={{ opacity: 0, y: 20, x: '-50%' }} animate={{ opacity: 1, y: 0, x: '-50%' }} exit={{ opacity: 0 }} className="fixed bottom-32 lg:bottom-40 left-1/2 z-[1000] bg-[#004aad] text-white px-6 lg:px-8 py-3 lg:py-4 rounded-full font-black uppercase text-[10px] shadow-2xl flex items-center gap-2 transition-transform cursor-pointer"><CheckCircle2 className="w-3 h-3" /> {toastMessage}</motion.div>)}</AnimatePresence>
         <style>{`
           .italic-outline { -webkit-text-stroke: 1px rgba(255,255,255,0.1); color: transparent; }
           @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
