@@ -7,10 +7,10 @@ import {
   getAuth, onAuthStateChanged, signInAnonymously, signOut, signInWithPopup, GoogleAuthProvider 
 } from 'firebase/auth';
 import { 
-  getFirestore, doc, setDoc, collection, onSnapshot, query, updateDoc, increment, deleteDoc, getDoc, orderBy 
+  getFirestore, doc, setDoc, collection, onSnapshot, query, updateDoc, increment, deleteDoc, getDoc
 } from 'firebase/firestore';
 import { 
-  Loader2, Music, Heart, Share2, Zap, Trophy, Medal, Calendar, Star, Moon, Coffee, Ghost, HelpCircle, CheckCircle2, AlertCircle, X, Smartphone, Sparkles, Archive as ArchiveIcon, Play, Waves, ListMusic, Target, Headphones, User, Disc
+  Loader2, Music, Heart, Share2, Zap, Trophy, Medal, Calendar, Star, Moon, Coffee, Ghost, HelpCircle, CheckCircle2, AlertCircle, X, Smartphone, Sparkles, Archive as ArchiveIcon, Play, Waves, ListMusic, Target, Headphones, User
 } from 'lucide-react';
 import { motion, AnimatePresence, useScroll, useSpring } from 'framer-motion';
 
@@ -96,7 +96,7 @@ export default function App() {
   const [siteConfig, setSiteConfig] = useState(null);
   const [shareItem, setShareItem] = useState(null);
   const [allUsers, setAllUsers] = useState([]);
-  const [rankingTheme, setRankingTheme] = useState({ id: 'night_owl', title: '심야의 감상자', desc: '새벽 0시-4시, 정적 속에 머문 이들', icon: Moon });
+  const [rankingTheme, setRankingTheme] = useState({ id: 'quiet_observer', title: '조용한 탐험가', desc: '흔적 없이 소리만 깊게 파고든 이들', icon: Headphones });
 
   const audioRef = useRef(null);
   const shareCardRef = useRef(null);
@@ -118,7 +118,7 @@ export default function App() {
 
   const formatTime = useCallback((time) => { if (isNaN(time)) return "0:00"; const min = Math.floor(time / 60); const sec = Math.floor(time % 60); return `${min}:${String(sec).padStart(2, '0')}`; }, []);
 
-  // 🚀 [수정됨] iOS 잠금화면 메타데이터 주입 함수
+  // 🚀 [iOS 잠금화면 최적화 업데이트]
   const updateMediaSession = useCallback(() => {
     if (currentTrack && 'mediaSession' in navigator) {
         const artUrl = currentTrack.image || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17';
@@ -136,12 +136,16 @@ export default function App() {
             ]
         });
 
+        // iOS 제어 센터 핸들러 등록
         navigator.mediaSession.setActionHandler('play', () => { setIsPlaying(true); audioRef.current?.play(); });
         navigator.mediaSession.setActionHandler('pause', () => { setIsPlaying(false); audioRef.current?.pause(); });
-        navigator.mediaSession.setActionHandler('previoustrack', () => playTrack((currentTrackIdx - 1 + currentQueue.length) % currentQueue.length));
-        navigator.mediaSession.setActionHandler('nexttrack', () => playTrack((currentTrackIdx + 1) % currentQueue.length));
+        navigator.mediaSession.setActionHandler('previoustrack', () => { if(currentQueue.length > 0) playTrack((currentTrackIdx - 1 + currentQueue.length) % currentQueue.length); });
+        navigator.mediaSession.setActionHandler('nexttrack', () => { if(currentQueue.length > 0) playTrack((currentTrackIdx + 1) % currentQueue.length); });
+        
+        // 재생 상태 명시적 업데이트
+        navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
     }
-  }, [currentTrack, currentTrackIdx, currentQueue.length]);
+  }, [currentTrack, currentTrackIdx, currentQueue.length, isPlaying]);
 
   useEffect(() => {
     let isMounted = true;
@@ -150,12 +154,16 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, (u) => { if (isMounted) { setUser(u); const adminCheck = !!(u && u.email && ADMIN_EMAILS.includes(u.email.toLowerCase())); setIsAdmin(adminCheck); if (u) setLoading(false); } });
     const handleScroll = () => setScrolled(window.scrollY > 50);
     window.addEventListener('scroll', handleScroll);
+    
+    // 🎲 랭킹 테마 랜덤 설정 (새로고침 시)
     const themes = [
         { id: 'night_owl', title: '심야의 감상자', desc: '새벽 0시-4시, 정적 속에 머문 이들', icon: Moon },
         { id: 'quiet_observer', title: '조용한 탐험가', desc: '흔적 없이 소리만 깊게 파고든 이들', icon: Headphones },
-        { id: 'signal_herald', title: '신호의 전령사', desc: '아티팩트의 파동을 널리 퍼뜨린 이들', icon: Share2 }
+        { id: 'signal_herald', title: '신호의 전령사', desc: '아티팩트의 파동을 널리 퍼뜨린 이들', icon: Share2 },
+        { id: 'early_pioneer', title: '초창기 개척자', desc: '공간의 시작부터 함께한 멤버들', icon: Target }
     ];
     setRankingTheme(themes[Math.floor(Math.random() * themes.length)]);
+
     return () => { isMounted = false; unsubscribe(); window.removeEventListener('scroll', handleScroll); };
   }, []);
 
@@ -185,11 +193,8 @@ export default function App() {
 
   useEffect(() => { if (toastMessage) { const timer = setTimeout(() => setToastMessage(null), 6000); return () => clearTimeout(timer); } }, [toastMessage]);
 
-  const handleShare = async (e, item, type = 'track') => {
-    if (e) e.stopPropagation();
-    if (user && type === 'track') updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'stats'), { shareCount: increment(1) });
-    setShareItem({ ...item, type });
-  };
+  const handleToggleLike = async (e, trackId) => { if (e) e.stopPropagation(); if (!user) return; const likeDoc = doc(db, 'artifacts', appId, 'users', user.uid, 'likes', trackId); if (userLikes.includes(trackId)) { await deleteDoc(likeDoc); } else { await setDoc(likeDoc, { likedAt: Date.now() }); setToastMessage("아카이브에 기록되었습니다 💗"); } };
+  const handleShare = async (e, item, type = 'track') => { if (e) e.stopPropagation(); if (user && type === 'track') updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'stats'), { shareCount: increment(1) }); setShareItem({ ...item, type }); };
 
   useEffect(() => {
     if (shareItem && shareCardRef.current) {
@@ -215,18 +220,10 @@ export default function App() {
     const directUrl = getDirectLink(targetTrack.audioUrl);
     if (audio.src !== directUrl) { audio.src = directUrl; audio.load(); }
     if (idx !== undefined) setCurrentTrackIdx(idx);
-    setIsPlaying(true); 
-    try { 
-        await audio.play(); 
-        // 🚀 재생 직후 메타데이터 강제 업데이트
-        updateMediaSession();
-    } catch (e) { setIsPlaying(false); } 
+    setIsPlaying(true); try { await audio.play(); updateMediaSession(); } catch (e) { setIsPlaying(false); } 
   };
 
-  // 🚀 곡 변경 시에도 메타데이터 업데이트
-  useEffect(() => {
-    updateMediaSession();
-  }, [currentTrack, updateMediaSession]);
+  useEffect(() => { updateMediaSession(); }, [currentTrack, isPlaying, updateMediaSession]);
 
   if (loading) return <div className="min-h-screen bg-black flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-[#004aad]" /></div>;
 
@@ -234,7 +231,7 @@ export default function App() {
     <Router>
       <ScrollToTop />
       <div className={`min-h-screen bg-[#050505] text-zinc-100 font-sans selection:bg-[#004aad] relative overflow-x-hidden ${isPlayerExpanded ? 'h-screen overflow-hidden' : ''}`}>
-        <audio ref={audioRef} muted={isMuted} onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)} onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)} onEnded={() => playTrack((currentTrackIdx + 1) % currentQueue.length)} onWaiting={() => setIsBuffering(true)} onPlaying={() => setIsBuffering(false)} onPlay={() => { if(user) updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'stats'), { listenCount: increment(1) }); updateMediaSession(); }} playsInline />
+        <audio ref={audioRef} muted={isMuted} onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)} onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)} onEnded={() => playTrack((currentTrackIdx + 1) % currentQueue.length)} onWaiting={() => setIsBuffering(true)} onPlaying={() => setIsBuffering(false)} onPlay={() => { if(user) updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'stats'), { listenCount: increment(1) }); }} playsInline />
         
         <header className={`fixed top-0 w-full z-100 transition-all duration-500 ${scrolled ? 'py-4 bg-black/40 backdrop-blur-xl border-b border-white/5' : 'py-6 lg:py-10'}`}>
           <div className="container mx-auto px-6 lg:px-8 flex justify-between items-end">
@@ -258,6 +255,7 @@ export default function App() {
 
         <AudioPlayer currentTrack={currentTrack} isPlayerExpanded={isPlayerExpanded} setIsPlayerExpanded={setIsPlayerExpanded} isPlaying={isPlaying} progressPct={duration ? (currentTime / duration) * 100 : 0} volume={volume} isMuted={isMuted} setIsMuted={setIsMuted} setVolume={setVolume} handleShare={handleShare} handleToggleLike={handleToggleLike} userLikes={userLikes} togglePlay={(e) => { if(e) e.stopPropagation(); isPlaying ? (setIsPlaying(false), audioRef.current?.pause()) : playTrack(); }} playTrack={playTrack} currentTrackIdx={currentTrackIdx} publicTracks={currentQueue} isBuffering={isBuffering} playerView={playerView} setPlayerView={setPlayerView} parsedLyrics={parsedLyrics} setParsedLyrics={setParsedLyrics} duration={duration} currentTime={currentTime} audioRef={audioRef} formatTime={formatTime} loopMode={loopMode} toggleLoop={() => setLoopMode(p => (p+1)%3)} isShuffle={isShuffle} toggleShuffle={() => setIsShuffle(!isShuffle)} />
 
+        {/* Share Card Design */}
         {shareItem && (
             <div ref={shareCardRef} style={{ position: 'fixed', left: '-9999px', top: 0, width: '400px', height: '700px', backgroundColor: '#09090b', border: '12px solid #18181b', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', padding: '60px', textAlign: 'center', fontFamily: 'sans-serif', color: '#ffffff' }}>
                 <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(0,74,173,0.15), rgba(147,51,234,0.05))', zIndex: 0 }} />
@@ -290,10 +288,7 @@ export default function App() {
               </div>
               <div className="space-y-4 lg:space-y-8">
                 <p className="text-[10px] lg:text-[12px] font-black uppercase tracking-widest text-[#004aad] flex items-center gap-3"><span className="w-1.5 h-1.5 bg-[#004aad] rounded-full" /> VISIT US</p>
-                <ul className="text-xs lg:text-sm font-bold opacity-60 space-y-1">
-                  <li>서울특별시 종로구 인사동4길 17, 108호</li>
-                  <li>Tue - Sun, 11:00 - 19:00</li>
-                </ul>
+                <ul className="text-xs lg:text-sm font-bold opacity-60 space-y-1"><li>서울특별시 종로구 인사동4길 17, 108호</li><li>Tue - Sun, 11:00 - 19:00</li></ul>
               </div>
               <div className="space-y-4 lg:space-y-8">
                 <p className="text-[10px] lg:text-[12px] font-black uppercase tracking-widest text-[#004aad] flex items-center gap-3"><span className="w-1.5 h-1.5 bg-[#004aad] rounded-full" /> SYSTEM</p>
@@ -304,36 +299,19 @@ export default function App() {
               </div>
               <div className="space-y-4 lg:space-y-8">
                 <p className="text-[10px] lg:text-[12px] font-black uppercase tracking-widest text-[#004aad] flex items-center gap-3"><span className="w-1.5 h-1.5 bg-[#004aad] rounded-full" /> CONNECT</p>
-                <div className="flex gap-4">
-                  <a href="https://unframe.kr" target="_blank" className="text-xs font-black uppercase hover:text-[#004aad]">Web</a>
-                  <a href="https://instagram.com" target="_blank" className="text-xs font-black uppercase hover:text-[#004aad]">Insta</a>
-                </div>
+                <div className="flex gap-4"><a href="https://unframe.kr" target="_blank" className="text-xs font-black uppercase hover:text-[#004aad]">Web</a><a href="https://instagram.com" target="_blank" className="text-xs font-black uppercase hover:text-[#004aad]">Insta</a></div>
               </div>
             </div>
         </footer>
 
-        <AnimatePresence>{toastMessage && (<motion.div onClick={() => setToastMessage(null)} initial={{ opacity: 0, y: 20, x: '-50%' }} animate={{ opacity: 1, y: 0, x: '-50%' }} exit={{ opacity: 0 }} className="fixed bottom-32 lg:bottom-40 left-1/2 z-1000 bg-[#004aad] text-white px-6 lg:px-8 py-3 lg:py-4 rounded-full font-black uppercase text-[10px] shadow-2xl flex items-center gap-2 transition-transform cursor-pointer"><CheckCircle2 className="w-3 h-3" /> {toastMessage}</motion.div>)}</AnimatePresence>
+        <AnimatePresence>{toastMessage && (<motion.div onClick={() => setToastMessage(null)} initial={{ opacity: 0, y: 20, x: '-50%' }} animate={{ opacity: 1, y: 0, x: '-50%' }} exit={{ opacity: 0 }} className="fixed bottom-32 lg:bottom-40 left-1/2 z-[1000] bg-[#004aad] text-white px-6 lg:px-8 py-3 lg:py-4 rounded-full font-black uppercase text-[10px] shadow-2xl flex items-center gap-2 transition-transform cursor-pointer"><CheckCircle2 className="w-3 h-3" /> {toastMessage}</motion.div>)}</AnimatePresence>
         <style>{`
           .italic-outline { -webkit-text-stroke: 1px rgba(255,255,255,0.1); color: transparent; }
           @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
           @keyframes wave { 0%, 100% { height: 4px; } 50% { height: 12px; } }
-          
-          /* 🚀 [NEW] Marquee (흐르는 텍스트) 애니메이션 */
-          @keyframes marquee {
-            0% { transform: translateX(0); }
-            100% { transform: translateX(-100%); }
-          }
-          .animate-marquee {
-            display: inline-block;
-            padding-left: 100%; /* 처음엔 오른쪽 밖에서 시작 */
-            animation: marquee 15s linear infinite;
-          }
-          .marquee-container {
-            width: 100%;
-            overflow: hidden;
-            white-space: nowrap;
-          }
-
+          @keyframes marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
+          .animate-marquee { display: inline-block; padding-left: 100%; animation: marquee 15s linear infinite; }
+          .marquee-container { width: 100%; overflow: hidden; white-space: nowrap; }
           .no-scrollbar::-webkit-scrollbar { display: none; }
           .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
           input[type=range]::-webkit-slider-thumb { appearance: none; height: 16px; width: 16px; border-radius: 50%; background: white; box-shadow: 0 0 15px rgba(0,74,173,1); cursor: pointer; }

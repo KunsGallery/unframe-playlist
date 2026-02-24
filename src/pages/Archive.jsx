@@ -35,16 +35,16 @@ const Archive = ({
 }) => {
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
 
-  // 🚀 [추가됨] 실시간 내 등수 계산 로직
+  // 🚀 [실시간 데이터 기반] 내 등수 계산 로직
   const myRank = useMemo(() => {
       if (!user || !allUsers || allUsers.length === 0) return '?';
-      // 전체 유저 목록에서 내 UID와 같은 유저의 인덱스를 찾습니다.
+      // 전체 유저 목록(public_stats)에서 내 UID와 같은 유저의 인덱스를 찾습니다.
       const index = allUsers.findIndex(u => u.id === user.uid);
-      // 인덱스는 0부터 시작하므로 +1, 못 찾으면 목록 맨 끝 +1로 표시
+      // 인덱스는 0부터 시작하므로 +1을 해줍니다.
       return index === -1 ? allUsers.length + 1 : index + 1;
   }, [user, allUsers]);
 
-  // 프로필 이미지 업로드 로직
+  // 프로필 이미지 업로드 로직 (ImgBB 연동)
   const handleProfileImageUpload = async (e) => {
     const file = e.target.files[0]; 
     if (!file || !user) return;
@@ -154,8 +154,8 @@ const Archive = ({
         {/* Right Column: Quest & My Hearts */}
         <div className="lg:col-span-8 space-y-10 lg:space-y-16">
             
-            {/* 🚀 오늘의 UP 놀이 (Quest Card) */}
-            <section className="bg-linear-to-br from-[#004aad] to-[#001f4d] p-8 lg:p-12 rounded-[3rem] lg:rounded-[5rem] relative overflow-hidden shadow-2xl">
+            {/* 🚀 오늘의 UP 놀이 (Quest Card) - 실시간 랭킹 테마 및 등수 연동 */}
+            <section className="bg-gradient-to-br from-[#004aad] to-[#001f4d] p-8 lg:p-12 rounded-[3rem] lg:rounded-[5rem] relative overflow-hidden shadow-2xl">
                 <div className="absolute top-0 right-0 p-12 opacity-10 -rotate-12">
                     {rankingTheme && React.createElement(rankingTheme.icon, { size: 180, color: 'white' })}
                 </div>
@@ -168,18 +168,18 @@ const Archive = ({
                         </div>
                         <div className="text-right">
                             <p className="text-[10px] font-black uppercase text-white/60 mb-1">Rank in "{rankingTheme?.title || 'System'}"</p>
-                            {/* 🚀 [변경됨] 하드코딩된 #3 대신 진짜 내 등수 표시! */}
+                            {/* 🚀 실시간 내 등수 표시! */}
                             <p className="text-4xl lg:text-6xl font-black italic tracking-tighter text-white">#{myRank}</p>
                         </div>
                     </div>
 
-                    <div className="bg-black/20 p-6 rounded-4xl border border-white/10 space-y-4">
+                    <div className="bg-black/20 p-6 rounded-[2rem] lg:rounded-4xl border border-white/10 space-y-4">
                         <div className="flex justify-between items-center">
                             <p className="text-sm font-bold text-white">오늘 노래 1번 듣기 ({userProfile?.listenCount > 0 ? '1' : '0'}/1)</p>
                             <span className="text-[10px] font-black uppercase text-white/50">Reward: Tier Card</span>
                         </div>
                         <div className="h-3 bg-white/10 rounded-full overflow-hidden">
-                            {/* 🚀 [변경됨] 실제 재생 횟수에 따라 프로그레스바 연동 */}
+                            {/* 실제 재생 횟수에 따라 진행도 반영 (1회 이상이면 100%) */}
                             <motion.div initial={{ width: 0 }} animate={{ width: userProfile?.listenCount > 0 ? '100%' : '0%' }} className="h-full bg-white shadow-[0_0_15px_rgba(255,255,255,0.8)]" />
                         </div>
                         <div className="flex flex-col md:flex-row gap-4 pt-2">
@@ -189,7 +189,7 @@ const Archive = ({
                                 <p className="text-xs font-bold text-zinc-400 flex items-center gap-2 flex-1">아티팩트를 감상하고 오늘의 기록을 해제하세요.</p>
                             )}
                             
-                            {/* 🚀 티어 카드 발급 버튼 (이제 내 진짜 등수가 박힌 이미지가 발급됩니다!) */}
+                            {/* 🚀 티어 카드 발급 버튼 (실제 랭킹 데이터가 박힌 이미지가 생성됨) */}
                             <button 
                                 onClick={(e) => handleShare(e, { title: rankingTheme.title }, 'tier')}
                                 className="bg-white text-[#004aad] px-6 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-zinc-100 transition-all flex items-center gap-2 shadow-xl shrink-0"
@@ -203,12 +203,12 @@ const Archive = ({
                 </div>
             </section>
 
-            {/* My Hearts List */}
+            {/* My Hearts List: 내가 좋아요 한 곡 목록 */}
             <section className="space-y-8">
                 <h2 className={`${h1Title} text-5xl lg:text-[9rem]`}>My<br/>Hearts</h2>
                 <div className="grid gap-4">
                     {tracks.filter(t => userLikes.includes(t.id)).map(t => (
-                        <div key={t.id} onClick={() => setSelectedTrack(t)} className={`${glass} p-6 lg:p-12 rounded-4xl lg:rounded-[4rem] flex justify-between items-center group cursor-pointer border-white/5 hover:bg-[#004aad]/5 transition-all shadow-xl`}>
+                        <div key={t.id} onClick={() => setSelectedTrack(t)} className={`${glass} p-6 lg:p-12 rounded-2xl lg:rounded-4xl flex justify-between items-center group cursor-pointer border-white/5 hover:bg-[#004aad]/5 transition-all shadow-xl`}>
                             <div className="flex items-center gap-6 lg:gap-10">
                                 <div className="w-14 h-14 lg:w-20 lg:h-20 rounded-[1.2rem] lg:rounded-4xl overflow-hidden shadow-2xl shrink-0">
                                     <img src={t.image} className="w-full h-full object-cover" alt="" />
