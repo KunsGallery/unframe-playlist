@@ -95,8 +95,6 @@ export default function App() {
   const [parsedLyrics, setParsedLyrics] = useState([]);
   const [siteConfig, setSiteConfig] = useState(null);
   const [shareItem, setShareItem] = useState(null);
-
-  // 🚀 [NEW] 전체 유저 리스트 (실시간 랭킹용)
   const [allUsers, setAllUsers] = useState([]);
   const [rankingTheme, setRankingTheme] = useState({ id: 'night_owl', title: '심야의 감상자', desc: '새벽 0시-4시, 정적 속에 머문 이들', icon: Moon });
 
@@ -120,6 +118,31 @@ export default function App() {
 
   const formatTime = useCallback((time) => { if (isNaN(time)) return "0:00"; const min = Math.floor(time / 60); const sec = Math.floor(time % 60); return `${min}:${String(sec).padStart(2, '0')}`; }, []);
 
+  // 🚀 [수정됨] iOS 잠금화면 메타데이터 주입 함수
+  const updateMediaSession = useCallback(() => {
+    if (currentTrack && 'mediaSession' in navigator) {
+        const artUrl = currentTrack.image || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17';
+        navigator.mediaSession.metadata = new MediaMetadata({
+            title: currentTrack.title,
+            artist: currentTrack.artist,
+            album: 'UNFRAME PLAYLIST',
+            artwork: [
+                { src: artUrl, sizes: '96x96',   type: 'image/jpeg' },
+                { src: artUrl, sizes: '128x128', type: 'image/jpeg' },
+                { src: artUrl, sizes: '192x192', type: 'image/jpeg' },
+                { src: artUrl, sizes: '256x256', type: 'image/jpeg' },
+                { src: artUrl, sizes: '384x384', type: 'image/jpeg' },
+                { src: artUrl, sizes: '512x512', type: 'image/jpeg' },
+            ]
+        });
+
+        navigator.mediaSession.setActionHandler('play', () => { setIsPlaying(true); audioRef.current?.play(); });
+        navigator.mediaSession.setActionHandler('pause', () => { setIsPlaying(false); audioRef.current?.pause(); });
+        navigator.mediaSession.setActionHandler('previoustrack', () => playTrack((currentTrackIdx - 1 + currentQueue.length) % currentQueue.length));
+        navigator.mediaSession.setActionHandler('nexttrack', () => playTrack((currentTrackIdx + 1) % currentQueue.length));
+    }
+  }, [currentTrack, currentTrackIdx, currentQueue.length]);
+
   useEffect(() => {
     let isMounted = true;
     const initAuth = async () => { try { if (!auth.currentUser) await signInAnonymously(auth); } catch (err) { console.error(err); } };
@@ -127,7 +150,6 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, (u) => { if (isMounted) { setUser(u); const adminCheck = !!(u && u.email && ADMIN_EMAILS.includes(u.email.toLowerCase())); setIsAdmin(adminCheck); if (u) setLoading(false); } });
     const handleScroll = () => setScrolled(window.scrollY > 50);
     window.addEventListener('scroll', handleScroll);
-    
     const themes = [
         { id: 'night_owl', title: '심야의 감상자', desc: '새벽 0시-4시, 정적 속에 머문 이들', icon: Moon },
         { id: 'quiet_observer', title: '조용한 탐험가', desc: '흔적 없이 소리만 깊게 파고든 이들', icon: Headphones },
@@ -141,43 +163,33 @@ export default function App() {
     const fetchConfig = async () => { try { const configSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'site_config', 'main_texts')); if (configSnap.exists()) setSiteConfig(configSnap.data()); } catch(e) {} };
     fetchConfig();
     if (!user) return;
-
-    // 🚀 실시간 랭킹을 위한 유저 데이터 수집
     const unsubAllUsers = onSnapshot(collection(db, 'artifacts', appId, 'public_stats'), (snap) => {
         const users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         setAllUsers(users.sort((a, b) => (b.listenCount || 0) - (a.listenCount || 0)));
     });
-
     const unsubTracks = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'tracks')), (snap) => { 
         const loaded = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
         setTracks(loaded); if (currentQueue.length === 0) setCurrentQueue(loaded.filter(t => !t.isHidden));
     });
     const unsubPlaylists = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'playlists')), (snap) => { setPlaylists(snap.docs.map(d => ({ id: d.id, ...d.data() }))); });
     const unsubLikes = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'likes'), (snap) => setUserLikes(snap.docs.map(d => d.id)));
-    
     const profileRef = doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'stats');
     const unsubProfile = onSnapshot(profileRef, async (snap) => {
       if (snap.exists()) { 
-          const data = snap.data();
-          setUserProfile(data);
-          // 🚀 랭킹용 공용 컬렉션에도 동기화
-          await setDoc(doc(db, 'artifacts', appId, 'public_stats', user.uid), {
-              displayName: user.displayName || 'Anonymous',
-              listenCount: data.listenCount || 0,
-              profileImg: data.profileImg || '',
-              membership: membership.name
-          }, { merge: true });
-      } else { 
-          await setDoc(profileRef, { listenCount: 0, shareCount: 0, firstJoin: Date.now(), rewards: [], profileImg: '', hasSeenGuide: false }); 
-      }
+          const data = snap.data(); setUserProfile(data);
+          await setDoc(doc(db, 'artifacts', appId, 'public_stats', user.uid), { displayName: user.displayName || 'Anonymous', listenCount: data.listenCount || 0, profileImg: data.profileImg || '', membership: membership.name }, { merge: true });
+      } else { await setDoc(profileRef, { listenCount: 0, shareCount: 0, firstJoin: Date.now(), rewards: [], profileImg: '', hasSeenGuide: false }); }
     });
     return () => { unsubTracks(); unsubPlaylists(); unsubLikes(); unsubProfile(); unsubAllUsers(); };
   }, [user, membership.name]);
 
   useEffect(() => { if (toastMessage) { const timer = setTimeout(() => setToastMessage(null), 6000); return () => clearTimeout(timer); } }, [toastMessage]);
 
-  const handleToggleLike = async (e, trackId) => { if (e) e.stopPropagation(); if (!user) return; const likeDoc = doc(db, 'artifacts', appId, 'users', user.uid, 'likes', trackId); if (userLikes.includes(trackId)) { await deleteDoc(likeDoc); } else { await setDoc(likeDoc, { likedAt: Date.now() }); setToastMessage("아카이브에 기록되었습니다 💗"); } };
-  const handleShare = async (e, item, type = 'track') => { if (e) e.stopPropagation(); if (user && type === 'track') updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'stats'), { shareCount: increment(1) }); setShareItem({ ...item, type }); };
+  const handleShare = async (e, item, type = 'track') => {
+    if (e) e.stopPropagation();
+    if (user && type === 'track') updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'stats'), { shareCount: increment(1) });
+    setShareItem({ ...item, type });
+  };
 
   useEffect(() => {
     if (shareItem && shareCardRef.current) {
@@ -203,14 +215,26 @@ export default function App() {
     const directUrl = getDirectLink(targetTrack.audioUrl);
     if (audio.src !== directUrl) { audio.src = directUrl; audio.load(); }
     if (idx !== undefined) setCurrentTrackIdx(idx);
-    setIsPlaying(true); try { await audio.play(); } catch (e) { setIsPlaying(false); } 
+    setIsPlaying(true); 
+    try { 
+        await audio.play(); 
+        // 🚀 재생 직후 메타데이터 강제 업데이트
+        updateMediaSession();
+    } catch (e) { setIsPlaying(false); } 
   };
+
+  // 🚀 곡 변경 시에도 메타데이터 업데이트
+  useEffect(() => {
+    updateMediaSession();
+  }, [currentTrack, updateMediaSession]);
+
+  if (loading) return <div className="min-h-screen bg-black flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-[#004aad]" /></div>;
 
   return (
     <Router>
       <ScrollToTop />
       <div className={`min-h-screen bg-[#050505] text-zinc-100 font-sans selection:bg-[#004aad] relative overflow-x-hidden ${isPlayerExpanded ? 'h-screen overflow-hidden' : ''}`}>
-        <audio ref={audioRef} muted={isMuted} onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)} onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)} onEnded={() => playTrack((currentTrackIdx + 1) % currentQueue.length)} onWaiting={() => setIsBuffering(true)} onPlaying={() => setIsBuffering(false)} onPlay={() => { if(user) updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'stats'), { listenCount: increment(1) }); }} playsInline />
+        <audio ref={audioRef} muted={isMuted} onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)} onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)} onEnded={() => playTrack((currentTrackIdx + 1) % currentQueue.length)} onWaiting={() => setIsBuffering(true)} onPlaying={() => setIsBuffering(false)} onPlay={() => { if(user) updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'stats'), { listenCount: increment(1) }); updateMediaSession(); }} playsInline />
         
         <header className={`fixed top-0 w-full z-100 transition-all duration-500 ${scrolled ? 'py-4 bg-black/40 backdrop-blur-xl border-b border-white/5' : 'py-6 lg:py-10'}`}>
           <div className="container mx-auto px-6 lg:px-8 flex justify-between items-end">
@@ -219,7 +243,6 @@ export default function App() {
               <Link to="/about" className="text-[10px] lg:text-[11px] font-black uppercase tracking-widest hover:text-[#004aad]">About</Link>
               <Link to="/" className="text-[10px] lg:text-[11px] font-black uppercase tracking-widest hover:text-[#004aad]">Exhibit</Link>
               <Link to="/archive" className="text-[10px] lg:text-[11px] font-black uppercase tracking-widest hover:text-[#004aad]">Archive</Link>
-              <button onClick={() => setShowGuide(true)} className="p-2 text-zinc-600 hover:text-[#004aad] transition-all"><HelpCircle className="w-4 h-4 lg:w-5 lg:h-5" /></button>
             </nav>
           </div>
         </header>
@@ -235,7 +258,6 @@ export default function App() {
 
         <AudioPlayer currentTrack={currentTrack} isPlayerExpanded={isPlayerExpanded} setIsPlayerExpanded={setIsPlayerExpanded} isPlaying={isPlaying} progressPct={duration ? (currentTime / duration) * 100 : 0} volume={volume} isMuted={isMuted} setIsMuted={setIsMuted} setVolume={setVolume} handleShare={handleShare} handleToggleLike={handleToggleLike} userLikes={userLikes} togglePlay={(e) => { if(e) e.stopPropagation(); isPlaying ? (setIsPlaying(false), audioRef.current?.pause()) : playTrack(); }} playTrack={playTrack} currentTrackIdx={currentTrackIdx} publicTracks={currentQueue} isBuffering={isBuffering} playerView={playerView} setPlayerView={setPlayerView} parsedLyrics={parsedLyrics} setParsedLyrics={setParsedLyrics} duration={duration} currentTime={currentTime} audioRef={audioRef} formatTime={formatTime} loopMode={loopMode} toggleLoop={() => setLoopMode(p => (p+1)%3)} isShuffle={isShuffle} toggleShuffle={() => setIsShuffle(!isShuffle)} />
 
-        {/* Share Card Area (Hidden) */}
         {shareItem && (
             <div ref={shareCardRef} style={{ position: 'fixed', left: '-9999px', top: 0, width: '400px', height: '700px', backgroundColor: '#09090b', border: '12px solid #18181b', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', padding: '60px', textAlign: 'center', fontFamily: 'sans-serif', color: '#ffffff' }}>
                 <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(0,74,173,0.15), rgba(147,51,234,0.05))', zIndex: 0 }} />
@@ -260,7 +282,6 @@ export default function App() {
             </div>
         )}
 
-        {/* 🚀 [복구됨] 예전 푸터 디자인 */}
         <footer className="py-24 lg:py-40 bg-[#fdfbf7] text-black border-t border-zinc-200 px-6 lg:px-8 relative z-30">
             <div className="container mx-auto grid lg:grid-cols-4 gap-12 lg:gap-10 opacity-80">
               <div className="space-y-6 lg:space-y-10">
@@ -277,7 +298,6 @@ export default function App() {
               <div className="space-y-4 lg:space-y-8">
                 <p className="text-[10px] lg:text-[12px] font-black uppercase tracking-widest text-[#004aad] flex items-center gap-3"><span className="w-1.5 h-1.5 bg-[#004aad] rounded-full" /> SYSTEM</p>
                 <ul className="text-xs lg:text-sm font-bold opacity-80 underline space-y-1">
-                  {/* 🚀 잃어버렸던 콘솔 링크 복구! */}
                   <li><Link to="/admin" className="cursor-pointer hover:text-[#004aad] transition-colors">Console / Admin</Link></li>
                   <li><Link to="/about" className="cursor-pointer hover:text-[#004aad] transition-colors">Project Info</Link></li>
                 </ul>
@@ -293,7 +313,32 @@ export default function App() {
         </footer>
 
         <AnimatePresence>{toastMessage && (<motion.div onClick={() => setToastMessage(null)} initial={{ opacity: 0, y: 20, x: '-50%' }} animate={{ opacity: 1, y: 0, x: '-50%' }} exit={{ opacity: 0 }} className="fixed bottom-32 lg:bottom-40 left-1/2 z-1000 bg-[#004aad] text-white px-6 lg:px-8 py-3 lg:py-4 rounded-full font-black uppercase text-[10px] shadow-2xl flex items-center gap-2 transition-transform cursor-pointer"><CheckCircle2 className="w-3 h-3" /> {toastMessage}</motion.div>)}</AnimatePresence>
-        <style>{`.italic-outline { -webkit-text-stroke: 1px rgba(255,255,255,0.1); color: transparent; } @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } } @keyframes wave { 0%, 100% { height: 4px; } 50% { height: 12px; } } .no-scrollbar::-webkit-scrollbar { display: none; } .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; } input[type=range]::-webkit-slider-thumb { appearance: none; height: 16px; width: 16px; border-radius: 50%; background: white; box-shadow: 0 0 15px rgba(0,74,173,1); cursor: pointer; } .pt-safe-top { padding-top: env(safe-area-inset-top, 20px); }`}</style>
+        <style>{`
+          .italic-outline { -webkit-text-stroke: 1px rgba(255,255,255,0.1); color: transparent; }
+          @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+          @keyframes wave { 0%, 100% { height: 4px; } 50% { height: 12px; } }
+          
+          /* 🚀 [NEW] Marquee (흐르는 텍스트) 애니메이션 */
+          @keyframes marquee {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-100%); }
+          }
+          .animate-marquee {
+            display: inline-block;
+            padding-left: 100%; /* 처음엔 오른쪽 밖에서 시작 */
+            animation: marquee 15s linear infinite;
+          }
+          .marquee-container {
+            width: 100%;
+            overflow: hidden;
+            white-space: nowrap;
+          }
+
+          .no-scrollbar::-webkit-scrollbar { display: none; }
+          .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+          input[type=range]::-webkit-slider-thumb { appearance: none; height: 16px; width: 16px; border-radius: 50%; background: white; box-shadow: 0 0 15px rgba(0,74,173,1); cursor: pointer; }
+          .pt-safe-top { padding-top: env(safe-area-inset-top, 20px); }
+        `}</style>
       </div>
     </Router>
   );
