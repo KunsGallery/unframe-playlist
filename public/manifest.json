@@ -3,12 +3,12 @@
   "name": "Unframe Art Playlist",
   "icons": [
     {
-      "src": "https://i.ibb.co/69Tpj9b/11.png",
+      "src": "/icon.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "https://i.ibb.co/69Tpj9b/11.png",
+      "src": "/icon.png",
       "sizes": "512x512",
       "type": "image/png"
     }
