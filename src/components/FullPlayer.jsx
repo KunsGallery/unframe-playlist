@@ -6,16 +6,14 @@ import { Play, Pause, SkipBack, SkipForward, Heart, Share2, Volume2, VolumeX, Lo
 const FullPlayer = ({
   currentTrack, setIsPlayerExpanded, isPlaying, progressPct, volume, isMuted, setIsMuted, setVolume,
   handleShare, handleToggleLike, userLikes, togglePlay, playTrack, currentTrackIdx, publicTracks, isBuffering,
-  // 🚀 [변경됨] playerView 사용
   playerView, setPlayerView, 
   parsedLyrics, activeLyricIdx, duration, currentTime, audioRef, formatTime,
   loopMode, toggleLoop, isShuffle, toggleShuffle
 }) => {
   
   const lyricsContainerRef = useRef(null);
-  const listContainerRef = useRef(null); // 리스트 스크롤용 Ref
+  const listContainerRef = useRef(null);
 
-  // 가사 자동 스크롤
   useEffect(() => {
     if (playerView === 'lyrics' && activeLyricIdx !== -1 && lyricsContainerRef.current) {
         const activeEl = document.getElementById(`lyric-${activeLyricIdx}`);
@@ -27,7 +25,6 @@ const FullPlayer = ({
     }
   }, [activeLyricIdx, playerView]);
 
-  // 리스트 뷰일 때 현재 곡으로 자동 스크롤
   useEffect(() => {
       if (playerView === 'list' && listContainerRef.current) {
           const activeItem = document.getElementById(`track-${currentTrack.id}`);
@@ -51,9 +48,9 @@ const FullPlayer = ({
         <div className="flex-1 overflow-hidden flex flex-col items-center justify-center relative w-full max-w-2xl mx-auto">
           <AnimatePresence mode="wait">
             
-            {/* 1. Cover View */}
+            {/* 1. Cover View - 🚀 [수정됨] px-8 제거, object-cover 적용 */}
             {playerView === 'cover' && (
-              <motion.div key="cover" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="w-full aspect-square max-w-md rounded-[2.5rem] lg:rounded-[4rem] overflow-hidden shadow-2xl shadow-black/50 border border-white/5 bg-zinc-900 px-8" onClick={() => setPlayerView('lyrics')}>
+              <motion.div key="cover" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="w-full aspect-square max-w-md rounded-[2.5rem] lg:rounded-[4rem] overflow-hidden shadow-2xl shadow-black/50 border border-white/5 bg-zinc-900 mx-6" onClick={() => setPlayerView('lyrics')}>
                 <img src={currentTrack.image || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17"} loading="lazy" className="w-full h-full object-cover" alt="Album Cover" />
               </motion.div>
             )}
@@ -77,7 +74,7 @@ const FullPlayer = ({
               </motion.div>
             )}
 
-            {/* 3. List View (Queue) */}
+            {/* 3. List View */}
             {playerView === 'list' && (
               <motion.div key="list" ref={listContainerRef} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="w-full h-[60vh] flex flex-col overflow-y-auto no-scrollbar relative scroll-smooth px-6 lg:px-12">
                   <div className="space-y-2 pb-[10vh] pt-4 w-full max-w-xl mx-auto">
@@ -122,13 +119,9 @@ const FullPlayer = ({
             <button onClick={toggleLoop} className={`p-3 transition-colors ${loopMode > 0 ? 'text-[#004aad]' : 'text-zinc-500 hover:text-white'}`}>{loopMode === 2 ? <Repeat1 className="w-6 h-6" /> : <Repeat className="w-6 h-6" />}</button>
           </div>
           
-          {/* 🚀 [하단 버튼 재배치] 가사 / 리스트 / 공유 / 뮤트 */}
           <div className="flex items-center justify-between pt-6 border-t border-white/5 opacity-80 px-4">
             <button onClick={() => setPlayerView(playerView === 'lyrics' ? 'cover' : 'lyrics')} className={`flex flex-col items-center gap-2 transition-colors ${playerView === 'lyrics' ? 'text-[#004aad]' : 'text-zinc-400 hover:text-white'}`}><AlignLeft className="w-6 h-6" /><span className="text-[9px] font-black uppercase tracking-widest">Lyrics</span></button>
-            
-            {/* 🚀 리스트 버튼 추가 */}
             <button onClick={() => setPlayerView(playerView === 'list' ? 'cover' : 'list')} className={`flex flex-col items-center gap-2 transition-colors ${playerView === 'list' ? 'text-[#004aad]' : 'text-zinc-400 hover:text-white'}`}><ListMusic className="w-6 h-6" /><span className="text-[9px] font-black uppercase tracking-widest">List</span></button>
-            
             <button onClick={(e) => handleShare(e, currentTrack, 'track')} className="flex flex-col items-center gap-2 text-zinc-400 hover:text-white transition-colors"><Share2 className="w-6 h-6" /><span className="text-[9px] font-black uppercase tracking-widest">Share</span></button>
             <button onClick={() => setIsMuted(!isMuted)} className="items-center gap-2 text-zinc-400 hover:text-white transition-colors hidden md:flex">{isMuted || volume === 0 ? <VolumeX className="w-6 h-6" /> : <Volume2 className="w-6 h-6" />}<span className="text-[9px] font-black uppercase tracking-widest">Mute</span></button>
           </div>

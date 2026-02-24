@@ -35,7 +35,6 @@ const db = getFirestore(app);
 const appId = 'unframe-playlist-v1';
 const ADMIN_EMAILS = ['gallerykuns@gmail.com', 'sylove887@gmail.com']; 
 
-// 디자인 상수
 const glass = "bg-white/[0.03] backdrop-blur-[40px] border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]";
 const subTitle = "font-bold uppercase tracking-[0.4em] text-[#004aad]";
 const h1Title = "font-black uppercase tracking-[-0.07em] leading-[0.8] italic";
@@ -98,7 +97,6 @@ export default function App() {
   const [parsedLyrics, setParsedLyrics] = useState([]);
   const [siteConfig, setSiteConfig] = useState(null);
   
-  // 공유용 상태
   const [shareItem, setShareItem] = useState(null);
   const shareCardRef = useRef(null);
 
@@ -161,7 +159,6 @@ export default function App() {
     setShareItem({ ...item, type });
   };
 
-  // 🚀 [수정됨] html2canvas 오류 해결을 위해 순수 CSS 스타일과 raw SVG 사용
   useEffect(() => {
     if (shareItem && shareCardRef.current) {
         setTimeout(async () => {
@@ -173,6 +170,7 @@ export default function App() {
                     logging: false,
                     useCORS: true,
                     allowTaint: true,
+                    ignoreElements: (element) => element.tagName === 'LINK' || element.tagName === 'STYLE', 
                 });
 
                 const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
@@ -226,6 +224,25 @@ export default function App() {
   const toggleShuffle = () => setIsShuffle(prev => !prev);
   const progressPct = duration ? (currentTime / duration) * 100 : 0;
 
+  // 🚀 [NEW] Media Session API Integration
+  useEffect(() => {
+    if (currentTrack && 'mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+            title: currentTrack.title,
+            artist: currentTrack.artist,
+            album: 'UNFRAME',
+            artwork: [
+                { src: currentTrack.image || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17', sizes: '512x512', type: 'image/jpeg' }
+            ]
+        });
+
+        navigator.mediaSession.setActionHandler('play', () => togglePlay());
+        navigator.mediaSession.setActionHandler('pause', () => togglePlay());
+        navigator.mediaSession.setActionHandler('previoustrack', () => playTrack((currentTrackIdx - 1 + publicTracks.length) % publicTracks.length));
+        navigator.mediaSession.setActionHandler('nexttrack', () => playTrack((currentTrackIdx + 1) % publicTracks.length));
+    }
+  }, [currentTrack, isPlaying]); // Track changes update metadata, isPlaying status is implied but mainly track change matters
+
   if (loading) return <div className="min-h-screen bg-black flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-[#004aad]" /></div>;
 
   return (
@@ -270,7 +287,6 @@ export default function App() {
           playerView={playerView} setPlayerView={setPlayerView}
         />
 
-        {/* 🚀 [NEW] 숨겨진 공유용 카드 디자인 (순수 CSS 스타일 & Raw SVG 적용) */}
         {shareItem && (
             <div ref={shareCardRef} 
                  style={{
@@ -282,33 +298,27 @@ export default function App() {
                      padding: '48px', textAlign: 'center',
                      fontFamily: 'sans-serif'
                  }}>
-                {/* Background Gradient */}
                 <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(0,74,173,0.2), rgba(147,51,234,0.1))', zIndex: 0 }} />
                 
-                {/* Content Container */}
                 <div style={{ position: 'relative', zIndex: 10, width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, justifyContent: 'center', gap: '32px' }}>
                     <h1 style={{ fontSize: '32px', fontWeight: 900, fontStyle: 'italic', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '-0.05em', margin: 0 }}>Unframe.</h1>
                     
-                    {/* Image Container */}
                     <div style={{ width: '256px', height: '256px', borderRadius: '32px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)', position: 'relative', backgroundColor: '#18181b', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         {shareItem.type === 'track' ? (
                             <img src={shareItem.image} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" crossOrigin="anonymous" />
                         ) : (
-                            // Trophy SVG with explicit style (Raw SVG)
                             <svg width="96" height="96" viewBox="0 0 24 24" fill="none" stroke="#004aad" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#004aad' }}>
                                 <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
                             </svg>
                         )}
                     </div>
                     
-                    {/* Text Info */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         <h2 style={{ fontSize: '24px', fontWeight: 900, textTransform: 'uppercase', color: '#ffffff', letterSpacing: '-0.025em', lineHeight: 1.2, margin: 0 }}>{shareItem.title}</h2>
                         <p style={{ fontSize: '14px', fontWeight: 700, color: '#004aad', textTransform: 'uppercase', letterSpacing: '0.1em', margin: 0 }}>{shareItem.artist || shareItem.desc}</p>
                     </div>
                 </div>
                 
-                {/* Footer */}
                 <div style={{ position: 'relative', zIndex: 10, width: '100%', paddingTop: '32px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
                     <p style={{ fontSize: '10px', fontWeight: 700, color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.5em', margin: 0 }}>Reactive Art Collective</p>
                 </div>
@@ -325,12 +335,7 @@ export default function App() {
                 <div className="flex-1 overflow-y-auto p-8 lg:p-20 space-y-8 lg:space-y-12">
                   <div className="space-y-3 lg:space-y-4"><h2 className="text-3xl lg:text-5xl font-black uppercase italic tracking-tighter text-[#004aad]">System Guide</h2><p className="text-[9px] lg:text-sm text-zinc-500 font-bold uppercase tracking-[0.2em] lg:tracking-[0.3em]">Unframe: 당신을 위한 공간 이용법</p></div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-8">
-                    {[ 
-                        { icon: Ghost, title: "Relationship", desc: siteConfig?.guide_1 || "머무른 시간이 쌓일수록 Hello에서 Family까지 우리의 관계는 깊어집니다." }, 
-                        { icon: ArchiveIcon, title: "Sticker Book", desc: siteConfig?.guide_2 || "첫 소리, 첫 하트, 첫 신호... 소중한 순간들을 스티커로 기록해 보세요." }, 
-                        { icon: Sparkles, title: "Daily Play", desc: siteConfig?.guide_3 || "하루 한 번, 소소한 놀이를 통해 Unframe의 세계관을 함께 완성합니다." }, 
-                        { icon: Smartphone, title: "Install App", desc: siteConfig?.guide_4 || "Safari/Chrome 메뉴에서 [홈 화면에 추가]를 눌러 앱처럼 감상하세요." } 
-                    ].map((item, i) => (
+                    {[ { icon: Ghost, title: "Relationship", desc: siteConfig?.guide_1 || "머무른 시간이 쌓일수록 Hello에서 Family까지 우리의 관계는 깊어집니다." }, { icon: ArchiveIcon, title: "Sticker Book", desc: siteConfig?.guide_2 || "첫 소리, 첫 하트, 첫 신호... 소중한 순간들을 스티커로 기록해 보세요." }, { icon: Sparkles, title: "Daily Play", desc: siteConfig?.guide_3 || "하루 한 번, 소소한 놀이를 통해 Unframe의 세계관을 함께 완성합니다." }, { icon: Smartphone, title: "Install App", desc: siteConfig?.guide_4 || "Safari/Chrome 메뉴에서 [홈 화면에 추가]를 눌러 앱처럼 감상하세요." } ].map((item, i) => (
                       <div key={i} className="space-y-3 lg:space-y-4 p-6 lg:p-8 bg-white/5 rounded-[2rem] lg:rounded-[2.5rem] border border-white/5 hover:border-[#004aad]/30 transition-all flex flex-col items-center text-center">
                           <div className="w-10 h-10 lg:w-12 lg:h-12 bg-[#004aad]/10 rounded-xl lg:rounded-2xl flex items-center justify-center"><item.icon className="w-5 h-5 lg:w-6 lg:h-6 text-[#004aad]" /></div>
                           <h4 className="text-base lg:text-lg font-black uppercase tracking-tight">{item.title}</h4>
