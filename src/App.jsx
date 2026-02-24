@@ -118,31 +118,45 @@ export default function App() {
 
   const formatTime = useCallback((time) => { if (isNaN(time)) return "0:00"; const min = Math.floor(time / 60); const sec = Math.floor(time % 60); return `${min}:${String(sec).padStart(2, '0')}`; }, []);
 
-  // 🚀 [핵심 수정] Media Session 업데이트 로직 - 특정 트랙을 인자로 받아 즉시 업데이트
-  const updateMediaSession = useCallback((track) => {
-    if (!track) return;
-    if ('mediaSession' in navigator) {
-        const artUrl = track.image || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17';
-        navigator.mediaSession.metadata = new MediaMetadata({
-            title: track.title,
-            artist: track.artist,
-            album: 'UNFRAME PLAYLIST',
-            artwork: [
-                { src: artUrl, sizes: '96x96',   type: 'image/jpeg' },
-                { src: artUrl, sizes: '128x128', type: 'image/jpeg' },
-                { src: artUrl, sizes: '192x192', type: 'image/jpeg' },
-                { src: artUrl, sizes: '256x256', type: 'image/jpeg' },
-                { src: artUrl, sizes: '384x384', type: 'image/jpeg' },
-                { src: artUrl, sizes: '512x512', type: 'image/jpeg' },
-            ]
-        });
+  // 🚀 [Media Session 정밀 보정]
+  const updateMediaSession = useCallback((track, queue, index) => {
+    if (!track || !('mediaSession' in navigator)) return;
 
-        // 핸들러 재등록 (클로저 문제 방지)
-        navigator.mediaSession.setActionHandler('play', () => { setIsPlaying(true); audioRef.current?.play(); });
-        navigator.mediaSession.setActionHandler('pause', () => { setIsPlaying(false); audioRef.current?.pause(); });
-        // 'previoustrack', 'nexttrack'은 playTrack 함수 내부에서 큐 제어를 하므로 생략하거나 아래처럼 연결
+    const artUrl = track.image || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17';
+    
+    // 1. 메타데이터 설정 (사이즈 배열 보강)
+    navigator.mediaSession.metadata = new MediaMetadata({
+        title: track.title,
+        artist: track.artist,
+        album: 'UNFRAME PLAYLIST',
+        artwork: [
+            { src: artUrl, sizes: '96x96', type: 'image/jpeg' },
+            { src: artUrl, sizes: '128x128', type: 'image/jpeg' },
+            { src: artUrl, sizes: '192x192', type: 'image/jpeg' },
+            { src: artUrl, sizes: '256x256', type: 'image/jpeg' },
+            { src: artUrl, sizes: '384x384', type: 'image/jpeg' },
+            { src: artUrl, sizes: '512x512', type: 'image/jpeg' }
+        ]
+    });
+
+    // 2. 🚀 [핵심] 액션 핸들러 등록 (다음/이전 곡 버튼 활성화)
+    navigator.mediaSession.setActionHandler('play', () => { setIsPlaying(true); audioRef.current?.play(); });
+    navigator.mediaSession.setActionHandler('pause', () => { setIsPlaying(false); audioRef.current?.pause(); });
+    
+    // 다음 곡 핸들러: 대기열이 있을 때만 로직 연결
+    if (queue && queue.length > 0) {
+        navigator.mediaSession.setActionHandler('previoustrack', () => {
+            const prevIdx = (index - 1 + queue.length) % queue.length;
+            playTrack(prevIdx, queue);
+        });
+        navigator.mediaSession.setActionHandler('nexttrack', () => {
+            const nextIdx = (index + 1) % queue.length;
+            playTrack(nextIdx, queue);
+        });
     }
-  }, []);
+
+    navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
+  }, [isPlaying]);
 
   useEffect(() => {
     let isMounted = true;
@@ -205,11 +219,10 @@ export default function App() {
     }
   }, [shareItem]);
 
-  // 🚀 [수정됨] playTrack에서 즉각적으로 MediaSession 정보를 쏩니다.
   const playTrack = async (idx, queue = null) => { 
     const audio = audioRef.current; if (!audio) return;
     
-    // 큐 교체 작업
+    // 큐 설정 (비동기 상태를 피하기 위해 즉시 변수 사용)
     const activeQueue = queue || currentQueue;
     if (queue) setCurrentQueue(queue);
     
@@ -218,28 +231,23 @@ export default function App() {
     if (!targetTrack) return;
 
     const directUrl = getDirectLink(targetTrack.audioUrl);
-    
-    // 1. 오디오 소스 설정 및 재생
     if (audio.src !== directUrl) { audio.src = directUrl; audio.load(); }
     if (idx !== undefined) setCurrentTrackIdx(idx);
     
     setIsPlaying(true); 
     try { 
         await audio.play(); 
-        // 🚀 [핵심] 오디오 재생 직후, '현재 재생할 곡 정보'를 즉시 MediaSession에 전달!
-        updateMediaSession(targetTrack);
+        // 🚀 재생 즉시 최신 정보로 MediaSession 업데이트
+        updateMediaSession(targetTrack, activeQueue, targetIdx);
     } catch (e) { setIsPlaying(false); } 
   };
 
-  // 🚀 [수정됨] 곡이 자동으로 넘어갈 때도 정보를 갱신하도록 useEffect 보강
+  // 🚀 렌더링 시마다 최신 상태로 MediaSession 액션 유지
   useEffect(() => {
     if (currentTrack) {
-        updateMediaSession(currentTrack);
-        if ('mediaSession' in navigator) {
-            navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
-        }
+        updateMediaSession(currentTrack, currentQueue, currentTrackIdx);
     }
-  }, [currentTrack?.id, isPlaying, updateMediaSession]);
+  }, [currentTrack?.id, isPlaying, currentQueue, currentTrackIdx, updateMediaSession]);
 
   if (loading) return <div className="min-h-screen bg-black flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-[#004aad]" /></div>;
 
@@ -247,8 +255,7 @@ export default function App() {
     <Router>
       <ScrollToTop />
       <div className={`min-h-screen bg-[#050505] text-zinc-100 font-sans selection:bg-[#004aad] relative overflow-x-hidden ${isPlayerExpanded ? 'h-screen overflow-hidden' : ''}`}>
-        {/* onPlay에서도 메타데이터 업데이트 호출 */}
-        <audio ref={audioRef} muted={isMuted} onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)} onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)} onEnded={() => playTrack((currentTrackIdx + 1) % currentQueue.length)} onWaiting={() => setIsBuffering(true)} onPlaying={() => setIsBuffering(false)} onPlay={() => { if(user) updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'stats'), { listenCount: increment(1) }); updateMediaSession(currentTrack); }} playsInline />
+        <audio ref={audioRef} muted={isMuted} onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)} onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)} onEnded={() => playTrack((currentTrackIdx + 1) % currentQueue.length)} onWaiting={() => setIsBuffering(true)} onPlaying={() => setIsBuffering(false)} onPlay={() => { if(user) updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'stats'), { listenCount: increment(1) }); updateMediaSession(currentTrack, currentQueue, currentTrackIdx); }} playsInline />
         
         <header className={`fixed top-0 w-full z-100 transition-all duration-500 ${scrolled ? 'py-4 bg-black/40 backdrop-blur-xl border-b border-white/5' : 'py-6 lg:py-10'}`}>
           <div className="container mx-auto px-6 lg:px-8 flex justify-between items-end">
@@ -272,7 +279,7 @@ export default function App() {
 
         <AudioPlayer currentTrack={currentTrack} isPlayerExpanded={isPlayerExpanded} setIsPlayerExpanded={setIsPlayerExpanded} isPlaying={isPlaying} progressPct={duration ? (currentTime / duration) * 100 : 0} volume={volume} isMuted={isMuted} setIsMuted={setIsMuted} setVolume={setVolume} handleShare={handleShare} handleToggleLike={handleToggleLike} userLikes={userLikes} togglePlay={(e) => { if(e) e.stopPropagation(); isPlaying ? (setIsPlaying(false), audioRef.current?.pause()) : playTrack(); }} playTrack={playTrack} currentTrackIdx={currentTrackIdx} publicTracks={currentQueue} isBuffering={isBuffering} playerView={playerView} setPlayerView={setPlayerView} parsedLyrics={parsedLyrics} setParsedLyrics={setParsedLyrics} duration={duration} currentTime={currentTime} audioRef={audioRef} formatTime={formatTime} loopMode={loopMode} toggleLoop={() => setLoopMode(p => (p+1)%3)} isShuffle={isShuffle} toggleShuffle={() => setIsShuffle(!isShuffle)} />
 
-        {/* Share Card Design (Hidden) */}
+        {/* Share Card 영역 */}
         {shareItem && (
             <div ref={shareCardRef} style={{ position: 'fixed', left: '-9999px', top: 0, width: '400px', height: '700px', backgroundColor: '#09090b', border: '12px solid #18181b', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', padding: '60px', textAlign: 'center', fontFamily: 'sans-serif', color: '#ffffff' }}>
                 <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(0,74,173,0.15), rgba(147,51,234,0.05))', zIndex: 0 }} />
@@ -297,7 +304,6 @@ export default function App() {
             </div>
         )}
 
-        {/* Footer 복구 */}
         <footer className="py-24 lg:py-40 bg-[#fdfbf7] text-black border-t border-zinc-200 px-6 lg:px-8 relative z-30">
             <div className="container mx-auto grid lg:grid-cols-4 gap-12 lg:gap-10 opacity-80">
               <div className="space-y-6 lg:space-y-10">
