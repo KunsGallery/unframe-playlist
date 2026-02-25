@@ -5,7 +5,7 @@ import {
   Save, Type, ListMusic, Settings2, Plus, CheckCircle2, Users, Search, Award, Lock, 
   Flame, Crown, Sunrise, Target, Waves, Music, Heart, Share2, Zap, Medal, Navigation, 
   Calendar, Star, Moon, Coffee, Ghost, Repeat, Smartphone, Clock, User, ArrowRight, MousePointer2,
-  Trophy // 🚀 [FIXED] 누락되었던 Trophy 아이콘 추가
+  Trophy 
 } from 'lucide-react';
 import { doc, addDoc, updateDoc, deleteDoc, collection, getDoc, setDoc, getDocs, arrayUnion, arrayRemove } from 'firebase/firestore'; 
 
@@ -34,7 +34,7 @@ const ACHIEVEMENT_DATA = {
 };
 
 const COLLECTIVE_DATA = {
-  eternal_origin: { title: "The Origin", icon: Flame, color: "#ef4444" },
+  eternal_origin: { title: "The Origin (초기멤버)", icon: Flame, color: "#ef4444" },
   unframe_genesis: { title: "The Genesis", icon: Crown, color: "#fbbf24" },
   new_year_2026: { title: "2026 First Light", icon: Sunrise, color: "#fb7185" },
   pioneer_26: { title: "Pioneer 26", icon: Target, color: "#2dd4bf" },
@@ -44,19 +44,19 @@ const COLLECTIVE_DATA = {
 const Admin = ({ isAdmin, user, signInWithPopup, tracks, playlists, db, appId, setToastMessage, setAuthError }) => {
   const [activeTab, setActiveTab] = useState('tracks'); 
   
-  // 1. 트랙 관리 상태
+  // 트랙 관리 상태
   const [newTrack, setNewTrack] = useState({ 
     title: '', artist: '', image: '', description: '', tag: 'Ambient', audioUrl: '', lyrics: '' 
   });
   const [editingId, setEditingId] = useState(null); 
   const [isUploadingImg, setIsUploadingImg] = useState(false);
 
-  // 2. 플레이리스트 관리 상태
+  // 플레이리스트 관리 상태
   const [newPlaylist, setNewPlaylist] = useState({ title: '', desc: '', image: '', trackIds: [] });
   const [editingPlaylistId, setEditingPlaylistId] = useState(null);
   const [isUploadingPLImg, setIsUploadingPLImg] = useState(false);
 
-  // 3. 사이트 설정 상태 (인트로 팝업 및 철학)
+  // 사이트 설정 상태 (인트로 팝업 포함)
   const [featuredData, setFeaturedData] = useState({ headline: '', subHeadline: '', quote: '', description: '', linkedTrackId: '' });
   const [siteConfig, setSiteConfig] = useState({ 
     intro_title: "UNFRAME PLAYLIST",
@@ -69,13 +69,13 @@ const Admin = ({ isAdmin, user, signInWithPopup, tracks, playlists, db, appId, s
     guide_1: "", guide_2: "", guide_3: "", guide_4: "" 
   });
 
-  // 4. 유저 관리 상태
+  // 유저 관리 상태
   const [allUsers, setAllUsers] = useState([]);
   const [userSearchTerm, setUserSearchTerm] = useState("");
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [selectedUserForSticker, setSelectedUserForSticker] = useState(null);
 
-  // 초기 데이터 로드
+  // 데이터 로드
   useEffect(() => {
     if (!db || !isAdmin) return;
     const fetchData = async () => {
@@ -89,7 +89,7 @@ const Admin = ({ isAdmin, user, signInWithPopup, tracks, playlists, db, appId, s
     fetchData();
   }, [db, isAdmin, appId]);
 
-  // 유저 조회
+  // 유저 리스트 조회
   const fetchUsers = async () => {
     if (!isAdmin) return;
     setIsLoadingUsers(true);
@@ -97,7 +97,10 @@ const Admin = ({ isAdmin, user, signInWithPopup, tracks, playlists, db, appId, s
       const querySnapshot = await getDocs(collection(db, 'artifacts', appId, 'public_stats'));
       const usersData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setAllUsers(usersData);
-    } catch (e) { setAuthError("유저 조회를 할 수 없습니다."); } finally { setIsLoadingUsers(false); }
+    } catch (e) { 
+        console.error("유저 로드 실패:", e);
+        setAuthError("유저 정보를 불러올 수 없습니다."); 
+    } finally { setIsLoadingUsers(false); }
   };
 
   useEffect(() => {
@@ -111,86 +114,97 @@ const Admin = ({ isAdmin, user, signInWithPopup, tracks, playlists, db, appId, s
     );
   }, [allUsers, userSearchTerm]);
 
-  // 스티커 토글 함수
+  // 🚀 [핵심 수정] 스티커 지급/회수 로직 보강
   const handleStickerToggle = async (targetUid, stickerId, isGiving) => {
+    if (!isAdmin) return;
     try {
+      // 1. 유저의 개인 프로필 경로 (Archive.jsx에서 사용하는 진짜 데이터)
       const privateRef = doc(db, 'artifacts', appId, 'users', targetUid, 'profile', 'stats');
+      // 2. 어드민 유저 목록에서 사용하는 공개 통계 경로
       const publicRef = doc(db, 'artifacts', appId, 'public_stats', targetUid);
-      const updateData = { rewards: isGiving ? arrayUnion(stickerId) : arrayRemove(stickerId) };
-      await updateDoc(privateRef, updateData);
-      await updateDoc(publicRef, updateData);
-      setToastMessage(isGiving ? "지급 완료! 🎁" : "회수 완료! 🚫");
-      setAllUsers(p => p.map(u => u.id === targetUid ? { ...u, rewards: isGiving ? [...(u.rewards || []), stickerId] : (u.rewards || []).filter(id => id !== stickerId) } : u));
-      if (selectedUserForSticker?.id === targetUid) {
-        setSelectedUserForSticker(prev => ({ ...prev, rewards: isGiving ? [...(prev.rewards || []), stickerId] : (prev.rewards || []).filter(id => id !== stickerId) }));
-      }
-    } catch (e) { setAuthError("권한 부족 또는 유저 데이터 없음."); }
-  };
-
-  // 트랙 관리 함수들
-  const handleImageUpload = async (e) => {
-    const file = e.target.files[0]; if (!file) return;
-    setIsUploadingImg(true);
-    try {
-      const reader = new FileReader(); reader.readAsDataURL(file);
-      reader.onload = async (event) => {
-        const img = new Image(); img.src = event.target.result;
-        img.onload = async () => {
-          const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 512;
-          const ctx = canvas.getContext('2d');
-          const minSide = Math.min(img.width, img.height);
-          ctx.drawImage(img, (img.width - minSide) / 2, (img.height - minSide) / 2, minSide, minSide, 0, 0, 512, 512);
-          const base64Data = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
-          const formData = new FormData(); formData.append("image", base64Data);
-          const response = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, { method: "POST", body: formData });
-          const result = await response.json();
-          if (result.success) setNewTrack(prev => ({ ...prev, image: result.data.url }));
-          setIsUploadingImg(false);
-        };
+      
+      const updateData = { 
+        rewards: isGiving ? arrayUnion(stickerId) : arrayRemove(stickerId) 
       };
-    } catch (err) { setIsUploadingImg(false); }
+
+      // updateDoc 대신 setDoc(merge: true)를 사용하여 문서가 없는 유저 대응
+      await setDoc(privateRef, updateData, { merge: true });
+      await setDoc(publicRef, updateData, { merge: true });
+      
+      setToastMessage(isGiving ? "스티커를 지급했습니다! 🎁" : "스티커를 회수했습니다. 🚫");
+      
+      // 로컬 상태 즉시 업데이트
+      setAllUsers(prev => prev.map(u => u.id === targetUid ? { 
+        ...u, 
+        rewards: isGiving ? [...(u.rewards || []), stickerId] : (u.rewards || []).filter(id => id !== stickerId) 
+      } : u));
+
+      if (selectedUserForSticker?.id === targetUid) {
+        setSelectedUserForSticker(prev => ({
+          ...prev,
+          rewards: isGiving ? [...(prev.rewards || []), stickerId] : (prev.rewards || []).filter(id => id !== stickerId)
+        }));
+      }
+    } catch (e) {
+      console.error("Sticker Update Error:", e);
+      setAuthError("스티커 처리에 실패했습니다. 보안 규칙을 확인하세요.");
+    }
   };
 
-  const handleLrcUpload = (e) => {
-    const file = e.target.files[0]; if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => { setNewTrack(prev => ({ ...prev, lyrics: event.target.result })); setToastMessage("가사 로드 완료"); };
-    reader.readAsText(file);
+  // 트랙 관리
+  const handleImageUpload = async (e) => { 
+    const file = e.target.files[0]; if (!file) return; 
+    setIsUploadingImg(true); 
+    try { 
+      const reader = new FileReader(); reader.readAsDataURL(file); 
+      reader.onload = async (event) => { 
+        const img = new Image(); img.src = event.target.result; 
+        img.onload = async () => { 
+          const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 512; 
+          const ctx = canvas.getContext('2d'); const minSide = Math.min(img.width, img.height);
+          ctx.drawImage(img, (img.width - minSide) / 2, (img.height - minSide) / 2, minSide, minSide, 0, 0, 512, 512); 
+          const base64Data = canvas.toDataURL('image/jpeg', 0.85).split(',')[1]; 
+          const formData = new FormData(); formData.append("image", base64Data); 
+          const response = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, { method: "POST", body: formData }); 
+          const result = await response.json(); 
+          if (result.success) setNewTrack(prev => ({ ...prev, image: result.data.url })); 
+          setIsUploadingImg(false); 
+        }; 
+      }; 
+    } catch (err) { setIsUploadingImg(false); } 
+  };
+
+  const handleLrcUpload = (e) => { 
+    const file = e.target.files[0]; if (!file) return; 
+    const reader = new FileReader(); 
+    reader.onload = (event) => { 
+      setNewTrack(prev => ({ ...prev, lyrics: event.target.result })); 
+      setToastMessage("가사 로드 완료 🎤"); 
+    }; 
+    reader.readAsText(file); 
   };
 
   const handleAddOrUpdateTrack = async (e) => {
-    e.preventDefault();
+    e.preventDefault(); if (!isAdmin) return;
     try {
       if (editingId) {
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tracks', editingId), { ...newTrack, updatedAt: Date.now() });
-        setToastMessage("수정 완료 ✨");
+        setToastMessage("수정 완료 🛠️");
       } else {
         await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tracks'), { ...newTrack, isHidden: false, createdAt: Date.now() });
         setToastMessage("등록 성공 🚀");
       }
       handleCancelEdit();
-    } catch (err) { setAuthError("권한 오류"); }
+    } catch (err) { setAuthError("저장 권한 오류"); }
   };
 
-  const handleEditClick = (track) => {
-    setEditingId(track.id); setNewTrack({ ...track });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  const handleEditClick = (track) => { setEditingId(track.id); setNewTrack({ ...track }); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  const handleCancelEdit = () => { setEditingId(null); setNewTrack({ title: '', artist: '', image: '', description: '', tag: 'Ambient', audioUrl: '', lyrics: '' }); };
+  const handleToggleVisibility = async (track) => { if (!isAdmin) return; try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tracks', track.id), { isHidden: !track.isHidden }); setToastMessage(track.isHidden ? "공개됨 👁️" : "숨김 처리됨 🚫"); } catch (err) {} };
 
-  const handleCancelEdit = () => {
-    setEditingId(null); setNewTrack({ title: '', artist: '', image: '', description: '', tag: 'Ambient', audioUrl: '', lyrics: '' });
-  };
-
-  const handleToggleVisibility = async (track) => {
-    try {
-      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tracks', track.id), { isHidden: !track.isHidden });
-      setToastMessage(track.isHidden ? "공개됨 👁️" : "숨김 처리됨 🚫");
-    } catch (err) {}
-  };
-
-  // 플레이리스트 관리 함수
+  // 플레이리스트 관리
   const handleAddOrUpdatePlaylist = async (e) => {
-    e.preventDefault();
+    e.preventDefault(); if (!isAdmin) return;
     try {
         if (editingPlaylistId) {
             await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'playlists', editingPlaylistId), { ...newPlaylist, updatedAt: Date.now() });
@@ -199,8 +213,7 @@ const Admin = ({ isAdmin, user, signInWithPopup, tracks, playlists, db, appId, s
             await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'playlists'), { ...newPlaylist, createdAt: Date.now() });
             setToastMessage("생성 완료 🚀");
         }
-        setEditingPlaylistId(null);
-        setNewPlaylist({ title: '', desc: '', image: '', trackIds: [] });
+        setEditingPlaylistId(null); setNewPlaylist({ title: '', desc: '', image: '', trackIds: [] });
     } catch (err) { setAuthError("저장 실패"); }
   };
 
@@ -223,7 +236,8 @@ const Admin = ({ isAdmin, user, signInWithPopup, tracks, playlists, db, appId, s
     });
   };
 
-  const handleSaveAll = async () => {
+  const handleSaveAllConfig = async () => {
+    if (!isAdmin) return;
     try {
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'featured', 'directors_pick'), featuredData);
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'site_config', 'main_texts'), siteConfig);
@@ -247,16 +261,16 @@ const Admin = ({ isAdmin, user, signInWithPopup, tracks, playlists, db, appId, s
                 </div>
 
                 <AnimatePresence mode="wait">
-                    {/* [유저 관리 탭] */}
+                    {/* 유저 관리 탭 */}
                     {activeTab === 'users' && (
                         <motion.div key="users" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="grid lg:grid-cols-12 gap-8">
                             <div className="lg:col-span-5 space-y-6">
                                 <div className={`${glass} p-4 rounded-full flex items-center gap-4 px-6`}>
                                     <Search className="w-5 h-5 text-zinc-500" />
-                                    <input placeholder="Search users..." className="bg-transparent border-none outline-none flex-1 font-bold text-white uppercase text-sm" value={userSearchTerm} onChange={e => setUserSearchTerm(e.target.value)} />
+                                    <input placeholder="유저 닉네임 또는 UID 검색..." className="bg-transparent border-none outline-none flex-1 font-bold text-white uppercase text-sm" value={userSearchTerm} onChange={e => setUserSearchTerm(e.target.value)} />
                                     {isLoadingUsers && <Loader2 className="w-4 h-4 animate-spin text-[#004aad]" />}
                                 </div>
-                                <div className="space-y-3 max-h-[700px] overflow-y-auto no-scrollbar pr-2">
+                                <div className="space-y-3 max-h-175 overflow-y-auto no-scrollbar pr-2">
                                     {filteredUsers.map(u => (
                                         <div key={u.id} onClick={() => setSelectedUserForSticker(u)} className={`${glass} p-5 rounded-3xl flex justify-between items-center cursor-pointer transition-all border-white/5 hover:border-[#004aad]/50 ${selectedUserForSticker?.id === u.id ? 'bg-[#004aad]/10 border-[#004aad]/40' : ''}`}>
                                             <div className="flex items-center gap-4">
@@ -270,7 +284,7 @@ const Admin = ({ isAdmin, user, signInWithPopup, tracks, playlists, db, appId, s
                             </div>
                             <div className="lg:col-span-7">
                                 {selectedUserForSticker ? (
-                                    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className={`${glass} p-8 lg:p-12 rounded-[4rem] border-white/10 space-y-12 shadow-2xl`}>
+                                    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className={`${glass} p-8 lg:p-12 rounded-[4rem] border-white/10 space-y-12 shadow-2xl relative overflow-visible`}>
                                         <div className="flex items-center gap-6 pb-8 border-b border-white/10">
                                             <div className="w-20 h-20 rounded-full bg-zinc-900 border-2 border-[#004aad] p-1"><img src={selectedUserForSticker.profileImg || ""} className="w-full h-full rounded-full object-cover" /></div>
                                             <div className="flex-1"><h3 className="text-3xl font-black uppercase italic tracking-tighter text-white">{selectedUserForSticker.displayName}</h3><p className="text-[10px] text-zinc-500 font-bold">{selectedUserForSticker.id}</p></div>
@@ -278,13 +292,13 @@ const Admin = ({ isAdmin, user, signInWithPopup, tracks, playlists, db, appId, s
                                         
                                         <div className="space-y-6">
                                             <div className="flex items-center gap-3"><Award className="w-4 h-4 text-[#a78bfa]" /><h4 className="text-xs font-black uppercase tracking-widest text-[#a78bfa]">Achievements</h4></div>
-                                            <div className="grid grid-cols-4 sm:grid-cols-6 gap-3">
+                                            <div className="grid grid-cols-4 sm:grid-cols-8 gap-3">
                                                 {Object.entries(ACHIEVEMENT_DATA).map(([id, data]) => {
                                                     const hasIt = selectedUserForSticker.rewards?.includes(id);
                                                     return (
                                                         <button key={id} onClick={() => handleStickerToggle(selectedUserForSticker.id, id, !hasIt)} 
                                                           className={`aspect-square rounded-2xl border flex items-center justify-center transition-all ${hasIt ? 'bg-[#a78bfa]/20 border-[#a78bfa] text-white shadow-[0_0_15px_rgba(167,139,250,0.3)]' : 'bg-white/5 border-white/10 text-zinc-800 hover:border-white/30'}`} title={data.title}>
-                                                          <data.icon size={22} style={{ color: hasIt ? data.color : 'inherit' }} />
+                                                          <data.icon size={20} style={{ color: hasIt ? data.color : 'inherit' }} />
                                                         </button>
                                                     );
                                                 })}
@@ -313,7 +327,7 @@ const Admin = ({ isAdmin, user, signInWithPopup, tracks, playlists, db, appId, s
                         </motion.div>
                     )}
 
-                    {/* [사이트 설정 탭] */}
+                    {/* 사이트 설정 탭 */}
                     {activeTab === 'config' && (
                         <motion.div key="config" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-8">
                             <div className="bg-zinc-900 border border-white/10 p-8 lg:p-12 rounded-[4rem] shadow-2xl relative overflow-hidden">
@@ -354,7 +368,7 @@ const Admin = ({ isAdmin, user, signInWithPopup, tracks, playlists, db, appId, s
                                     </div>
                                 </div>
                             </div>
-                            <button onClick={handleSaveAll} className="w-full bg-[#004aad] text-white py-6 rounded-3xl font-black uppercase tracking-widest hover:bg-white hover:text-black transition-all flex items-center justify-center gap-3 shadow-2xl"><Save className="w-6 h-6" /> Deploy Site Changes</button>
+                            <button onClick={handleSaveAllConfig} className="w-full bg-[#004aad] text-white py-6 rounded-3xl font-black uppercase tracking-widest hover:bg-white hover:text-black transition-all flex items-center justify-center gap-3 shadow-2xl"><Save className="w-6 h-6" /> Deploy Site Changes</button>
                         </motion.div>
                     )}
 

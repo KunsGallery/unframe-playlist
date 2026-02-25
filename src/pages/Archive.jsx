@@ -114,7 +114,7 @@ const Archive = ({
             {!isActive && <Lock className="absolute w-4 h-4 text-white/20 z-10" />}
             <AnimatePresence>
                 {hoveredSticker === id && (
-                    <motion.div initial={{ opacity: 0, y: 15, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 10 }} className="absolute bottom-full left-1/2 -translate-x-1/2 mb-6 z-[200] w-56 pointer-events-none">
+                    <motion.div initial={{ opacity: 0, y: 15, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 10 }} className="absolute bottom-full left-1/2 -translate-x-1/2 mb-6 z-200 w-56 pointer-events-none">
                         <div className="bg-[#0c0c0e] border border-white/20 p-4 rounded-3xl shadow-[0_30px_70px_rgba(0,0,0,0.9)] text-center backdrop-blur-3xl">
                             <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1.5" style={{ color: isActive ? data.color : '#71717a' }}>{isActive ? 'Unlocked' : 'Locked Artifact'}</p>
                             <h4 className="text-sm font-black text-white mb-1 uppercase tracking-tight">{data.title}</h4>
@@ -217,10 +217,10 @@ const Archive = ({
         <div className="lg:col-span-8 space-y-10 overflow-visible">
             <div className="flex gap-8 border-b border-white/10 pb-4 relative z-30">
                 <button onClick={() => setActiveTab('hearts')} className={`px-2 py-2 text-[11px] font-black uppercase tracking-[0.4em] transition-all relative ${activeTab === 'hearts' ? 'text-[#004aad]' : 'text-zinc-500 hover:text-white'}`}>
-                    01. Hearts {activeTab === 'hearts' && <motion.div layoutId="tab-underline" className="absolute bottom-[-17px] left-0 w-full h-[3px] bg-[#004aad]" />}
+                    01. Hearts {activeTab === 'hearts' && <motion.div layoutId="tab-underline" className="absolute -bottom-4.25 left-0 w-full h-0.75 bg-[#004aad]" />}
                 </button>
                 <button onClick={() => setActiveTab('stickers')} className={`px-2 py-2 text-[11px] font-black uppercase tracking-[0.4em] transition-all relative ${activeTab === 'stickers' ? 'text-[#004aad]' : 'text-zinc-500 hover:text-white'}`}>
-                    02. Sticker Book {activeTab === 'stickers' && <motion.div layoutId="tab-underline" className="absolute bottom-[-17px] left-0 w-full h-[3px] bg-[#004aad]" />}
+                    02. Sticker Book {activeTab === 'stickers' && <motion.div layoutId="tab-underline" className="absolute -bottom-4.25 left-0 w-full h-0.75 bg-[#004aad]" />}
                 </button>
             </div>
 
@@ -254,7 +254,7 @@ const Archive = ({
                                 <div className="text-right"><p className="text-4xl font-black italic text-white">{userProfile?.rewards?.filter(r => COLLECTIVE_LIBRARY[r]).length || 0}<span className="text-xl text-zinc-600 ml-1">/ 30</span></p></div>
                             </div>
                             <div className="h-4 bg-black/40 rounded-full overflow-hidden p-1 border border-white/5 shadow-inner">
-                                <motion.div initial={{ width: 0 }} animate={{ width: `${(userProfile?.rewards?.filter(r => COLLECTIVE_LIBRARY[r]).length / 30) * 100}%` }} className="h-full bg-gradient-to-r from-[#fb7185] via-[#fbbf24] to-[#34d399] rounded-full shadow-[0_0_20px_rgba(251,113,133,0.6)]" />
+                                <motion.div initial={{ width: 0 }} animate={{ width: `${(userProfile?.rewards?.filter(r => COLLECTIVE_LIBRARY[r]).length / 30) * 100}%` }} className="h-full bg-linear-to-r from-[#fb7185] via-[#fbbf24] to-[#34d399] rounded-full shadow-[0_0_20px_rgba(251,113,133,0.6)]" />
                             </div>
                         </div>
 
@@ -263,7 +263,7 @@ const Archive = ({
                                 <StickerItem key={key} id={key} data={data} isActive={userProfile?.rewards?.includes(key)} type="collective" />
                             ))}
                             {[...Array(25)].map((_, i) => (
-                                <div key={i} className="aspect-square bg-white/[0.02] border border-white/5 rounded-full flex items-center justify-center opacity-10"><Layers size={18} /></div>
+                                <div key={i} className="aspect-square bg-white/2 border border-white/5 rounded-full flex items-center justify-center opacity-10"><Layers size={18} /></div>
                             ))}
                         </div>
                     </motion.section>

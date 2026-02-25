@@ -1,4 +1,3 @@
-// src/pages/Home.jsx
 import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowDown, Disc, Eye, Archive, ExternalLink, Share2, Heart, Play, Pause, Loader2, Trophy, Sparkles, MoveRight, Headphones, Shuffle, ListMusic, X, Search, User } from 'lucide-react';
@@ -18,6 +17,15 @@ const Home = ({ tracks, playlists, isPlaying, playTrack, userLikes, handleToggle
   const scrollContainerRef = useRef(null);
 
   const topThree = allUsers.slice(0, 3);
+
+  // 🚀 [Instagram Widget] 외부 스크립트 로드
+  useEffect(() => {
+    const script = document.createElement("script");
+    script.src = "https://cdn.lightwidget.com/widgets/lightwidget.js";
+    script.async = true;
+    document.body.appendChild(script);
+    return () => { if (document.body.contains(script)) document.body.removeChild(script); };
+  }, []);
 
   useEffect(() => { if(!db) return; const fetchFeatured = async () => { try { const docRef = doc(db, 'artifacts', 'unframe-playlist-v1', 'public', 'data', 'featured', 'directors_pick'); const snap = await getDoc(docRef); if(snap.exists()) { const data = snap.data(); setFeaturedData(data); if(data.linkedTrackId && tracks.length > 0) { const found = tracks.find(t => t.id === data.linkedTrackId); if(found) setFeaturedTrack(found); } } } catch(e) {} }; fetchFeatured(); }, [db, tracks]);
   useEffect(() => { if (tracks.length > 0 && searchTerm === "") { const shuffled = [...tracks].sort(() => 0.5 - Math.random()); setDisplayTracks(shuffled.slice(0, 9)); } }, [tracks, searchTerm]);
@@ -94,6 +102,29 @@ const Home = ({ tracks, playlists, isPlaying, playTrack, userLikes, handleToggle
       {/* Search Console */}
       <section className="py-20 lg:py-40 px-6 lg:px-8 bg-zinc-950/50"><div className="container mx-auto"><div className="flex flex-col md:flex-row justify-between items-end mb-8 gap-6"><div><h3 className={subTitle}>Sound Discovery</h3><p className="text-3xl font-black uppercase text-white mt-2">Find Your Vibe</p></div><div className="relative w-full md:w-96 group"><input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search artist or title..." className="w-full bg-white/5 border border-white/10 rounded-full py-4 pl-12 pr-6 text-white placeholder:text-zinc-600 focus:bg-white/10 focus:border-[#004aad] outline-none transition-all font-bold uppercase text-xs tracking-widest" /><Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-[#004aad] transition-colors" /></div></div><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-12 gap-y-4">{displayTracks.length > 0 ? displayTracks.map((track) => (<div key={track.id} onClick={() => setSelectedTrack(track)} className="flex items-center gap-4 p-3 rounded-xl hover:bg-white/5 cursor-pointer group transition-colors border-b border-white/5 last:border-0 md:border-0"><div className="w-12 h-12 rounded-lg overflow-hidden shrink-0 relative"><img src={track.image} className="w-full h-full object-cover" alt="" /><div className="absolute inset-0 bg-black/40 hidden group-hover:flex items-center justify-center"><button onClick={(e) => { e.stopPropagation(); playTrack(displayTracks.findIndex(t => t.id === track.id), displayTracks); }}><Play className="w-4 h-4 fill-white text-white" /></button></div></div><div className="flex-1 min-w-0"><p className="text-sm font-bold text-white truncate">{track.title}</p><p className="text-xs text-zinc-500 truncate">{track.artist}</p></div><button onClick={(e) => handleToggleLike(e, track.id)} className={`p-2 transition-all ${userLikes.includes(track.id) ? 'text-red-500' : 'text-zinc-600 hover:text-white'}`}><Heart size={18} className={userLikes.includes(track.id) ? 'fill-current' : ''} /></button></div>)) : (<div className="col-span-full py-20 text-center text-zinc-600"><p className="text-xl font-bold uppercase">No tracks found</p></div>)}</div></div></section>
 
+      {/* 🚀 Instagram Signal Section (LightWidget) */}
+      <section className="px-6 lg:px-8 container mx-auto py-32 border-t border-white/5 overflow-hidden">
+        <div className="mb-12 flex justify-between items-end">
+          <div>
+            <span className={subTitle + " text-[10px] mb-3 block italic"}>Live Vibe</span>
+            <h2 className={`${h1Title} text-5xl lg:text-7xl`}>Signal<br/>Moments</h2>
+          </div>
+          <a href="https://instagram.com/unframe.playlist" target="_blank" rel="noreferrer" className="flex items-center gap-2 text-zinc-500 hover:text-white transition-colors text-[10px] font-black uppercase tracking-widest mb-2">
+            Follow Us <ExternalLink size={14} />
+          </a>
+        </div>
+        <div className="rounded-[3rem] overflow-hidden border border-white/10 shadow-2xl bg-black/40">
+          <iframe 
+            src="//lightwidget.com/widgets/2c45aca067de5705bece3725c4e2ca5d.html" 
+            scrolling="no" 
+            allowtransparency="true" 
+            className="lightwidget-widget" 
+            style={{ width: '100%', border: '0', overflow: 'hidden' }}
+          ></iframe>
+        </div>
+      </section>
+
+      {/* Connection Section */}
       <section className="py-40 lg:py-60 px-6 lg:px-8 bg-black relative overflow-hidden"><div className="container mx-auto text-center space-y-16 lg:space-y-24 relative z-10"><div className="space-y-4 lg:space-y-6"><span className={subTitle}>Streaming Connection</span><h2 className={`${h1Title} text-[12vw] lg:text-[7.5rem] leading-none`}>Carry the<br/><span className="text-[#004aad]">Vibe Outside</span></h2></div><div className="flex flex-col lg:flex-row justify-center gap-6 lg:gap-12 max-w-5xl mx-auto w-full"><a href="https://music.youtube.com" target="_blank" rel="noopener noreferrer" className="flex-1 py-12 lg:py-16 rounded-4xl lg:rounded-[4rem] bg-zinc-900/50 border border-white/5 hover:border-red-600 transition-all group flex flex-col items-center gap-6 lg:gap-8 shadow-xl"><div className="w-16 h-16 lg:w-20 lg:h-20 bg-red-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform shadow-red-600/20 shadow-2xl"><Play className="w-8 h-8 lg:w-10 lg:h-10 fill-white text-white" /></div><p className="text-xl lg:text-2xl font-black uppercase tracking-tighter">YouTube Music</p></a><a href="https://spotify.com" target="_blank" rel="noopener noreferrer" className="flex-1 py-12 lg:py-16 rounded-4xl lg:rounded-[4rem] bg-zinc-900/50 border border-white/5 hover:border-green-500 transition-all group flex flex-col items-center gap-6 lg:gap-8 shadow-xl"><div className="w-16 h-16 lg:w-20 lg:h-20 bg-green-500 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform shadow-green-500/20 shadow-2xl"><Disc className="w-8 h-8 lg:w-10 lg:h-10 text-black fill-black" /></div><p className="text-xl lg:text-2xl font-black uppercase tracking-tighter">Spotify</p></a></div></div><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[radial-gradient(circle_at_center,rgba(0,74,173,0.1)_0%,transparent_70%)] z-0 pointer-events-none" /></section>
     </motion.div>
   );
