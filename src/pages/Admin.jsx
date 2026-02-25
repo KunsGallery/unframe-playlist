@@ -1,12 +1,36 @@
 // src/pages/Admin.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShieldCheck, Trash2, Eye, EyeOff, Edit2, Upload, Loader2, FileText, Sparkles, Save, Type, ListMusic, Settings2, Plus, CheckCircle2 } from 'lucide-react';
-import { doc, addDoc, updateDoc, deleteDoc, collection, getDoc, setDoc } from 'firebase/firestore'; 
+import { 
+  ShieldCheck, Trash2, Eye, EyeOff, Edit2, Upload, Loader2, FileText, Sparkles, 
+  Save, Type, ListMusic, Settings2, Plus, CheckCircle2, Users, Search, Award, Lock, 
+  Flame, Crown, Sunrise, Target, Waves, Music, Heart, Share2, Zap, Medal, Navigation, 
+  Calendar, Star, Moon, Coffee, Ghost, Repeat, Smartphone, Clock
+} from 'lucide-react';
+import { doc, addDoc, updateDoc, deleteDoc, collection, getDoc, setDoc, getDocs, arrayUnion, arrayRemove } from 'firebase/firestore'; 
 
 const glass = "bg-white/[0.03] backdrop-blur-[40px] border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]";
 const h1Title = "font-black uppercase tracking-[-0.07em] leading-[0.8] italic";
 const IMGBB_API_KEY = "d1d66a67fff0404d782a4a001dfb40e2";
+
+// 🚀 지급 가능한 전체 스티커 리스트 (관리자용)
+const ALL_STICKERS = {
+  achievements: {
+    first_sound: "첫 소리", moment_10: "10번의 순간", moment_100: "심오한 감상자",
+    heart_1: "첫 하트", heart_50: "취향 컬렉터", signal_1: "첫 신호",
+    signal_10: "신호의 대가", loyal_7: "단골 거주자", loyal_30: "공간의 역사",
+    night_owl: "심야의 동반자", early_bird: "얼리 버드", weekend_art: "주말의 여유",
+    repeater_3: "다시 듣기", nfc_explorer: "공간의 교감", long_voyage: "긴 항해",
+    archive_master: "완벽한 아카이브"
+  },
+  collections: {
+    eternal_origin: "Eternal Signal: The Origin (초기멤버)",
+    unframe_genesis: "The Genesis",
+    new_year_2026: "2026 First Light",
+    pioneer_26: "Pioneer 26",
+    insadong_wave: "Insadong First Wave"
+  }
+};
 
 const Admin = ({ isAdmin, user, signInWithPopup, tracks, playlists, db, appId, setToastMessage, setAuthError }) => {
   const [activeTab, setActiveTab] = useState('tracks'); 
@@ -23,18 +47,72 @@ const Admin = ({ isAdmin, user, signInWithPopup, tracks, playlists, db, appId, s
   const [featuredData, setFeaturedData] = useState({ headline: '', subHeadline: '', quote: '', description: '', linkedTrackId: '' });
   const [siteConfig, setSiteConfig] = useState({ phil_title: "", phil_sub: "Philosophy", phil_desc: "", phil_quote: "", guide_1: "", guide_2: "", guide_3: "", guide_4: "" });
 
+  // 🚀 유저 관리 상태
+  const [allUsers, setAllUsers] = useState([]);
+  const [userSearchTerm, setUserSearchTerm] = useState("");
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [selectedUserForSticker, setSelectedUserForSticker] = useState(null);
+
   useEffect(() => {
     if (!db || !isAdmin) return;
     const fetchData = async () => {
-        const pickSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'featured', 'directors_pick'));
-        if (pickSnap.exists()) setFeaturedData(pickSnap.data());
-        const configSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'site_config', 'main_texts'));
-        if (configSnap.exists()) setSiteConfig(prev => ({ ...prev, ...configSnap.data() }));
+        try {
+          const pickSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'featured', 'directors_pick'));
+          if (pickSnap.exists()) setFeaturedData(pickSnap.data());
+          const configSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'site_config', 'main_texts'));
+          if (configSnap.exists()) setSiteConfig(prev => ({ ...prev, ...configSnap.data() }));
+        } catch (e) { console.error(e); }
     };
     fetchData();
   }, [db, isAdmin, appId]);
 
-  // 🚀 [플레이리스트 저장/수정]
+  // 🚀 유저 리스트 불러오기 (탭 전환 시 호출)
+  useEffect(() => {
+    if (activeTab === 'users' && isAdmin) {
+      fetchUsers();
+    }
+  }, [activeTab]);
+
+  const fetchUsers = async () => {
+    setIsLoadingUsers(true);
+    try {
+      // public_stats 컬렉션에서 전체 유저 요약을 가져옵니다.
+      const querySnapshot = await getDocs(collection(db, 'artifacts', appId, 'public', 'public_stats'));
+      const usersData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setAllUsers(usersData);
+    } catch (e) {
+      setAuthError("유저 정보를 불러올 수 없습니다.");
+    } finally {
+      setIsLoadingUsers(false);
+    }
+  };
+
+  const filteredUsers = useMemo(() => {
+    return allUsers.filter(u => 
+      u.displayName?.toLowerCase().includes(userSearchTerm.toLowerCase()) || 
+      u.id?.toLowerCase().includes(userSearchTerm.toLowerCase())
+    );
+  }, [allUsers, userSearchTerm]);
+
+  // 🚀 스티커 지급/회수 로직
+  const handleStickerToggle = async (targetUid, stickerId, isGiving) => {
+    try {
+      const userRef = doc(db, 'artifacts', appId, 'users', targetUid, 'profile', 'stats');
+      await updateDoc(userRef, {
+        rewards: isGiving ? arrayUnion(stickerId) : arrayRemove(stickerId)
+      });
+      setToastMessage(isGiving ? "스티커 지급 완료! 🎁" : "스티커 회수 완료 🚫");
+      // 지급 후 로컬 상태 업데이트 (다시 페칭할 수도 있지만 간단히)
+      setAllUsers(prev => prev.map(u => u.id === targetUid ? { 
+        ...u, 
+        rewards: isGiving ? [...(u.rewards || []), stickerId] : (u.rewards || []).filter(id => id !== stickerId) 
+      } : u));
+    } catch (e) {
+      setAuthError("스티커 처리에 실패했습니다.");
+    }
+  };
+
+  // 플레이리스트 관리 로직...
   const handleAddOrUpdatePlaylist = async (e) => {
     e.preventDefault(); if (!isAdmin) return;
     try {
@@ -96,6 +174,7 @@ const Admin = ({ isAdmin, user, signInWithPopup, tracks, playlists, db, appId, s
                 <div className="flex items-center gap-4 mb-8 overflow-x-auto pb-2 no-scrollbar">
                     <button onClick={() => setActiveTab('tracks')} className={`px-6 py-3 rounded-full font-black uppercase text-[10px] lg:text-xs tracking-widest transition-all flex items-center gap-2 shrink-0 ${activeTab === 'tracks' ? 'bg-[#004aad] text-white' : 'bg-white/5 text-zinc-500 hover:text-white'}`}><ListMusic className="w-4 h-4" /> Tracks</button>
                     <button onClick={() => setActiveTab('playlists')} className={`px-6 py-3 rounded-full font-black uppercase text-[10px] lg:text-xs tracking-widest transition-all flex items-center gap-2 shrink-0 ${activeTab === 'playlists' ? 'bg-[#004aad] text-white' : 'bg-white/5 text-zinc-500 hover:text-white'}`}><Plus className="w-4 h-4" /> Playlists</button>
+                    <button onClick={() => setActiveTab('users')} className={`px-6 py-3 rounded-full font-black uppercase text-[10px] lg:text-xs tracking-widest transition-all flex items-center gap-2 shrink-0 ${activeTab === 'users' ? 'bg-[#004aad] text-white' : 'bg-white/5 text-zinc-500 hover:text-white'}`}><Users className="w-4 h-4" /> Users</button>
                     <button onClick={() => setActiveTab('config')} className={`px-6 py-3 rounded-full font-black uppercase text-[10px] lg:text-xs tracking-widest transition-all flex items-center gap-2 shrink-0 ${activeTab === 'config' ? 'bg-[#004aad] text-white' : 'bg-white/5 text-zinc-500 hover:text-white'}`}><Settings2 className="w-4 h-4" /> Config</button>
                 </div>
 
@@ -110,7 +189,7 @@ const Admin = ({ isAdmin, user, signInWithPopup, tracks, playlists, db, appId, s
                         </motion.div>
                     )}
 
-                    {/* 🚀 [Tab 2] 플레이리스트 관리 */}
+                    {/* [Tab 2] 플레이리스트 관리 */}
                     {activeTab === 'playlists' && (
                         <motion.div key="playlists" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="grid lg:grid-cols-12 gap-8">
                             <div className="lg:col-span-7 space-y-4">
@@ -146,7 +225,6 @@ const Admin = ({ isAdmin, user, signInWithPopup, tracks, playlists, db, appId, s
                                         </div>
                                         {newPlaylist.image && <div className="w-24 h-24 rounded-2xl overflow-hidden border border-white/20 mx-auto"><img src={newPlaylist.image} className="w-full h-full object-cover" alt="" /></div>}
 
-                                        {/* 곡 선택기 */}
                                         <div className="space-y-2">
                                             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#004aad]">Select Tracks</p>
                                             <div className="h-60 overflow-y-auto no-scrollbar bg-black/40 rounded-2xl border border-white/5 p-4 space-y-2">
@@ -170,7 +248,117 @@ const Admin = ({ isAdmin, user, signInWithPopup, tracks, playlists, db, appId, s
                         </motion.div>
                     )}
 
-                    {/* [Tab 3] 사이트 설정 */}
+                    {/* 🚀 [Tab 3] 유저 관리 & 스티커 지급 */}
+                    {activeTab === 'users' && (
+                        <motion.div key="users" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="grid lg:grid-cols-12 gap-8">
+                            <div className="lg:col-span-6 space-y-6">
+                                <div className={`${glass} p-4 rounded-full flex items-center gap-4 px-6`}>
+                                    <Search className="w-5 h-5 text-zinc-500" />
+                                    <input 
+                                      placeholder="유저 이름 또는 UID로 검색..." 
+                                      className="bg-transparent border-none outline-none flex-1 font-bold text-white uppercase text-sm"
+                                      value={userSearchTerm}
+                                      onChange={e => setUserSearchTerm(e.target.value)}
+                                    />
+                                    {isLoadingUsers && <Loader2 className="w-4 h-4 animate-spin text-[#004aad]" />}
+                                </div>
+
+                                <div className="space-y-3 max-h-[600px] overflow-y-auto no-scrollbar pr-2">
+                                    {filteredUsers.map(u => (
+                                        <div 
+                                          key={u.id} 
+                                          onClick={() => setSelectedUserForSticker(u)}
+                                          className={`${glass} p-5 rounded-3xl flex justify-between items-center cursor-pointer transition-all border-white/5 hover:border-[#004aad]/50 ${selectedUserForSticker?.id === u.id ? 'bg-[#004aad]/10 border-[#004aad]/40' : ''}`}
+                                        >
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-12 h-12 rounded-full bg-zinc-800 overflow-hidden border border-white/10">
+                                                    {u.profileImg ? <img src={u.profileImg} className="w-full h-full object-cover" /> : <User className="w-full h-full p-3 text-zinc-600" />}
+                                                </div>
+                                                <div>
+                                                    <p className="font-black uppercase text-lg">{u.displayName || 'Unnamed'}</p>
+                                                    <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">{u.id?.slice(0,12)}...</p>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-[10px] font-black text-[#004aad] uppercase tracking-widest">Rewards</p>
+                                                <p className="text-xl font-black italic">{u.rewards?.length || 0}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {filteredUsers.length === 0 && !isLoadingUsers && <p className="text-center py-20 text-zinc-600 font-black uppercase tracking-widest">No users found.</p>}
+                                </div>
+                            </div>
+
+                            <div className="lg:col-span-6">
+                                <AnimatePresence mode="wait">
+                                    {selectedUserForSticker ? (
+                                        <motion.div key={selectedUserForSticker.id} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className={`${glass} p-8 lg:p-12 rounded-[3rem] border-white/10 space-y-10`}>
+                                            <div className="flex justify-between items-start">
+                                                <div className="flex items-center gap-6">
+                                                    <div className="w-20 h-20 rounded-full bg-zinc-900 border-2 border-[#004aad] p-1"><img src={selectedUserForSticker.profileImg} className="w-full h-full rounded-full object-cover" /></div>
+                                                    <div>
+                                                        <span className="px-3 py-1 bg-[#004aad] text-white text-[9px] font-black uppercase rounded-full mb-1 inline-block">Collector Management</span>
+                                                        <h3 className="text-3xl font-black uppercase italic tracking-tighter text-white">{selectedUserForSticker.displayName}</h3>
+                                                    </div>
+                                                </div>
+                                                <button onClick={() => setSelectedUserForSticker(null)} className="text-zinc-500 hover:text-white p-2">✕</button>
+                                            </div>
+
+                                            {/* 업적 지급 그리드 */}
+                                            <div className="space-y-6">
+                                                <div className="flex items-center gap-3"><Award className="w-4 h-4 text-[#a78bfa]" /><h4 className="text-xs font-black uppercase tracking-widest text-[#a78bfa]">Achievements</h4></div>
+                                                <div className="grid grid-cols-4 sm:grid-cols-6 gap-3">
+                                                    {Object.entries(ALL_STICKERS.achievements).map(([id, title]) => {
+                                                        const hasIt = selectedUserForSticker.rewards?.includes(id);
+                                                        return (
+                                                            <button 
+                                                              key={id} 
+                                                              onClick={() => handleStickerToggle(selectedUserForSticker.id, id, !hasIt)}
+                                                              className={`aspect-square rounded-xl border flex items-center justify-center transition-all ${hasIt ? 'bg-[#a78bfa]/20 border-[#a78bfa] text-white' : 'bg-white/5 border-white/10 text-zinc-700 hover:border-white/30'}`}
+                                                              title={title}
+                                                            >
+                                                              <Medal size={20} />
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+
+                                            {/* 컬렉티브 지급 그리드 */}
+                                            <div className="space-y-6">
+                                                <div className="flex items-center gap-3"><Sparkles className="w-4 h-4 text-[#fbbf24]" /><h4 className="text-xs font-black uppercase tracking-widest text-[#fbbf24]">Special Collections</h4></div>
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    {Object.entries(ALL_STICKERS.collections).map(([id, title]) => {
+                                                        const hasIt = selectedUserForSticker.rewards?.includes(id);
+                                                        return (
+                                                            <button 
+                                                              key={id} 
+                                                              onClick={() => handleStickerToggle(selectedUserForSticker.id, id, !hasIt)}
+                                                              className={`p-4 rounded-2xl border flex items-center gap-4 transition-all text-left ${hasIt ? 'bg-[#fbbf24]/20 border-[#fbbf24] text-white' : 'bg-white/5 border-white/10 text-zinc-500 hover:border-white/30'}`}
+                                                            >
+                                                              {id === 'eternal_origin' ? <Flame size={18} className={hasIt ? "text-red-500" : ""} /> : <Crown size={18} className={hasIt ? "text-[#fbbf24]" : ""} />}
+                                                              <div className="min-w-0"><p className="text-[10px] font-black uppercase truncate">{title}</p><p className="text-[8px] opacity-60 font-bold uppercase">{hasIt ? 'Granted' : 'Click to Grant'}</p></div>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        </motion.div>
+                                    ) : (
+                                        <div className={`${glass} p-12 lg:p-20 rounded-[3rem] flex flex-col items-center justify-center text-center space-y-6 border-dashed border-white/10`}>
+                                            <Users className="w-16 h-16 text-zinc-800" />
+                                            <div>
+                                                <h3 className="text-xl font-black uppercase text-zinc-500 mb-2">유저를 선택해주세요</h3>
+                                                <p className="text-xs text-zinc-600 font-bold uppercase tracking-widest">왼쪽 리스트에서 스티커를 지급할 유저를 클릭하세요.</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
+                        </motion.div>
+                    )}
+
+                    {/* [Tab 4] 사이트 설정 */}
                     {activeTab === 'config' && (
                         <motion.div key="config" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-zinc-900 border border-white/10 p-8 lg:p-12 rounded-[3rem] space-y-12 shadow-2xl relative overflow-hidden">
                             <div className="absolute top-0 right-0 p-8 opacity-10"><Type className="w-32 h-32 text-[#004aad]" /></div>
