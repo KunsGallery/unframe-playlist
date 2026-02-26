@@ -49,7 +49,18 @@ const MiniPlayer = ({
                 </button>
                 {/* 🚀 이제 여기가 잘리지 않습니다! */}
                 <div className="absolute bottom-[120%] mb-2 w-10 h-32 bg-zinc-900 border border-white/10 rounded-[2rem] opacity-0 invisible group-hover/vol:opacity-100 group-hover/vol:visible transition-all flex flex-col items-center justify-center shadow-2xl z-50">
-                    <input type="range" min="0" max="1" step="0.01" value={isMuted ? 0 : volume} onChange={(e) => {setVolume(e.target.value); setIsMuted(false);}} className="w-1.5 h-24 appearance-none bg-white/20 rounded-full outline-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full cursor-pointer slider-vertical" style={{ WebkitAppearance: 'slider-vertical' }} />
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.01"
+                      value={isMuted ? 0 : volume}
+                      onChange={(e) => { setVolume(Number(e.target.value)); setIsMuted(false); }}
+                      className="w-1.5 h-24 appearance-none bg-white/20 rounded-full outline-none
+                        [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4
+                      [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full cursor-pointer"
+                      style={{ writingMode: 'vertical-lr', direction: 'rtl' }}
+                    />
                 </div>
             </div>
             <button onClick={(e) => handleShare(e, currentTrack, 'track')} className="p-2 text-zinc-400 hover:text-white transition-colors hidden md:block"><Share2 className="w-5 h-5 lg:w-6 lg:h-6" /></button>
@@ -63,5 +74,4 @@ const MiniPlayer = ({
     </motion.div>
   );
 };
-
 export default MiniPlayer;
