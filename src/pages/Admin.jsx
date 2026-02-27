@@ -1,19 +1,59 @@
 // src/pages/Admin.jsx
-import React, { useState, useEffect, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useEffect, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
-  ShieldCheck, Trash2, Eye, Edit2, Upload, Loader2, FileText, Sparkles,
-  Save, Type, ListMusic, Settings2, Plus, CheckCircle2, Users, Search, Award,
-  Flame, Crown, Sunrise, Target, Waves, Music, Heart, Share2, Zap, Medal,
-  Calendar, Star, Moon, Repeat, User, ArrowRight, MousePointer2, Trophy
-} from 'lucide-react';
+  ShieldCheck,
+  Trash2,
+  Eye,
+  Edit2,
+  Upload,
+  Loader2,
+  FileText,
+  Sparkles,
+  Save,
+  Type,
+  ListMusic,
+  Settings2,
+  Plus,
+  CheckCircle2,
+  Users,
+  Search,
+  Award,
+  Flame,
+  Crown,
+  Sunrise,
+  Target,
+  Waves,
+  Music,
+  Heart,
+  Share2,
+  Zap,
+  Medal,
+  Calendar,
+  Star,
+  Moon,
+  Repeat,
+  User,
+  ArrowRight,
+  MousePointer2,
+  Trophy,
+} from "lucide-react";
 import {
-  doc, addDoc, updateDoc, deleteDoc, collection, getDoc, setDoc, getDocs, Timestamp
-} from 'firebase/firestore';
+  doc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  collection,
+  getDoc,
+  setDoc,
+  getDocs,
+  Timestamp,
+} from "firebase/firestore";
 
-import { LEVELS } from '../levels';
+import { LEVELS } from "../levels";
 
-const glass = "bg-white/[0.03] backdrop-blur-[40px] border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]";
+const glass =
+  "bg-white/[0.03] backdrop-blur-[40px] border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]";
 const h1Title = "font-black uppercase tracking-[-0.07em] leading-[0.8] italic";
 const IMGBB_API_KEY = "d1d66a67fff0404d782a4a001dfb40e2";
 
@@ -55,19 +95,19 @@ const COLLECTIVE_DATA = {
 // -------------------------
 const normalizeRewardIds = (rewards) => {
   if (!Array.isArray(rewards) || rewards.length === 0) return new Set();
-  if (typeof rewards[0] === 'string') return new Set(rewards.filter(Boolean));
-  return new Set(rewards.map(r => r?.id).filter(Boolean));
+  if (typeof rewards[0] === "string") return new Set(rewards.filter(Boolean));
+  return new Set(rewards.map((r) => r?.id).filter(Boolean));
 };
 
 const asObjectRewards = (rewards) => {
   if (!Array.isArray(rewards)) return [];
   if (rewards.length === 0) return [];
-  if (typeof rewards[0] === 'object') return rewards.filter(Boolean);
+  if (typeof rewards[0] === "object") return rewards.filter(Boolean);
   const year = new Date().getFullYear();
   const nowTs = Timestamp.fromMillis(Date.now());
   return rewards
-    .filter(x => typeof x === 'string' && x.trim())
-    .map(id => ({ id, unlockedAt: nowTs, year, meta: { migratedFromAdmin: true } }));
+    .filter((x) => typeof x === "string" && x.trim())
+    .map((id) => ({ id, unlockedAt: nowTs, year, meta: { migratedFromAdmin: true } }));
 };
 
 const addRewardObject = (rewards, id, meta = {}) => {
@@ -80,7 +120,7 @@ const addRewardObject = (rewards, id, meta = {}) => {
 
 const removeRewardById = (rewards, id) => {
   const base = asObjectRewards(rewards);
-  return base.filter(r => r?.id !== id);
+  return base.filter((r) => r?.id !== id);
 };
 
 const safeSrc = (v) => (typeof v === "string" && v.trim() ? v : null);
@@ -96,22 +136,34 @@ export default function Admin({
   setToastMessage,
   setAuthError,
 }) {
-  const [activeTab, setActiveTab] = useState('tracks');
+  const [activeTab, setActiveTab] = useState("tracks");
 
   // 트랙
   const [newTrack, setNewTrack] = useState({
-    title: '', artist: '', image: '', description: '', tag: 'Ambient', audioUrl: '', lyrics: ''
+    title: "",
+    artist: "",
+    image: "",
+    description: "",
+    tag: "Ambient",
+    audioUrl: "",
+    lyrics: "",
   });
   const [editingId, setEditingId] = useState(null);
   const [isUploadingImg, setIsUploadingImg] = useState(false);
 
   // 플레이리스트
-  const [newPlaylist, setNewPlaylist] = useState({ title: '', desc: '', image: '', trackIds: [] });
+  const [newPlaylist, setNewPlaylist] = useState({ title: "", desc: "", image: "", trackIds: [] });
   const [editingPlaylistId, setEditingPlaylistId] = useState(null);
   const [isUploadingPLImg, setIsUploadingPLImg] = useState(false);
 
   // 사이트 설정
-  const [featuredData, setFeaturedData] = useState({ headline: '', subHeadline: '', quote: '', description: '', linkedTrackId: '' });
+  const [featuredData, setFeaturedData] = useState({
+    headline: "",
+    subHeadline: "",
+    quote: "",
+    description: "",
+    linkedTrackId: "",
+  });
   const [siteConfig, setSiteConfig] = useState({
     intro_title: "UNFRAME PLAYLIST",
     intro_desc: "감각의 프레임을 넘어선 소리의 아카이브",
@@ -120,7 +172,10 @@ export default function Admin({
     phil_sub: "Philosophy",
     phil_desc: "",
     phil_quote: "",
-    guide_1: "", guide_2: "", guide_3: "", guide_4: ""
+    guide_1: "",
+    guide_2: "",
+    guide_3: "",
+    guide_4: "",
   });
 
   // 유저
@@ -145,11 +200,15 @@ export default function Admin({
     if (!db || !isAdmin) return;
     const fetchData = async () => {
       try {
-        const pickSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'featured', 'directors_pick'));
-        if (pickSnap.exists()) setFeaturedData(prev => ({ ...prev, ...pickSnap.data() }));
+        const pickSnap = await getDoc(
+          doc(db, "artifacts", appId, "public", "data", "featured", "directors_pick")
+        );
+        if (pickSnap.exists()) setFeaturedData((prev) => ({ ...prev, ...pickSnap.data() }));
 
-        const configSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'site_config', 'main_texts'));
-        if (configSnap.exists()) setSiteConfig(prev => ({ ...prev, ...configSnap.data() }));
+        const configSnap = await getDoc(
+          doc(db, "artifacts", appId, "public", "data", "site_config", "main_texts")
+        );
+        if (configSnap.exists()) setSiteConfig((prev) => ({ ...prev, ...configSnap.data() }));
       } catch (e) {
         console.error(e);
       }
@@ -164,8 +223,8 @@ export default function Admin({
     if (!isAdmin || !db) return;
     setIsLoadingUsers(true);
     try {
-      const querySnapshot = await getDocs(collection(db, 'artifacts', appId, 'public_stats'));
-      const usersData = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      const querySnapshot = await getDocs(collection(db, "artifacts", appId, "public_stats"));
+      const usersData = querySnapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
       setAllUsers(usersData);
     } catch (e) {
       console.error("유저 로드 실패:", e);
@@ -176,7 +235,7 @@ export default function Admin({
   };
 
   useEffect(() => {
-    if (activeTab === 'users' && isAdmin) fetchUsers();
+    if (activeTab === "users" && isAdmin) fetchUsers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, isAdmin]);
 
@@ -185,10 +244,10 @@ export default function Admin({
     const term = userSearchTerm.toLowerCase().trim();
     if (!term) return allUsers;
 
-    return allUsers.filter(u => {
-      const dn = (u.displayName || '').toLowerCase();
-      const nn = (u.nickname || '').toLowerCase();
-      const id = (u.id || '').toLowerCase();
+    return allUsers.filter((u) => {
+      const dn = (u.displayName || "").toLowerCase();
+      const nn = (u.nickname || "").toLowerCase();
+      const id = (u.id || "").toLowerCase();
       return dn.includes(term) || nn.includes(term) || id.includes(term);
     });
   }, [allUsers, userSearchTerm]);
@@ -206,13 +265,13 @@ export default function Admin({
 
     (async () => {
       try {
-        const privateRef = doc(db, 'artifacts', appId, 'users', uid, 'profile', 'stats');
+        const privateRef = doc(db, "artifacts", appId, "users", uid, "profile", "stats");
         const snap = await getDoc(privateRef);
 
         if (snap.exists()) {
           const stats = snap.data();
 
-          setSelectedUserForSticker(prev => ({ ...prev, ...stats }));
+          setSelectedUserForSticker((prev) => ({ ...prev, ...stats }));
 
           const currentNickname =
             (stats?.nickname || "").trim() ||
@@ -225,7 +284,7 @@ export default function Admin({
           setLevelOverrideName(mn);
           setLevelOverrideColor(mc);
         } else {
-          const fallbackName = (selectedUserForSticker.nickname || selectedUserForSticker.displayName || "");
+          const fallbackName = selectedUserForSticker.nickname || selectedUserForSticker.displayName || "";
           setNicknameDraft(fallbackName);
           setLevelOverrideName("");
           setLevelOverrideColor("");
@@ -243,8 +302,8 @@ export default function Admin({
   const handleStickerToggle = async (targetUid, stickerId, isGiving) => {
     if (!isAdmin || !db) return;
 
-    const privateRef = doc(db, 'artifacts', appId, 'users', targetUid, 'profile', 'stats');
-    const publicRef = doc(db, 'artifacts', appId, 'public_stats', targetUid);
+    const privateRef = doc(db, "artifacts", appId, "users", targetUid, "profile", "stats");
+    const publicRef = doc(db, "artifacts", appId, "public_stats", targetUid);
 
     try {
       const privateSnap = await getDoc(privateRef);
@@ -252,7 +311,7 @@ export default function Admin({
       const prevRewards = privateData?.rewards || [];
 
       const nextRewards = isGiving
-        ? addRewardObject(prevRewards, stickerId, { manual: true, by: user?.email || 'admin' })
+        ? addRewardObject(prevRewards, stickerId, { manual: true, by: user?.email || "admin" })
         : removeRewardById(prevRewards, stickerId);
 
       await setDoc(privateRef, { rewards: nextRewards }, { merge: true });
@@ -260,9 +319,9 @@ export default function Admin({
 
       setToastMessage?.(isGiving ? "스티커를 지급했습니다! 🎁" : "스티커를 회수했습니다. 🚫");
 
-      setAllUsers(prev => prev.map(u => u.id === targetUid ? { ...u, rewards: nextRewards } : u));
+      setAllUsers((prev) => prev.map((u) => (u.id === targetUid ? { ...u, rewards: nextRewards } : u)));
       if (selectedUserForSticker?.id === targetUid) {
-        setSelectedUserForSticker(prev => ({ ...prev, rewards: nextRewards }));
+        setSelectedUserForSticker((prev) => ({ ...prev, rewards: nextRewards }));
       }
     } catch (e) {
       console.error("Sticker Update Error:", e);
@@ -285,7 +344,7 @@ export default function Admin({
     setIsSettling(true);
 
     try {
-      const uids = (allUsers || []).map(u => u.id).filter(Boolean);
+      const uids = (allUsers || []).map((u) => u.id).filter(Boolean);
 
       const bronzeId = `annual_bronze_${year}`;
       const silverId = `annual_silver_${year}`;
@@ -294,8 +353,8 @@ export default function Admin({
       let updated = 0;
 
       for (const uid of uids) {
-        const privateRef = doc(db, 'artifacts', appId, 'users', uid, 'profile', 'stats');
-        const publicRef = doc(db, 'artifacts', appId, 'public_stats', uid);
+        const privateRef = doc(db, "artifacts", appId, "users", uid, "profile", "stats");
+        const publicRef = doc(db, "artifacts", appId, "public_stats", uid);
 
         const snap = await getDoc(privateRef);
         if (!snap.exists()) continue;
@@ -313,7 +372,11 @@ export default function Admin({
         if (!needId) continue;
         if (ids.has(needId)) continue;
 
-        const nextRewards = addRewardObject(prevRewards, needId, { batch: true, year, unlockedCount: yearlyUnlocked });
+        const nextRewards = addRewardObject(prevRewards, needId, {
+          batch: true,
+          year,
+          unlockedCount: yearlyUnlocked,
+        });
 
         await setDoc(privateRef, { rewards: nextRewards }, { merge: true });
         await setDoc(publicRef, { rewards: nextRewards }, { merge: true });
@@ -345,8 +408,8 @@ export default function Admin({
       return;
     }
 
-    const privateRef = doc(db, 'artifacts', appId, 'users', uid, 'profile', 'stats');
-    const publicRef = doc(db, 'artifacts', appId, 'public_stats', uid);
+    const privateRef = doc(db, "artifacts", appId, "users", uid, "profile", "stats");
+    const publicRef = doc(db, "artifacts", appId, "public_stats", uid);
 
     try {
       await setDoc(privateRef, { nickname: next }, { merge: true });
@@ -354,8 +417,8 @@ export default function Admin({
 
       setToastMessage?.("닉네임 저장 완료 ✨");
 
-      setSelectedUserForSticker(prev => ({ ...prev, nickname: next, displayName: next }));
-      setAllUsers(prev => prev.map(u => u.id === uid ? { ...u, displayName: next, nickname: next } : u));
+      setSelectedUserForSticker((prev) => ({ ...prev, nickname: next, displayName: next }));
+      setAllUsers((prev) => prev.map((u) => (u.id === uid ? { ...u, displayName: next, nickname: next } : u)));
     } catch (e) {
       console.error(e);
       setAuthError?.("닉네임 저장 실패");
@@ -366,12 +429,12 @@ export default function Admin({
   const adminResetNicknameChance = async () => {
     if (!isAdmin || !db || !selectedUserForSticker?.id) return;
     const uid = selectedUserForSticker.id;
-    const privateRef = doc(db, 'artifacts', appId, 'users', uid, 'profile', 'stats');
+    const privateRef = doc(db, "artifacts", appId, "users", uid, "profile", "stats");
 
     try {
       await setDoc(privateRef, { nicknameChanged: false }, { merge: true });
       setToastMessage?.("닉네임 변경권을 리셋했습니다 ✅");
-      setSelectedUserForSticker(prev => ({ ...prev, nicknameChanged: false }));
+      setSelectedUserForSticker((prev) => ({ ...prev, nicknameChanged: false }));
     } catch (e) {
       console.error(e);
       setAuthError?.("리셋 실패");
@@ -391,22 +454,22 @@ export default function Admin({
       return;
     }
 
-    const privateRef = doc(db, 'artifacts', appId, 'users', uid, 'profile', 'stats');
-    const publicRef = doc(db, 'artifacts', appId, 'public_stats', uid);
+    const privateRef = doc(db, "artifacts", appId, "users", uid, "profile", "stats");
+    const publicRef = doc(db, "artifacts", appId, "public_stats", uid);
 
     try {
       await setDoc(privateRef, { manualLevelName: name, manualLevelColor: color }, { merge: true });
       await setDoc(publicRef, { levelName: name, levelColor: color }, { merge: true });
 
       setToastMessage?.("수동 레벨 지정 완료 ✨");
-      setSelectedUserForSticker(prev => ({
+      setSelectedUserForSticker((prev) => ({
         ...prev,
         manualLevelName: name,
         manualLevelColor: color,
         levelName: name,
-        levelColor: color
+        levelColor: color,
       }));
-      setAllUsers(prev => prev.map(u => u.id === uid ? { ...u, levelName: name, levelColor: color } : u));
+      setAllUsers((prev) => prev.map((u) => (u.id === uid ? { ...u, levelName: name, levelColor: color } : u)));
     } catch (e) {
       console.error(e);
       setAuthError?.("레벨 지정 실패");
@@ -418,8 +481,8 @@ export default function Admin({
     if (!isAdmin || !db || !selectedUserForSticker?.id) return;
     const uid = selectedUserForSticker.id;
 
-    const privateRef = doc(db, 'artifacts', appId, 'users', uid, 'profile', 'stats');
-    const publicRef = doc(db, 'artifacts', appId, 'public_stats', uid);
+    const privateRef = doc(db, "artifacts", appId, "users", uid, "profile", "stats");
+    const publicRef = doc(db, "artifacts", appId, "public_stats", uid);
 
     try {
       await setDoc(privateRef, { manualLevelName: "", manualLevelColor: "" }, { merge: true });
@@ -427,14 +490,12 @@ export default function Admin({
 
       setToastMessage?.("수동 레벨을 해제했습니다 ✅");
 
-      setSelectedUserForSticker(prev => ({
+      setSelectedUserForSticker((prev) => ({
         ...prev,
         manualLevelName: "",
         manualLevelColor: "",
-        levelName: prev?.levelName || "",
-        levelColor: prev?.levelColor || "",
       }));
-      setAllUsers(prev => prev.map(u => u.id === uid ? { ...u, levelName: "", levelColor: "" } : u));
+      setAllUsers((prev) => prev.map((u) => (u.id === uid ? { ...u, levelName: "", levelColor: "" } : u)));
 
       setLevelOverrideName("");
       setLevelOverrideColor("");
@@ -461,12 +522,15 @@ export default function Admin({
         img.src = event.target.result;
 
         img.onload = async () => {
-          const canvas = document.createElement('canvas');
+          const canvas = document.createElement("canvas");
           canvas.width = 512;
           canvas.height = 512;
 
-          const ctx = canvas.getContext('2d');
-          if (!ctx) { setIsUploadingImg(false); return; }
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            setIsUploadingImg(false);
+            return;
+          }
 
           const minSide = Math.min(img.width, img.height);
           ctx.drawImage(
@@ -481,17 +545,17 @@ export default function Admin({
             512
           );
 
-          const base64Data = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+          const base64Data = canvas.toDataURL("image/jpeg", 0.85).split(",")[1];
           const formData = new FormData();
           formData.append("image", base64Data);
 
           const response = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
             method: "POST",
-            body: formData
+            body: formData,
           });
           const result = await response.json();
 
-          if (result?.success) setNewTrack(prev => ({ ...prev, image: result.data.url }));
+          if (result?.success) setNewTrack((prev) => ({ ...prev, image: result.data.url }));
           setIsUploadingImg(false);
         };
       };
@@ -506,7 +570,7 @@ export default function Admin({
 
     const reader = new FileReader();
     reader.onload = (event) => {
-      setNewTrack(prev => ({ ...prev, lyrics: event.target.result }));
+      setNewTrack((prev) => ({ ...prev, lyrics: event.target.result }));
       setToastMessage?.("가사 로드 완료 🎤");
     };
     reader.readAsText(file);
@@ -518,13 +582,13 @@ export default function Admin({
 
     try {
       if (editingId) {
-        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tracks', editingId), {
+        await updateDoc(doc(db, "artifacts", appId, "public", "data", "tracks", editingId), {
           ...newTrack,
           updatedAt: Date.now(),
         });
         setToastMessage?.("수정 완료 🛠️");
       } else {
-        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tracks'), {
+        await addDoc(collection(db, "artifacts", appId, "public", "data", "tracks"), {
           ...newTrack,
           isHidden: false,
           createdAt: Date.now(),
@@ -533,7 +597,15 @@ export default function Admin({
       }
 
       setEditingId(null);
-      setNewTrack({ title: '', artist: '', image: '', description: '', tag: 'Ambient', audioUrl: '', lyrics: '' });
+      setNewTrack({
+        title: "",
+        artist: "",
+        image: "",
+        description: "",
+        tag: "Ambient",
+        audioUrl: "",
+        lyrics: "",
+      });
     } catch {
       setAuthError?.("저장 권한 오류");
     }
@@ -542,18 +614,28 @@ export default function Admin({
   const handleEditClick = (track) => {
     setEditingId(track.id);
     setNewTrack({ ...track });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleCancelEdit = () => {
     setEditingId(null);
-    setNewTrack({ title: '', artist: '', image: '', description: '', tag: 'Ambient', audioUrl: '', lyrics: '' });
+    setNewTrack({
+      title: "",
+      artist: "",
+      image: "",
+      description: "",
+      tag: "Ambient",
+      audioUrl: "",
+      lyrics: "",
+    });
   };
 
   const handleToggleVisibility = async (track) => {
     if (!isAdmin || !db) return;
     try {
-      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tracks', track.id), { isHidden: !track.isHidden });
+      await updateDoc(doc(db, "artifacts", appId, "public", "data", "tracks", track.id), {
+        isHidden: !track.isHidden,
+      });
       setToastMessage?.(track.isHidden ? "공개됨 👁️" : "숨김 처리됨 🚫");
     } catch {}
   };
@@ -567,13 +649,13 @@ export default function Admin({
 
     try {
       if (editingPlaylistId) {
-        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'playlists', editingPlaylistId), {
+        await updateDoc(doc(db, "artifacts", appId, "public", "data", "playlists", editingPlaylistId), {
           ...newPlaylist,
           updatedAt: Date.now(),
         });
         setToastMessage?.("수정 완료 ✨");
       } else {
-        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'playlists'), {
+        await addDoc(collection(db, "artifacts", appId, "public", "data", "playlists"), {
           ...newPlaylist,
           createdAt: Date.now(),
         });
@@ -581,7 +663,7 @@ export default function Admin({
       }
 
       setEditingPlaylistId(null);
-      setNewPlaylist({ title: '', desc: '', image: '', trackIds: [] });
+      setNewPlaylist({ title: "", desc: "", image: "", trackIds: [] });
     } catch {
       setAuthError?.("저장 실패");
     }
@@ -593,10 +675,10 @@ export default function Admin({
     setIsUploadingPLImg(true);
 
     try {
-      const base64 = await new Promise(resolve => {
+      const base64 = await new Promise((resolve) => {
         const reader = new FileReader();
         reader.readAsDataURL(file);
-        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onload = () => resolve(reader.result.split(",")[1]);
       });
 
       const formData = new FormData();
@@ -604,11 +686,11 @@ export default function Admin({
 
       const response = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
         method: "POST",
-        body: formData
+        body: formData,
       });
       const result = await response.json();
 
-      if (result?.success) setNewPlaylist(prev => ({ ...prev, image: result.data.url }));
+      if (result?.success) setNewPlaylist((prev) => ({ ...prev, image: result.data.url }));
     } catch {
       // ignore
     } finally {
@@ -617,9 +699,9 @@ export default function Admin({
   };
 
   const toggleTrackInPL = (trackId) => {
-    setNewPlaylist(prev => {
+    setNewPlaylist((prev) => {
       const exists = prev.trackIds.includes(trackId);
-      return { ...prev, trackIds: exists ? prev.trackIds.filter(id => id !== trackId) : [...prev.trackIds, trackId] };
+      return { ...prev, trackIds: exists ? prev.trackIds.filter((id) => id !== trackId) : [...prev.trackIds, trackId] };
     });
   };
 
@@ -627,8 +709,8 @@ export default function Admin({
     if (!isAdmin || !db) return;
 
     try {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'featured', 'directors_pick'), featuredData);
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'site_config', 'main_texts'), siteConfig);
+      await setDoc(doc(db, "artifacts", appId, "public", "data", "featured", "directors_pick"), featuredData);
+      await setDoc(doc(db, "artifacts", appId, "public", "data", "site_config", "main_texts"), siteConfig);
       setToastMessage?.("사이트 설정 저장 완료 ✨");
     } catch {
       setAuthError?.("설정 저장 실패");
@@ -651,25 +733,49 @@ export default function Admin({
           >
             Verify Admin
           </button>
-          <p className="text-zinc-600 text-xs font-bold">
-            App.jsx에서 isAdmin이 true면 자동으로 열립니다.
-          </p>
+          <p className="text-zinc-600 text-xs font-bold">App.jsx에서 isAdmin이 true면 자동으로 열립니다.</p>
         </div>
       ) : (
         <>
           <div className="flex items-center gap-4 mb-8 overflow-x-auto pb-2 no-scrollbar">
-            <button onClick={() => setActiveTab('tracks')} className={`px-6 py-3 rounded-full font-black uppercase text-[10px] lg:text-xs tracking-widest transition-all flex items-center gap-2 shrink-0 ${activeTab === 'tracks' ? 'bg-[#004aad] text-white' : 'bg-white/5 text-zinc-500 hover:text-white'}`}><ListMusic className="w-4 h-4" /> Tracks</button>
-            <button onClick={() => setActiveTab('playlists')} className={`px-6 py-3 rounded-full font-black uppercase text-[10px] lg:text-xs tracking-widest transition-all flex items-center gap-2 shrink-0 ${activeTab === 'playlists' ? 'bg-[#004aad] text-white' : 'bg-white/5 text-zinc-500 hover:text-white'}`}><Plus className="w-4 h-4" /> Playlists</button>
-            <button onClick={() => setActiveTab('users')} className={`px-6 py-3 rounded-full font-black uppercase text-[10px] lg:text-xs tracking-widest transition-all flex items-center gap-2 shrink-0 ${activeTab === 'users' ? 'bg-[#004aad] text-white' : 'bg-white/5 text-zinc-500 hover:text-white'}`}><Users className="w-4 h-4" /> Users</button>
-            <button onClick={() => setActiveTab('config')} className={`px-6 py-3 rounded-full font-black uppercase text-[10px] lg:text-xs tracking-widest transition-all flex items-center gap-2 shrink-0 ${activeTab === 'config' ? 'bg-[#004aad] text-white' : 'bg-white/5 text-zinc-500 hover:text-white'}`}><Settings2 className="w-4 h-4" /> Config</button>
+            <button
+              onClick={() => setActiveTab("tracks")}
+              className={`px-6 py-3 rounded-full font-black uppercase text-[10px] lg:text-xs tracking-widest transition-all flex items-center gap-2 shrink-0 ${
+                activeTab === "tracks" ? "bg-[#004aad] text-white" : "bg-white/5 text-zinc-500 hover:text-white"
+              }`}
+            >
+              <ListMusic className="w-4 h-4" /> Tracks
+            </button>
+            <button
+              onClick={() => setActiveTab("playlists")}
+              className={`px-6 py-3 rounded-full font-black uppercase text-[10px] lg:text-xs tracking-widest transition-all flex items-center gap-2 shrink-0 ${
+                activeTab === "playlists" ? "bg-[#004aad] text-white" : "bg-white/5 text-zinc-500 hover:text-white"
+              }`}
+            >
+              <Plus className="w-4 h-4" /> Playlists
+            </button>
+            <button
+              onClick={() => setActiveTab("users")}
+              className={`px-6 py-3 rounded-full font-black uppercase text-[10px] lg:text-xs tracking-widest transition-all flex items-center gap-2 shrink-0 ${
+                activeTab === "users" ? "bg-[#004aad] text-white" : "bg-white/5 text-zinc-500 hover:text-white"
+              }`}
+            >
+              <Users className="w-4 h-4" /> Users
+            </button>
+            <button
+              onClick={() => setActiveTab("config")}
+              className={`px-6 py-3 rounded-full font-black uppercase text-[10px] lg:text-xs tracking-widest transition-all flex items-center gap-2 shrink-0 ${
+                activeTab === "config" ? "bg-[#004aad] text-white" : "bg-white/5 text-zinc-500 hover:text-white"
+              }`}
+            >
+              <Settings2 className="w-4 h-4" /> Config
+            </button>
           </div>
 
           <AnimatePresence mode="wait">
-
             {/* USERS */}
-            {activeTab === 'users' && (
+            {activeTab === "users" && (
               <motion.div key="users" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="grid lg:grid-cols-12 gap-8">
-
                 {/* LEFT */}
                 <div className="lg:col-span-5 space-y-6">
                   <div className={`${glass} p-4 rounded-full flex items-center gap-4 px-6`}>
@@ -678,7 +784,7 @@ export default function Admin({
                       placeholder="닉네임/이름/UID 검색..."
                       className="bg-transparent border-none outline-none flex-1 font-bold text-white uppercase text-sm"
                       value={userSearchTerm}
-                      onChange={e => setUserSearchTerm(e.target.value)}
+                      onChange={(e) => setUserSearchTerm(e.target.value)}
                     />
                     {isLoadingUsers && <Loader2 className="w-4 h-4 animate-spin text-[#004aad]" />}
                   </div>
@@ -699,7 +805,7 @@ export default function Admin({
                           disabled={isSettling}
                           className="px-4 py-2 rounded-xl bg-[#004aad] text-white font-black uppercase text-[10px] tracking-widest disabled:opacity-50"
                         >
-                          {isSettling ? 'RUN...' : 'RUN YEARLY'}
+                          {isSettling ? "RUN..." : "RUN YEARLY"}
                         </button>
                       </div>
                     </div>
@@ -709,13 +815,15 @@ export default function Admin({
                   </div>
 
                   <div className="space-y-3 max-h-175 overflow-y-auto no-scrollbar pr-2">
-                    {filteredUsers.map(u => {
-                      const name = (u.nickname || u.displayName || 'Guest');
+                    {filteredUsers.map((u) => {
+                      const name = u.nickname || u.displayName || "Guest";
                       return (
                         <div
                           key={u.id}
                           onClick={() => setSelectedUserForSticker(u)}
-                          className={`${glass} p-5 rounded-3xl flex justify-between items-center cursor-pointer transition-all border-white/5 hover:border-[#004aad]/50 ${selectedUserForSticker?.id === u.id ? 'bg-[#004aad]/10 border-[#004aad]/40' : ''}`}
+                          className={`${glass} p-5 rounded-3xl flex justify-between items-center cursor-pointer transition-all border-white/5 hover:border-[#004aad]/50 ${
+                            selectedUserForSticker?.id === u.id ? "bg-[#004aad]/10 border-[#004aad]/40" : ""
+                          }`}
                         >
                           <div className="flex items-center gap-4">
                             <div className="w-12 h-12 rounded-full bg-zinc-800 overflow-hidden border border-white/10 flex items-center justify-center">
@@ -736,17 +844,14 @@ export default function Admin({
                 {/* RIGHT */}
                 <div className="lg:col-span-7">
                   {selectedUserForSticker ? (
-                    <motion.div
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      className={`${glass} p-8 lg:p-12 rounded-[4rem] border-white/10 space-y-12 shadow-2xl relative overflow-visible`}
-                    >
+                    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className={`${glass} p-8 lg:p-12 rounded-[4rem] border-white/10 space-y-12 shadow-2xl relative overflow-visible`}>
                       <div className="flex items-center gap-6 pb-8 border-b border-white/10">
                         <div className="w-20 h-20 rounded-full bg-zinc-900 border-2 border-[#004aad] p-1 flex items-center justify-center overflow-hidden">
-                          {safeSrc(selectedUserForSticker.profileImg)
-                            ? <img src={selectedUserForSticker.profileImg} className="w-full h-full rounded-full object-cover" alt="" />
-                            : <User className="w-8 h-8 text-white/20" />
-                          }
+                          {safeSrc(selectedUserForSticker.profileImg) ? (
+                            <img src={selectedUserForSticker.profileImg} className="w-full h-full rounded-full object-cover" alt="" />
+                          ) : (
+                            <User className="w-8 h-8 text-white/20" />
+                          )}
                         </div>
                         <div className="flex-1 min-w-0">
                           <h3 className="text-3xl font-black uppercase italic tracking-tighter text-white truncate">
@@ -759,9 +864,7 @@ export default function Admin({
                               {selectedUserForSticker.levelName || "User"}
                             </span>
                             {selectedUserForSticker.xp !== undefined && (
-                              <span className="text-[10px] font-black uppercase tracking-widest text-zinc-600">
-                                • XP {selectedUserForSticker.xp}
-                              </span>
+                              <span className="text-[10px] font-black uppercase tracking-widest text-zinc-600">• XP {selectedUserForSticker.xp}</span>
                             )}
                           </div>
                         </div>
@@ -789,16 +892,10 @@ export default function Admin({
                             </p>
                           </div>
                           <div className="flex flex-col gap-2 justify-end">
-                            <button
-                              onClick={adminSaveNickname}
-                              className="px-4 py-3 rounded-2xl bg-[#004aad] text-white font-black uppercase text-[10px] tracking-widest hover:brightness-110"
-                            >
+                            <button onClick={adminSaveNickname} className="px-4 py-3 rounded-2xl bg-[#004aad] text-white font-black uppercase text-[10px] tracking-widest hover:brightness-110">
                               SAVE
                             </button>
-                            <button
-                              onClick={adminResetNicknameChance}
-                              className="px-4 py-3 rounded-2xl bg-white/5 text-white font-black uppercase text-[10px] tracking-widest hover:bg-white/10"
-                            >
+                            <button onClick={adminResetNicknameChance} className="px-4 py-3 rounded-2xl bg-white/5 text-white font-black uppercase text-[10px] tracking-widest hover:bg-white/10">
                               RESET 1X
                             </button>
                           </div>
@@ -813,14 +910,16 @@ export default function Admin({
                               onChange={(e) => {
                                 const name = e.target.value;
                                 setLevelOverrideName(name);
-                                const found = LEVELS.find(x => x.name === name);
+                                const found = LEVELS.find((x) => x.name === name);
                                 setLevelOverrideColor(found?.color || "");
                               }}
                               className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest outline-none focus:border-[#004aad] cursor-pointer"
                             >
                               <option value="">-- AUTO (NONE) --</option>
-                              {LEVELS.map(l => (
-                                <option key={l.key} value={l.name}>{l.name}</option>
+                              {LEVELS.map((l) => (
+                                <option key={l.key} value={l.name}>
+                                  {l.name}
+                                </option>
                               ))}
                             </select>
 
@@ -834,16 +933,10 @@ export default function Admin({
                           </div>
 
                           <div className="flex flex-col gap-2 justify-end">
-                            <button
-                              onClick={adminApplyManualLevel}
-                              className="px-4 py-3 rounded-2xl bg-[#004aad] text-white font-black uppercase text-[10px] tracking-widest hover:brightness-110"
-                            >
+                            <button onClick={adminApplyManualLevel} className="px-4 py-3 rounded-2xl bg-[#004aad] text-white font-black uppercase text-[10px] tracking-widest hover:brightness-110">
                               APPLY
                             </button>
-                            <button
-                              onClick={adminClearManualLevel}
-                              className="px-4 py-3 rounded-2xl bg-white/5 text-white font-black uppercase text-[10px] tracking-widest hover:bg-white/10"
-                            >
+                            <button onClick={adminClearManualLevel} className="px-4 py-3 rounded-2xl bg-white/5 text-white font-black uppercase text-[10px] tracking-widest hover:bg-white/10">
                               CLEAR
                             </button>
                           </div>
@@ -870,12 +963,12 @@ export default function Admin({
                                 onClick={() => handleStickerToggle(selectedUserForSticker.id, id, !hasIt)}
                                 className={`aspect-square rounded-2xl border flex items-center justify-center transition-all ${
                                   hasIt
-                                    ? 'bg-[#a78bfa]/20 border-[#a78bfa] text-white shadow-[0_0_15px_rgba(167,139,250,0.3)]'
-                                    : 'bg-white/5 border-white/10 text-zinc-800 hover:border-white/30'
+                                    ? "bg-[#a78bfa]/20 border-[#a78bfa] text-white shadow-[0_0_15px_rgba(167,139,250,0.3)]"
+                                    : "bg-white/5 border-white/10 text-zinc-800 hover:border-white/30"
                                 }`}
                                 title={data.title}
                               >
-                                <data.icon size={20} style={{ color: hasIt ? data.color : 'inherit' }} />
+                                <data.icon size={20} style={{ color: hasIt ? data.color : "inherit" }} />
                               </button>
                             );
                           })}
@@ -898,21 +991,20 @@ export default function Admin({
                                 onClick={() => handleStickerToggle(selectedUserForSticker.id, id, !hasIt)}
                                 className={`p-5 rounded-3xl border flex items-center gap-4 transition-all text-left ${
                                   hasIt
-                                    ? 'bg-[#fbbf24]/20 border-[#fbbf24] text-white shadow-[0_0_15px_rgba(251,191,36,0.2)]'
-                                    : 'bg-white/5 border-white/10 text-zinc-500'
+                                    ? "bg-[#fbbf24]/20 border-[#fbbf24] text-white shadow-[0_0_15px_rgba(251,191,36,0.2)]"
+                                    : "bg-white/5 border-white/10 text-zinc-500"
                                 }`}
                               >
-                                <data.icon size={20} style={{ color: hasIt ? data.color : 'inherit' }} />
+                                <data.icon size={20} style={{ color: hasIt ? data.color : "inherit" }} />
                                 <div className="min-w-0">
                                   <p className="text-[11px] font-black uppercase truncate">{data.title}</p>
-                                  <p className="text-[8px] opacity-60 font-bold uppercase">{hasIt ? 'Reward Granted' : 'Pending'}</p>
+                                  <p className="text-[8px] opacity-60 font-bold uppercase">{hasIt ? "Reward Granted" : "Pending"}</p>
                                 </div>
                               </button>
                             );
                           })}
                         </div>
                       </div>
-
                     </motion.div>
                   ) : (
                     <div className={`${glass} p-20 rounded-[4rem] flex flex-col items-center justify-center text-center space-y-6 border-dashed border-white/10`}>
@@ -925,60 +1017,153 @@ export default function Admin({
             )}
 
             {/* CONFIG */}
-            {activeTab === 'config' && (
+            {activeTab === "config" && (
               <motion.div key="config" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-8">
                 <div className="bg-zinc-900 border border-white/10 p-8 lg:p-12 rounded-[4rem] shadow-2xl relative overflow-hidden">
-                  <div className="absolute top-0 right-0 p-8 opacity-5"><MousePointer2 className="w-40 h-40 text-[#004aad]" /></div>
+                  <div className="absolute top-0 right-0 p-8 opacity-5">
+                    <MousePointer2 className="w-40 h-40 text-[#004aad]" />
+                  </div>
                   <div className="grid lg:grid-cols-2 gap-16">
                     <div className="space-y-8">
-                      <h3 className="text-xl font-black uppercase text-white flex items-center gap-3"><Sparkles className="w-5 h-5 text-[#004aad]"/> Intro Page (Popup)</h3>
+                      <h3 className="text-xl font-black uppercase text-white flex items-center gap-3">
+                        <Sparkles className="w-5 h-5 text-[#004aad]" /> Intro Page (Popup)
+                      </h3>
                       <div className="space-y-5">
-                        <div><p className="text-[10px] text-zinc-500 uppercase font-black mb-1.5 ml-1">Main Title</p><input value={siteConfig.intro_title} onChange={e => setSiteConfig({...siteConfig, intro_title: e.target.value})} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white font-bold outline-none focus:border-[#004aad]" /></div>
-                        <div><p className="text-[10px] text-zinc-500 uppercase font-black mb-1.5 ml-1">Sub Description</p><textarea value={siteConfig.intro_desc} onChange={e => setSiteConfig({...siteConfig, intro_desc: e.target.value})} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-[#004aad] h-24 resize-none" /></div>
-                        <div><p className="text-[10px] text-zinc-500 uppercase font-black mb-1.5 ml-1">Entry Button Text</p><input value={siteConfig.intro_btn} onChange={e => setSiteConfig({...siteConfig, intro_btn: e.target.value})} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-[#004aad] font-black outline-none focus:border-white" /></div>
+                        <div>
+                          <p className="text-[10px] text-zinc-500 uppercase font-black mb-1.5 ml-1">Main Title</p>
+                          <input
+                            value={siteConfig.intro_title}
+                            onChange={(e) => setSiteConfig({ ...siteConfig, intro_title: e.target.value })}
+                            className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white font-bold outline-none focus:border-[#004aad]"
+                          />
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-zinc-500 uppercase font-black mb-1.5 ml-1">Sub Description</p>
+                          <textarea
+                            value={siteConfig.intro_desc}
+                            onChange={(e) => setSiteConfig({ ...siteConfig, intro_desc: e.target.value })}
+                            className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-[#004aad] h-24 resize-none"
+                          />
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-zinc-500 uppercase font-black mb-1.5 ml-1">Entry Button Text</p>
+                          <input
+                            value={siteConfig.intro_btn}
+                            onChange={(e) => setSiteConfig({ ...siteConfig, intro_btn: e.target.value })}
+                            className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-[#004aad] font-black outline-none focus:border-white"
+                          />
+                        </div>
                       </div>
                     </div>
+
                     <div className="space-y-8">
-                      <h3 className="text-xl font-black uppercase text-white flex items-center gap-3"><Type className="w-5 h-5 text-[#004aad]"/> Space Philosophy</h3>
+                      <h3 className="text-xl font-black uppercase text-white flex items-center gap-3">
+                        <Type className="w-5 h-5 text-[#004aad]" /> Space Philosophy
+                      </h3>
                       <div className="space-y-5">
-                        <div><p className="text-[10px] text-zinc-500 uppercase font-black mb-1.5 ml-1">Headline</p><input value={siteConfig.phil_title} onChange={e => setSiteConfig({...siteConfig, phil_title: e.target.value})} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-[#004aad]" /></div>
-                        <div><p className="text-[10px] text-zinc-500 uppercase font-black mb-1.5 ml-1">Philosophy Description</p><textarea value={siteConfig.phil_desc} onChange={e => setSiteConfig({...siteConfig, phil_desc: e.target.value})} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-[#004aad] h-32 resize-none" /></div>
+                        <div>
+                          <p className="text-[10px] text-zinc-500 uppercase font-black mb-1.5 ml-1">Headline</p>
+                          <input
+                            value={siteConfig.phil_title}
+                            onChange={(e) => setSiteConfig({ ...siteConfig, phil_title: e.target.value })}
+                            className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-[#004aad]"
+                          />
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-zinc-500 uppercase font-black mb-1.5 ml-1">Philosophy Description</p>
+                          <textarea
+                            value={siteConfig.phil_desc}
+                            onChange={(e) => setSiteConfig({ ...siteConfig, phil_desc: e.target.value })}
+                            className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-[#004aad] h-32 resize-none"
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
+
                   <div className="mt-16 grid lg:grid-cols-4 gap-6">
-                    {['guide_1', 'guide_2', 'guide_3', 'guide_4'].map((g, i) => (
-                      <div key={g}><p className="text-[9px] text-zinc-500 uppercase font-black mb-1.5 ml-1">Nav Guide {i+1}</p><input value={siteConfig[g]} onChange={e => setSiteConfig({...siteConfig, [g]: e.target.value})} className="w-full bg-white/5 border border-white/10 p-3 rounded-xl text-xs text-white" /></div>
+                    {["guide_1", "guide_2", "guide_3", "guide_4"].map((g, i) => (
+                      <div key={g}>
+                        <p className="text-[9px] text-zinc-500 uppercase font-black mb-1.5 ml-1">Nav Guide {i + 1}</p>
+                        <input
+                          value={siteConfig[g]}
+                          onChange={(e) => setSiteConfig({ ...siteConfig, [g]: e.target.value })}
+                          className="w-full bg-white/5 border border-white/10 p-3 rounded-xl text-xs text-white"
+                        />
+                      </div>
                     ))}
                   </div>
                 </div>
 
                 <div className={`${glass} p-8 lg:p-12 rounded-[4rem] space-y-10`}>
-                  <h3 className="text-xl font-black uppercase text-white flex items-center gap-3"><Sparkles className="w-5 h-5 text-[#004aad]"/> Featured Artifact (Directors Pick)</h3>
+                  <h3 className="text-xl font-black uppercase text-white flex items-center gap-3">
+                    <Sparkles className="w-5 h-5 text-[#004aad]" /> Featured Artifact (Directors Pick)
+                  </h3>
                   <div className="grid lg:grid-cols-2 gap-10">
                     <div className="space-y-5">
-                      <div><p className="text-[10px] text-zinc-500 uppercase font-black mb-1.5 ml-1">Headline</p><input value={featuredData.headline} onChange={e => setFeaturedData({...featuredData, headline: e.target.value})} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-[#004aad]" /></div>
-                      <div><p className="text-[10px] text-zinc-500 uppercase font-black mb-1.5 ml-1">Sub Headline</p><input value={featuredData.subHeadline} onChange={e => setFeaturedData({...featuredData, subHeadline: e.target.value})} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-[#004aad]" /></div>
+                      <div>
+                        <p className="text-[10px] text-zinc-500 uppercase font-black mb-1.5 ml-1">Headline</p>
+                        <input
+                          value={featuredData.headline}
+                          onChange={(e) => setFeaturedData({ ...featuredData, headline: e.target.value })}
+                          className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-[#004aad]"
+                        />
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-zinc-500 uppercase font-black mb-1.5 ml-1">Sub Headline</p>
+                        <input
+                          value={featuredData.subHeadline}
+                          onChange={(e) => setFeaturedData({ ...featuredData, subHeadline: e.target.value })}
+                          className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-[#004aad]"
+                        />
+                      </div>
                     </div>
                     <div className="space-y-5">
-                      <div><p className="text-[10px] text-zinc-500 uppercase font-black mb-1.5 ml-1">Quote</p><input value={featuredData.quote} onChange={e => setFeaturedData({...featuredData, quote: e.target.value})} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white italic outline-none focus:border-[#004aad]" /></div>
-                      <div><p className="text-[10px] text-zinc-500 uppercase font-black mb-1.5 ml-1">Linked Track</p><select value={featuredData.linkedTrackId} onChange={e => setFeaturedData({...featuredData, linkedTrackId: e.target.value})} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-[#004aad] font-black outline-none cursor-pointer"><option value="">-- SELECT TRACK --</option>{tracks.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}</select></div>
+                      <div>
+                        <p className="text-[10px] text-zinc-500 uppercase font-black mb-1.5 ml-1">Quote</p>
+                        <input
+                          value={featuredData.quote}
+                          onChange={(e) => setFeaturedData({ ...featuredData, quote: e.target.value })}
+                          className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white italic outline-none focus:border-[#004aad]"
+                        />
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-zinc-500 uppercase font-black mb-1.5 ml-1">Linked Track</p>
+                        <select
+                          value={featuredData.linkedTrackId}
+                          onChange={(e) => setFeaturedData({ ...featuredData, linkedTrackId: e.target.value })}
+                          className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-[#004aad] font-black outline-none cursor-pointer"
+                        >
+                          <option value="">-- SELECT TRACK --</option>
+                          {tracks.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.title}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                <button onClick={handleSaveAllConfig} className="w-full bg-[#004aad] text-white py-6 rounded-3xl font-black uppercase tracking-widest hover:bg-white hover:text-black transition-all flex items-center justify-center gap-3 shadow-2xl">
+                <button
+                  onClick={handleSaveAllConfig}
+                  className="w-full bg-[#004aad] text-white py-6 rounded-3xl font-black uppercase tracking-widest hover:bg-white hover:text-black transition-all flex items-center justify-center gap-3 shadow-2xl"
+                >
                   <Save className="w-6 h-6" /> Deploy Site Changes
                 </button>
               </motion.div>
             )}
 
             {/* TRACKS */}
-            {activeTab === 'tracks' && (
+            {activeTab === "tracks" && (
               <motion.div key="tracks" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="grid lg:grid-cols-12 gap-8">
                 <div className="lg:col-span-7 space-y-4">
-                  {tracks.map(t => (
-                    <div key={t.id} className={`${glass} p-6 rounded-4xl flex justify-between items-center group shadow-lg ${t.isHidden ? 'opacity-50 border-dashed' : 'border-white/5'}`}>
+                  {tracks.map((t) => (
+                    <div
+                      key={t.id}
+                      className={`${glass} p-6 rounded-4xl flex justify-between items-center group shadow-lg ${t.isHidden ? "opacity-50 border-dashed" : "border-white/5"}`}
+                    >
                       <div className="flex-1 min-w-0 pr-4">
                         <div className="flex items-center gap-2 mb-1">
                           {t.isHidden && <span className="px-2 py-0.5 bg-red-500/20 text-red-500 text-[10px] rounded font-bold uppercase">Hidden</span>}
@@ -987,38 +1172,83 @@ export default function Admin({
                         <p className="text-xs text-zinc-500 font-bold uppercase tracking-widest truncate">{t.artist}</p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <button onClick={() => handleToggleVisibility(t)} className={`p-3 rounded-full ${t.isHidden ? 'text-red-500 bg-red-500/10' : 'text-zinc-400 bg-white/5 hover:bg-white/10'}`}><Eye className="w-5 h-5" /></button>
-                        <button onClick={() => handleEditClick(t)} className="p-3 text-zinc-400 bg-white/5 hover:bg-white/10 rounded-full"><Edit2 className="w-5 h-5" /></button>
-                        <button onClick={() => { if (window.confirm('삭제?')) deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tracks', t.id)) }} className="p-3 text-red-500 bg-red-500/5 hover:bg-red-500/10 rounded-full"><Trash2 className="w-5 h-5" /></button>
+                        <button
+                          onClick={() => handleToggleVisibility(t)}
+                          className={`p-3 rounded-full ${t.isHidden ? "text-red-500 bg-red-500/10" : "text-zinc-400 bg-white/5 hover:bg-white/10"}`}
+                        >
+                          <Eye className="w-5 h-5" />
+                        </button>
+                        <button onClick={() => handleEditClick(t)} className="p-3 text-zinc-400 bg-white/5 hover:bg-white/10 rounded-full">
+                          <Edit2 className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (window.confirm("삭제?")) deleteDoc(doc(db, "artifacts", appId, "public", "data", "tracks", t.id));
+                          }}
+                          className="p-3 text-red-500 bg-red-500/5 hover:bg-red-500/10 rounded-full"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
                       </div>
                     </div>
                   ))}
                 </div>
 
                 <div className="lg:col-span-5">
-                  <div className={`p-8 lg:p-12 rounded-[3rem] text-black shadow-2xl sticky top-32 ${editingId ? 'bg-emerald-400' : 'bg-white'}`}>
+                  <div className={`p-8 lg:p-12 rounded-[3rem] text-black shadow-2xl sticky top-32 ${editingId ? "bg-emerald-400" : "bg-white"}`}>
                     <div className="mb-8 flex items-center justify-between">
-                      <h3 className="font-black uppercase tracking-tighter text-2xl lg:text-3xl">{editingId ? 'Edit Artifact' : 'New Artifact'}</h3>
-                      {editingId && <button onClick={handleCancelEdit} className="text-xs font-black uppercase bg-black/10 px-4 py-2 rounded-full">Cancel</button>}
+                      <h3 className="font-black uppercase tracking-tighter text-2xl lg:text-3xl">{editingId ? "Edit Artifact" : "New Artifact"}</h3>
+                      {editingId && (
+                        <button onClick={handleCancelEdit} className="text-xs font-black uppercase bg-black/10 px-4 py-2 rounded-full">
+                          Cancel
+                        </button>
+                      )}
                     </div>
 
                     <form onSubmit={handleAddOrUpdateTrack} className="space-y-6">
-                      <input required placeholder="TITLE" value={newTrack.title} onChange={e => setNewTrack({ ...newTrack, title: e.target.value })} className="w-full bg-black/5 border-b-2 border-black/10 p-4 font-black uppercase outline-none focus:border-black text-xl rounded-xl" />
-                      <input required placeholder="ARTIST" value={newTrack.artist} onChange={e => setNewTrack({ ...newTrack, artist: e.target.value })} className="w-full bg-black/5 border-b-2 border-black/10 p-4 font-black uppercase outline-none focus:border-black text-xl rounded-xl" />
+                      <input
+                        required
+                        placeholder="TITLE"
+                        value={newTrack.title}
+                        onChange={(e) => setNewTrack({ ...newTrack, title: e.target.value })}
+                        className="w-full bg-black/5 border-b-2 border-black/10 p-4 font-black uppercase outline-none focus:border-black text-xl rounded-xl"
+                      />
+                      <input
+                        required
+                        placeholder="ARTIST"
+                        value={newTrack.artist}
+                        onChange={(e) => setNewTrack({ ...newTrack, artist: e.target.value })}
+                        className="w-full bg-black/5 border-b-2 border-black/10 p-4 font-black uppercase outline-none focus:border-black text-xl rounded-xl"
+                      />
 
                       <div className="space-y-4">
                         <div className="relative group cursor-pointer">
                           <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
-                          <div className={`p-8 rounded-[2.5rem] border-2 border-dashed border-black/20 flex flex-col items-center justify-center gap-4`}>
+                          <div className="p-8 rounded-[2.5rem] border-2 border-dashed border-black/20 flex flex-col items-center justify-center gap-4">
                             {isUploadingImg ? <Loader2 className="w-10 h-10 animate-spin" /> : <Upload className="w-10 h-10 text-black/60" />}
                             <span className="text-xs font-black uppercase tracking-widest text-black/60">Upload Cover Art</span>
                           </div>
                         </div>
-                        {newTrack.image && <div className="w-full aspect-square rounded-[2.5rem] overflow-hidden border-2 border-black shadow-2xl"><img src={newTrack.image} className="w-full h-full object-cover" alt="" /></div>}
+                        {newTrack.image && (
+                          <div className="w-full aspect-square rounded-[2.5rem] overflow-hidden border-2 border-black shadow-2xl">
+                            <img src={newTrack.image} className="w-full h-full object-cover" alt="" />
+                          </div>
+                        )}
                       </div>
 
-                      <input required placeholder="AUDIO SOURCE (URL)" value={newTrack.audioUrl} onChange={e => setNewTrack({ ...newTrack, audioUrl: e.target.value })} className="w-full bg-black/5 border-b-2 border-black/10 p-4 font-black outline-none focus:border-black rounded-xl" />
-                      <textarea placeholder="DESCRIPTION" value={newTrack.description} onChange={e => setNewTrack({ ...newTrack, description: e.target.value })} className="w-full bg-black/5 border-b-2 border-black/10 p-4 font-medium text-sm outline-none focus:border-black h-24 resize-none rounded-xl" />
+                      <input
+                        required
+                        placeholder="AUDIO SOURCE (URL)"
+                        value={newTrack.audioUrl}
+                        onChange={(e) => setNewTrack({ ...newTrack, audioUrl: e.target.value })}
+                        className="w-full bg-black/5 border-b-2 border-black/10 p-4 font-black outline-none focus:border-black rounded-xl"
+                      />
+                      <textarea
+                        placeholder="DESCRIPTION"
+                        value={newTrack.description}
+                        onChange={(e) => setNewTrack({ ...newTrack, description: e.target.value })}
+                        className="w-full bg-black/5 border-b-2 border-black/10 p-4 font-medium text-sm outline-none focus:border-black h-24 resize-none rounded-xl"
+                      />
 
                       <div className="space-y-2">
                         <div className="flex justify-between items-end px-2">
@@ -1029,11 +1259,17 @@ export default function Admin({
                             <input type="file" accept=".lrc,.txt" onChange={handleLrcUpload} className="hidden" />
                           </label>
                         </div>
-                        <textarea placeholder="Paste lyrics here..." value={newTrack.lyrics} onChange={e => setNewTrack({ ...newTrack, lyrics: e.target.value })} className="w-full bg-black/5 border-b-2 border-black/10 p-4 font-medium text-xs outline-none focus:border-black h-32 resize-none font-mono rounded-xl" wrap="off" />
+                        <textarea
+                          placeholder="Paste lyrics here..."
+                          value={newTrack.lyrics}
+                          onChange={(e) => setNewTrack({ ...newTrack, lyrics: e.target.value })}
+                          className="w-full bg-black/5 border-b-2 border-black/10 p-4 font-medium text-xs outline-none focus:border-black h-32 resize-none font-mono rounded-xl"
+                          wrap="off"
+                        />
                       </div>
 
                       <button type="submit" disabled={isUploadingImg} className="w-full bg-black text-white py-6 mt-6 rounded-4xl font-black uppercase tracking-widest text-sm shadow-2xl disabled:opacity-50">
-                        {editingId ? 'Update' : 'Sync'}
+                        {editingId ? "Update" : "Sync"}
                       </button>
                     </form>
                   </div>
@@ -1042,10 +1278,10 @@ export default function Admin({
             )}
 
             {/* PLAYLISTS */}
-            {activeTab === 'playlists' && (
+            {activeTab === "playlists" && (
               <motion.div key="playlists" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="grid lg:grid-cols-12 gap-8">
                 <div className="lg:col-span-7 space-y-4">
-                  {playlists.map(pl => (
+                  {playlists.map((pl) => (
                     <div key={pl.id} className={`${glass} p-6 rounded-4xl flex justify-between items-center group shadow-lg border-white/5`}>
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 rounded-xl bg-zinc-800 overflow-hidden flex items-center justify-center">
@@ -1057,8 +1293,24 @@ export default function Admin({
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <button onClick={() => { setEditingPlaylistId(pl.id); setNewPlaylist(pl); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="p-3 text-zinc-400 bg-white/5 hover:bg-white/10 rounded-full"><Edit2 className="w-5 h-5" /></button>
-                        <button onClick={() => { if (window.confirm('삭제?')) deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'playlists', pl.id)) }} className="p-3 text-red-500 bg-red-500/5 hover:bg-red-500/10 rounded-full"><Trash2 className="w-5 h-5" /></button>
+                        <button
+                          onClick={() => {
+                            setEditingPlaylistId(pl.id);
+                            setNewPlaylist(pl);
+                            window.scrollTo({ top: 0, behavior: "smooth" });
+                          }}
+                          className="p-3 text-zinc-400 bg-white/5 hover:bg-white/10 rounded-full"
+                        >
+                          <Edit2 className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (window.confirm("삭제?")) deleteDoc(doc(db, "artifacts", appId, "public", "data", "playlists", pl.id));
+                          }}
+                          className="p-3 text-red-500 bg-red-500/5 hover:bg-red-500/10 rounded-full"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -1066,11 +1318,22 @@ export default function Admin({
 
                 <div className="lg:col-span-5">
                   <div className="p-8 lg:p-12 rounded-[3rem] bg-zinc-900 border border-white/10 text-white shadow-2xl sticky top-32">
-                    <h3 className="font-black uppercase tracking-tighter text-2xl mb-8">{editingPlaylistId ? 'Edit Playlist' : 'Create Playlist'}</h3>
+                    <h3 className="font-black uppercase tracking-tighter text-2xl mb-8">{editingPlaylistId ? "Edit Playlist" : "Create Playlist"}</h3>
 
                     <form onSubmit={handleAddOrUpdatePlaylist} className="space-y-6">
-                      <input required placeholder="TITLE" value={newPlaylist.title} onChange={e => setNewPlaylist({ ...newPlaylist, title: e.target.value })} className="w-full bg-white/5 border border-white/10 p-4 rounded-xl font-bold uppercase outline-none focus:border-[#004aad]" />
-                      <input placeholder="DESC" value={newPlaylist.desc} onChange={e => setNewPlaylist({ ...newPlaylist, desc: e.target.value })} className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-sm outline-none focus:border-[#004aad]" />
+                      <input
+                        required
+                        placeholder="TITLE"
+                        value={newPlaylist.title}
+                        onChange={(e) => setNewPlaylist({ ...newPlaylist, title: e.target.value })}
+                        className="w-full bg-white/5 border border-white/10 p-4 rounded-xl font-bold uppercase outline-none focus:border-[#004aad]"
+                      />
+                      <input
+                        placeholder="DESC"
+                        value={newPlaylist.desc}
+                        onChange={(e) => setNewPlaylist({ ...newPlaylist, desc: e.target.value })}
+                        className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-sm outline-none focus:border-[#004aad]"
+                      />
 
                       <div className="relative group cursor-pointer">
                         <input type="file" accept="image/*" onChange={handlePLImageUpload} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
@@ -1083,11 +1346,13 @@ export default function Admin({
                       <div className="space-y-2">
                         <p className="text-[10px] font-black uppercase text-[#004aad]">Select Tracks</p>
                         <div className="h-60 overflow-y-auto no-scrollbar bg-black/40 rounded-2xl border border-white/5 p-4 space-y-2">
-                          {tracks.map(t => (
+                          {tracks.map((t) => (
                             <div
                               key={t.id}
                               onClick={() => toggleTrackInPL(t.id)}
-                              className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer ${newPlaylist.trackIds.includes(t.id) ? 'bg-[#004aad]/20 border border-[#004aad]/50' : 'hover:bg-white/5'}`}
+                              className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer ${
+                                newPlaylist.trackIds.includes(t.id) ? "bg-[#004aad]/20 border border-[#004aad]/50" : "hover:bg-white/5"
+                              }`}
                             >
                               <div className="w-8 h-8 rounded bg-zinc-800 shrink-0 overflow-hidden flex items-center justify-center">
                                 {safeSrc(t.image) ? <img src={t.image} className="w-full h-full object-cover" alt="" /> : <Music className="w-4 h-4 text-white/20" />}
@@ -1100,14 +1365,13 @@ export default function Admin({
                       </div>
 
                       <button type="submit" className="w-full bg-white text-black py-4 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-[#004aad] hover:text-white shadow-xl">
-                        {editingPlaylistId ? 'Update' : 'Create'}
+                        {editingPlaylistId ? "Update" : "Create"}
                       </button>
                     </form>
                   </div>
                 </div>
               </motion.div>
             )}
-
           </AnimatePresence>
         </>
       )}

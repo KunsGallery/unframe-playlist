@@ -15,7 +15,7 @@ import {
 import {
   getFirestore,
   doc,
-  setDoc,
+  setDoc,            // ✅ FIX: setDoc 누락 보완
   collection,
   onSnapshot,
   query,
@@ -570,18 +570,27 @@ export default function App() {
     };
   }, [user]);
 
-  // ✅ public_stats 업데이트 (랭킹/홈 표시용) — nickname 우선 반영 + 엔진 XP/레벨 반영
+  // ✅ public_stats 업데이트 (랭킹/홈 표시용)
+  // ✅ nickname 우선 반영 + 엔진 XP/레벨 반영 + (FIX) manual override 우선
   useEffect(() => {
     if (!user) return;
 
     const xp = Number(userProfile?.xp || 0) || 0;
     const lv = getLevelInfo(xp);
+
     const nameForPublic = (userProfile?.nickname || "").trim()
       || user?.displayName
       || (user?.isAnonymous ? "Guest" : "Collector");
 
+    // ✅ FIX: manual override 우선 적용
+    const manualName = (userProfile?.manualLevelName || "").trim();
+    const manualColor = (userProfile?.manualLevelColor || "").trim();
+    const finalLevelName = manualName || lv.name;
+    const finalLevelColor = manualName ? (manualColor || lv.color) : lv.color;
+
     setDoc(doc(db, 'artifacts', appId, 'public_stats', user.uid), {
       displayName: nameForPublic,
+      nickname: (userProfile?.nickname || "").trim(), // (선택) 검색/일관성
       profileImg: userProfile?.profileImg || "",
       listenCount: userProfile?.listenCount || 0,
       shareCount: userProfile?.shareCount || 0,
@@ -589,8 +598,8 @@ export default function App() {
       xp,
       levelKey: lv.key,
       level: lv.level,
-      levelName: lv.name,
-      levelColor: lv.color,
+      levelName: finalLevelName,
+      levelColor: finalLevelColor,
     }, { merge: true }).catch(() => {});
   }, [user, userProfile]);
 
@@ -1094,52 +1103,88 @@ export default function App() {
 
         {/* ✅ Hidden 공유 카드(캡처용) */}
         {shareItem && (
-          <div ref={shareCardRef} style={{
-            position: 'fixed', top: 0, left: 0, width: '600px', height: '850px',
-            background: 'linear-gradient(135deg, #1a1a1a 0%, #242424 60%, #004aad 100%)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            zIndex: -1, opacity: 0.99, pointerEvents: 'none',
-            fontFamily: "'Inter', 'Pretendard', sans-serif"
-          }}>
-            <div style={{ width: '560px', height: '810px', border: '1.5px solid #7dd3fc', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', padding: '60px 40px', boxSizing: 'border-box' }}>
-              {/* corners */}
+          <div
+            ref={shareCardRef}
+            style={{
+              position: 'fixed', top: 0, left: 0, width: '600px', height: '850px',
+              background: 'linear-gradient(135deg, #1a1a1a 0%, #242424 60%, #004aad 100%)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              zIndex: -1, opacity: 0.99, pointerEvents: 'none',
+              fontFamily: "'Inter', 'Pretendard', sans-serif"
+            }}
+          >
+            <div style={{
+              width: '560px', height: '810px', border: '1.5px solid #7dd3fc', position: 'relative',
+              overflow: 'hidden', display: 'flex', flexDirection: 'column', alignItems: 'center',
+              justifyContent: 'space-between', padding: '60px 40px', boxSizing: 'border-box'
+            }}>
+
+              {/* 4모서리 내부 곡선 장식 */}
               <svg style={{ position: 'absolute', top: '10px', left: '10px', width: '40px', height: '40px', fill: 'none', stroke: '#7dd3fc', strokeWidth: '1.5' }} viewBox="0 0 40 40"><path d="M0,40 A40,40 0 0,1 40,0" /></svg>
               <svg style={{ position: 'absolute', top: '10px', right: '10px', width: '40px', height: '40px', fill: 'none', stroke: '#7dd3fc', strokeWidth: '1.5', transform: 'rotate(90deg)' }} viewBox="0 0 40 40"><path d="M0,40 A40,40 0 0,1 40,0" /></svg>
               <svg style={{ position: 'absolute', bottom: '10px', left: '10px', width: '40px', height: '40px', fill: 'none', stroke: '#7dd3fc', strokeWidth: '1.5', transform: 'rotate(-90deg)' }} viewBox="0 0 40 40"><path d="M0,40 A40,40 0 0,1 40,0" /></svg>
               <svg style={{ position: 'absolute', bottom: '10px', right: '10px', width: '40px', height: '40px', fill: 'none', stroke: '#7dd3fc', strokeWidth: '1.5', transform: 'rotate(180deg)' }} viewBox="0 0 40 40"><path d="M0,40 A40,40 0 0,1 40,0" /></svg>
 
-              {/* title + curve */}
+              {/* 상단 타이틀 및 곡선 라인 */}
               <div style={{ textAlign: 'center', position: 'relative', width: '100%' }}>
-                <h1 style={{ fontSize: '56px', fontWeight: 300, color: '#ffffff', letterSpacing: '0.1em', margin: 0, textShadow: '0 0 10px rgba(125, 211, 252, 0.5)', position: 'relative', zIndex: 2 }}>
-                  {shareItem.title}
+                <h1 style={{
+                  fontSize: '56px', fontWeight: 300, color: '#ffffff', letterSpacing: '0.1em',
+                  margin: 0, textShadow: '0 0 10px rgba(125, 211, 252, 0.5)',
+                  position: 'relative', zIndex: 2
+                }}>
+                  {shareItem.title || "UNFRAME"}
                 </h1>
-                <svg style={{ position: 'absolute', top: '45px', left: '50%', transform: 'translateX(-50%)', width: '380px', height: '60px', fill: 'none', stroke: '#7dd3fc', strokeWidth: 1, opacity: 0.6, zIndex: 1 }}>
+                <svg style={{
+                  position: 'absolute', top: '70px', left: '50%', transform: 'translateX(-50%)',
+                  width: '380px', height: '60px', fill: 'none', stroke: '#7dd3fc',
+                  strokeWidth: 1, opacity: 0.6, zIndex: 1
+                }}>
                   <path d="M0,30 Q190,-20 380,30" />
                 </svg>
               </div>
 
-              {/* icon */}
+              {/* 중앙 아이콘 */}
               <div style={{ position: 'relative', width: '320px', height: '320px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <div style={{ position: 'absolute', width: '260px', height: '260px', background: `radial-gradient(circle, ${shareItem.color || '#7dd3fc'}44 0%, transparent 60%)`, filter: 'blur(50px)', zIndex: 1, mixBlendMode: 'screen' }} />
-                <div style={{ zIndex: 5, filter: `drop-shadow(0 0 8px ${shareItem.color || '#7dd3fc'}) drop-shadow(0 0 15px ${shareItem.color || '#7dd3fc'}66)` }}>
-                  {shareItem.type === 'reward'
-                    ? React.createElement(shareItem.icon || Heart, { size: 180, color: '#ffffff', strokeWidth: 1.5 })
-                    : (shareItem.image
-                      ? <div style={{ width: '200px', height: '200px', border: '4px solid #ffffff', borderRadius: '40px', overflow: 'hidden' }}>
-                          <img src={shareItem.image} style={{ width: '100%', height: '100%', objectFit: 'cover' }} crossOrigin="anonymous" alt="" />
+                <div style={{
+                  position: 'absolute', width: '260px', height: '260px',
+                  background: `radial-gradient(circle, ${shareItem.color || '#7dd3fc'}44 0%, transparent 60%)`,
+                  filter: 'blur(50px)', zIndex: 1, mixBlendMode: 'screen'
+                }} />
+
+                <div style={{
+                  zIndex: 5,
+                  filter: `drop-shadow(0 0 8px ${shareItem.color || '#7dd3fc'}) drop-shadow(0 0 15px ${(shareItem.color || '#7dd3fc')}66)`
+                }}>
+                  {shareItem.type === 'reward' ? (
+                    shareItem.icon
+                      ? React.createElement(shareItem.icon, { size: 180, color: '#ffffff', strokeWidth: 1.5 })
+                      : <Heart size={180} color="#ffffff" strokeWidth={1.5} />
+                  ) : (
+                    shareItem.image
+                      ? (
+                        <div style={{ width: '200px', height: '200px', border: '4px solid #ffffff', borderRadius: '40px', overflow: 'hidden' }}>
+                          <img
+                            src={shareItem.image}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            crossOrigin="anonymous"
+                            alt=""
+                          />
                         </div>
+                      )
                       : <Music size={150} color="#ffffff" />
-                    )
-                  }
+                  )}
                 </div>
               </div>
 
-              {/* user + desc */}
+              {/* 유저 이름 및 설명 */}
               <div style={{ textAlign: 'center', zIndex: 10, width: '80%' }}>
                 <p style={{ fontSize: '26px', fontWeight: 400, color: '#ffffff', margin: 0 }}>
-                  <span style={{ fontWeight: 800, color: '#7dd3fc' }}>{displayName}</span> 님,
+                  <span style={{ fontWeight: 800, color: '#7dd3fc' }}>{user?.displayName || 'Collector'}</span> 님,
                 </p>
-                <p style={{ fontSize: '20px', fontWeight: 300, color: '#ffffff', marginTop: '12px', opacity: 0.9, wordBreak: 'keep-all', lineHeight: 1.4 }}>
+                <p style={{
+                  fontSize: '20px', fontWeight: 300, color: '#ffffff', marginTop: '12px',
+                  opacity: 0.9, wordBreak: 'keep-all', lineHeight: 1.4
+                }}>
                   {shareItem.desc || "당신의 취향을 기록합니다."}
                 </p>
               </div>
