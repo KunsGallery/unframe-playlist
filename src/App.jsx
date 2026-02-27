@@ -196,6 +196,8 @@ const AppRoutes = memo(function AppRoutes({
             db={db}
             appId={appId}
             setToastMessage={setToastMessage}
+            setAuthError={(msg) => setToastMessage?.(msg)} // optional
+            signInWithPopup={() => signInWithPopup(auth, new GoogleAuthProvider())}  // ✅ 추가
           />
         }
       />
@@ -646,61 +648,64 @@ export default function App() {
   // ✅ Media Session: 메타데이터 + action handlers (아이폰 잠금화면 next/prev 핵심)
   useEffect(() => {
     if (!('mediaSession' in navigator)) return;
-
     const audio = audioRef.current;
 
-    // action handlers는 트랙이 없어도 미리 등록해두는 게 안정적
-    try {
-      navigator.mediaSession.setActionHandler('play', async () => {
-        if (!audio) return;
-        try {
-          await audio.play();
-          setIsPlaying(true);
-        } catch {}
-      });
-      navigator.mediaSession.setActionHandler('pause', () => {
-        if (!audio) return;
-        audio.pause();
-        setIsPlaying(false);
-      });
+    const safeSet = (action, handler) => {
+      try {
+        navigator.mediaSession.setActionHandler(action, handler);
+      } catch {
+        // iOS/Safari: unsupported action이면 throw됨 → 무시
+      }
+    };
 
-      navigator.mediaSession.setActionHandler('previoustrack', () => playPrev());
-      navigator.mediaSession.setActionHandler('nexttrack', () => playNext());
+    safeSet('play', async () => {
+      if (!audio) return;
+      try {
+        await audio.play();
+        setIsPlaying(true);
+        navigator.mediaSession.playbackState = 'playing';
+      } catch {}
+    });
 
-      navigator.mediaSession.setActionHandler('seekto', (details) => {
-        if (!audio) return;
-        if (typeof details.seekTime === 'number') {
-          audio.currentTime = details.seekTime;
-        }
-      });
+    safeSet('pause', () => {
+      if (!audio) return;
+      audio.pause();
+      setIsPlaying(false);
+      try { navigator.mediaSession.playbackState = 'paused'; } catch {}
+    });
 
-      navigator.mediaSession.setActionHandler('seekbackward', (details) => {
-        if (!audio) return;
-        const offset = details.seekOffset || 10;
-        audio.currentTime = Math.max(0, audio.currentTime - offset);
-      });
+    safeSet('previoustrack', () => playPrev());
+    safeSet('nexttrack', () => playNext());
 
-      navigator.mediaSession.setActionHandler('seekforward', (details) => {
-        if (!audio) return;
-        const offset = details.seekOffset || 10;
-        audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + offset);
-      });
+    safeSet('seekto', (details) => {
+      if (!audio) return;
+      if (typeof details.seekTime === 'number') audio.currentTime = details.seekTime;
+    });
 
-      navigator.mediaSession.setActionHandler('stop', () => {
-        if (!audio) return;
-        audio.pause();
-        audio.currentTime = 0;
-        setIsPlaying(false);
-      });
-    } catch {
-      // iOS 일부 버전에서 setActionHandler가 throw 될 수 있음
-    }
+    safeSet('seekbackward', (details) => {
+      if (!audio) return;
+      const offset = details.seekOffset || 10;
+      audio.currentTime = Math.max(0, audio.currentTime - offset);
+    });
 
-    // metadata는 currentTrack 기준
+    safeSet('seekforward', (details) => {
+      if (!audio) return;
+      const offset = details.seekOffset || 10;
+      audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + offset);
+    });
+
+    safeSet('stop', () => {
+      if (!audio) return;
+      audio.pause();
+      audio.currentTime = 0;
+      setIsPlaying(false);
+      try { navigator.mediaSession.playbackState = 'none'; } catch {}
+    });
+
+    // metadata
     if (!currentTrack) return;
 
     const artworkUrl = currentTrack.image ? getDirectLink(currentTrack.image) : "";
-
     try {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: currentTrack.title ?? 'UNFRAME',
@@ -1226,11 +1231,44 @@ export default function App() {
         </AnimatePresence>
 
         <audio
-          ref={audioRef}
-          onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-          onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-          playsInline
-        />
+         ref={audioRef}
+         onTimeUpdate={(e) => {
+          const a = e.currentTarget;
+          setCurrentTime(a.currentTime);
+
+          // ✅ iOS MediaSession positionState
+          try {
+           if ('mediaSession' in navigator && navigator.mediaSession.setPositionState) {
+        navigator.mediaSession.setPositionState({
+          duration: a.duration || 0,
+          playbackRate: a.playbackRate || 1,
+          position: a.currentTime || 0,
+        });
+      }
+    } catch {}
+  }}
+  onLoadedMetadata={(e) => {
+  const a = e.currentTarget;
+  setDuration(a.duration);
+
+  try {
+    const ms = navigator.mediaSession;
+
+    if (ms && typeof ms.setPositionState === 'function') {
+      ms.setPositionState({
+        duration: a.duration || 0,
+        playbackRate: a.playbackRate || 1,
+        position: a.currentTime || 0,
+      });
+    }
+  } catch (err) {}
+}}
+  onEnded={() => {
+   // ✅ addEventListener보다 이게 더 안정적인 경우 많음
+   playNext();
+  }}
+  playsInline
+/>
       </div>
     </Router>
   );
