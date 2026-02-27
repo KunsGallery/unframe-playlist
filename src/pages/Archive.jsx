@@ -1,5 +1,5 @@
 // src/pages/Archive.jsx
-import React, { useState, useMemo, useId } from 'react';
+import React, { useState, useMemo, useId, memo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   User, Camera, Music, Heart, Share2, Zap,
@@ -10,44 +10,52 @@ import {
 } from 'lucide-react';
 import { doc, updateDoc } from 'firebase/firestore';
 
-// 디자인 상수
 const glass = "bg-white/[0.03] backdrop-blur-[40px] border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]";
 const h1Title = "font-black uppercase tracking-[-0.07em] leading-[0.8] italic";
 const IMGBB_API_KEY = "d1d66a67fff0404d782a4a001dfb40e2";
 
-// ✅ src="" 방지
 const safeSrc = (v) => (typeof v === "string" && v.trim() ? v : null);
 
-// 🚀 Achievements (16)
+// ✅ (엔진/store.js 기준) Achievements
 const ACHIEVEMENT_LIBRARY = {
-  first_sound: { title: "첫 소리", desc: "아티팩트를 처음 활성화함", icon: Music, color: "#a78bfa", glow: "rgba(167, 139, 250, 0.5)" },
-  moment_10: { title: "10번의 순간", desc: "10곡의 소리를 깊게 감상함", icon: Zap, color: "#fbbf24", glow: "rgba(251, 191, 36, 0.5)" },
-  moment_100: { title: "심오한 감상자", desc: "100곡 이상의 소리를 기록함", icon: Trophy, color: "#fb7185", glow: "rgba(251, 113, 133, 0.5)" },
-  heart_1: { title: "첫 하트", desc: "취향의 기록을 시작함", icon: Heart, color: "#f87171", glow: "rgba(248, 113, 113, 0.5)" },
-  heart_50: { title: "취향 컬렉터", desc: "50개 이상의 아티팩트를 수집함", icon: Medal, color: "#f472b6", glow: "rgba(244, 114, 182, 0.5)" },
-  signal_1: { title: "첫 신호", desc: "소리의 파동을 외부로 전달함", icon: Share2, color: "#34d399", glow: "rgba(52, 211, 153, 0.5)" },
-  signal_10: { title: "신호의 대가", desc: "10회 이상 소리를 공유함", icon: Navigation, color: "#22d3ee", glow: "rgba(34, 211, 238, 0.5)" },
-  loyal_7: { title: "단골 거주자", desc: "7일 동안 공간에 머무름", icon: Calendar, color: "#fb923c", glow: "rgba(251, 146, 60, 0.5)" },
-  loyal_30: { title: "공간의 역사", desc: "30일 넘게 함께한 멤버", icon: Star, color: "#fef08a", glow: "rgba(254, 240, 138, 0.5)" },
-  night_owl: { title: "심야의 동반자", desc: "새벽 2시, 소리에 귀 기울임", icon: Moon, color: "#818cf8", glow: "rgba(129, 140, 248, 0.5)" },
-  early_bird: { title: "얼리 버드", desc: "아침의 시작을 소리와 함께함", icon: Coffee, color: "#f59e0b", glow: "rgba(245, 158, 11, 0.5)" },
-  weekend_art: { title: "주말의 여유", desc: "주말의 공기를 소리로 채움", icon: Sparkles, color: "#c084fc", glow: "rgba(192, 132, 252, 0.5)" },
-  repeater_3: { title: "다시 듣기", desc: "하나의 소리를 세 번 반복함", icon: Repeat, color: "#fb7185", glow: "rgba(251, 113, 133, 0.5)" },
-  nfc_explorer: { title: "공간의 교감", desc: "NFC를 통해 공간과 연결됨", icon: Smartphone, color: "#2dd4bf", glow: "rgba(45, 212, 191, 0.5)" },
-  long_voyage: { title: "긴 항해", desc: "1시간 이상 소리를 여행함", icon: Clock, color: "#94a3b8", glow: "rgba(148, 163, 184, 0.5)" },
-  archive_master: { title: "완벽한 아카이브", desc: "모든 곡을 수집함", icon: Ghost, color: "#f4f4f5", glow: "rgba(255, 255, 255, 0.4)" }
+  first_listen: { title: "첫 감상", desc: "처음으로 소리를 재생했습니다.", icon: Music, color: "#a78bfa", glow: "rgba(167, 139, 250, 0.5)" },
+  first_complete: { title: "첫 완주", desc: "처음으로 한 곡을 끝까지 감상했습니다.", icon: Trophy, color: "#fb7185", glow: "rgba(251, 113, 133, 0.5)" },
+  first_like: { title: "첫 좋아요", desc: "처음으로 좋아요를 남겼습니다.", icon: Heart, color: "#f87171", glow: "rgba(248, 113, 113, 0.5)" },
+  first_share: { title: "첫 공유", desc: "처음으로 아카이브 카드를 발급/공유했습니다.", icon: Share2, color: "#34d399", glow: "rgba(52, 211, 153, 0.5)" },
+
+  repeat_10: { title: "반복의 의식", desc: "같은 곡을 10번 이상 감상했습니다.", icon: Repeat, color: "#fb7185", glow: "rgba(251, 113, 133, 0.5)" },
+  complete_10: { title: "10번의 완주", desc: "완주(90%+)를 10회 달성했습니다.", icon: Zap, color: "#fbbf24", glow: "rgba(251, 191, 36, 0.5)" },
+  complete_50: { title: "50번의 완주", desc: "완주(90%+)를 50회 달성했습니다.", icon: Zap, color: "#f59e0b", glow: "rgba(245, 158, 11, 0.5)" },
+
+  daily_like_5: { title: "하루 5좋아요", desc: "하루에 5곡 이상 좋아요를 남겼습니다.", icon: Heart, color: "#f87171", glow: "rgba(248, 113, 113, 0.5)" },
+  share_10: { title: "10회 공유", desc: "카드를 10회 발급/공유했습니다.", icon: Navigation, color: "#22d3ee", glow: "rgba(34, 211, 238, 0.5)" },
+  all_tracks_liked: { title: "올 컬렉션", desc: "전체 곡을 좋아요 했습니다.", icon: Medal, color: "#a78bfa", glow: "rgba(167, 139, 250, 0.45)" },
+
+  streak_7: { title: "7일 연속 접속", desc: "7일 연속으로 공간에 머물렀습니다.", icon: Calendar, color: "#fb923c", glow: "rgba(251, 146, 60, 0.5)" },
+  streak_30: { title: "30일 연속 접속", desc: "30일 연속으로 공간에 머물렀습니다.", icon: Star, color: "#fef08a", glow: "rgba(254, 240, 138, 0.5)" },
+  streak_100: { title: "100일 동행", desc: "100일 연속으로 공간에 머물렀습니다.", icon: Star, color: "#ffd600", glow: "rgba(255, 214, 0, 0.45)" },
+
+  day_and_night: { title: "낮과 밤", desc: "낮과 밤 모두 감상했습니다.", icon: Moon, color: "#818cf8", glow: "rgba(129, 140, 248, 0.5)" },
+  weekend_listener: { title: "주말의 여유", desc: "주말에 감상했습니다.", icon: Sparkles, color: "#c084fc", glow: "rgba(192, 132, 252, 0.5)" },
+
+  playlist_trinity: { title: "큐레이션 완주", desc: "OST/CEO/Director’s pick 플레이리스트를 모두 감상했습니다.", icon: Target, color: "#2dd4bf", glow: "rgba(45, 212, 191, 0.5)" },
 };
 
-// 🚀 Sticker Book (collective)
+// ✅ Sticker Book (collective + batch)
 const COLLECTIVE_LIBRARY = {
-  eternal_origin: { title: "Eternal Signal: The Origin", desc: "UNFRAME의 시작을 함께한 위대한 개척자", icon: Flame, color: "#ef4444", shape: 'hex' },
-  unframe_genesis: { title: "The Genesis", desc: "갤러리 정식 오픈 멤버", icon: Crown, color: "#fbbf24", shape: 'circle' },
+  eternal_origin: { title: "Eternal Signal: The Origin", desc: "UNFRAME의 시작을 함께한 개척자", icon: Flame, color: "#ef4444", shape: 'hex' },
+  unframe_genesis: { title: "The Genesis", desc: "갤러리 정식 오픈 멤버", icon: Crown, color: "#fbbf24", shape: 'hex' },
   new_year_2026: { title: "2026 First Light", desc: "2026년 첫 해돋이 기록", icon: Sunrise, color: "#fb7185", shape: 'hex' },
   pioneer_26: { title: "Pioneer 26", desc: "프로젝트 초기 개척자", icon: Target, color: "#2dd4bf", shape: 'hex' },
-  insadong_wave: { title: "Insadong First Wave", desc: "인사동 공간의 첫 번째 파동", icon: Sparkles, color: "#3b82f6", shape: 'circle' }
+  insadong_wave: { title: "Insadong First Wave", desc: "인사동 공간의 첫 번째 파동", icon: Sparkles, color: "#3b82f6", shape: 'hex' },
+
+  // ✅ 배치 지급 예시(Admin에서 지급)
+  annual_bronze_2026: { title: "2026 Bronze", desc: "2026년 기록 정산 브론즈", icon: Medal, color: "#cd7f32", shape: 'hex' },
+  annual_silver_2026: { title: "2026 Silver", desc: "2026년 기록 정산 실버", icon: Medal, color: "#c0c0c0", shape: 'hex' },
+  annual_gold_2026: { title: "2026 Gold", desc: "2026년 기록 정산 골드", icon: Trophy, color: "#fbbf24", shape: 'hex' },
 };
 
-// ✅ 6각형 SVG clipPath 쉘 (2.2)
+// ✅ 6각형 SVG clipPath 쉘
 const HexShell = ({ children, border = "rgba(255,255,255,0.18)", className = "" }) => {
   const maskId = useId();
   return (
@@ -69,14 +77,127 @@ const HexShell = ({ children, border = "rgba(255,255,255,0.18)", className = "" 
   );
 };
 
+// ✅ Sticker Item (memo) - hover/scale 안정
+const StickerItem = memo(function StickerItem({
+  id,
+  data,
+  isActive,
+  type,
+  hoveredSticker,
+  setHoveredSticker,
+  onShareReward,
+}) {
+  const isAchievement = type === 'achievement';
+  const isCollective = type === 'collective';
+
+  const Icon = data?.icon;
+  const safeTitle = data?.title ?? "Artifact";
+  const safeDesc = data?.desc ?? "";
+  const safeColor = data?.color ?? "#7dd3fc";
+  const safeGlow = data?.glow ?? "rgba(125,211,252,0.35)";
+
+  // 스티커북은 6각형
+  const useHex = isCollective;
+
+  const core = (
+    <div
+      className={`w-full h-full flex items-center justify-center border-2 overflow-hidden transition-all duration-700
+        ${isAchievement ? 'rounded-2xl bg-zinc-900/50' : (useHex ? '' : 'rounded-full')}
+        ${isActive ? 'border-white/20' : 'border-white/5 bg-black/20'}`}
+      style={{
+        boxShadow: (isActive && isAchievement) ? `0 0 20px ${safeGlow}` : 'none',
+        background: (isActive && isAchievement) ? `radial-gradient(circle at center, ${safeGlow} 0%, transparent 70%)` : ''
+      }}
+    >
+      {Icon ? (
+        <Icon
+          className={`w-1/2 h-1/2 ${isActive ? '' : 'grayscale opacity-30'}`}
+          style={{ color: isActive ? safeColor : 'white' }}
+        />
+      ) : (
+        <div className="text-white/20 text-[10px] font-black uppercase">N/A</div>
+      )}
+    </div>
+  );
+
+  return (
+    <div
+      onMouseEnter={() => setHoveredSticker(id)}
+      onMouseLeave={() => setHoveredSticker(null)}
+      onClick={(e) => isActive && onShareReward?.(e, id)}
+      className={`relative aspect-square flex items-center justify-center transition-opacity duration-300 ${isActive ? 'cursor-pointer' : 'opacity-40 hover:opacity-70'}`}
+    >
+      <div className={`w-full h-full transition-transform duration-300 ${isActive ? 'hover:scale-110' : ''}`}>
+        {useHex ? (
+          <HexShell border={isActive ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.06)"}>
+            {core}
+          </HexShell>
+        ) : (
+          core
+        )}
+      </div>
+
+      {!isActive && <Lock className="absolute w-4 h-4 text-white/20 z-10" />}
+
+      <AnimatePresence>
+        {hoveredSticker === id && (
+          <motion.div
+            initial={{ opacity: 0, y: 15, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10 }}
+            className="absolute bottom-full left-1/2 -translate-x-1/2 mb-6 z-200 w-56 pointer-events-none"
+          >
+            <div className="bg-[#0c0c0e] border border-white/20 p-4 rounded-3xl shadow-[0_30px_70px_rgba(0,0,0,0.9)] text-center backdrop-blur-3xl">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1.5" style={{ color: isActive ? safeColor : '#71717a' }}>
+                {isActive ? 'Unlocked' : 'Locked Artifact'}
+              </p>
+              <h4 className="text-sm font-black text-white mb-1 uppercase tracking-tight">{safeTitle}</h4>
+              <p className="text-[10px] leading-relaxed text-zinc-400 font-bold uppercase">
+                {isActive ? safeDesc : "아직 기록되지 않은 순간입니다."}
+              </p>
+              <div className="absolute top-full left-1/2 -translate-x-1/2 w-3 h-3 bg-[#0c0c0e] border-r border-b border-white/20 rotate-45 -translate-y-1.5" />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+});
+
 export default function Archive({
-  user, userProfile, membership, userLikes = [], tracks = [],
-  handleShare, signOut, setSelectedTrack, db, appId,
-  handleGoogleLogin, allUsers = []
+  user,
+  userProfile,
+  membership,
+  userLikes = [],
+  tracks = [],
+  handleShare,
+  signOut,
+  setSelectedTrack,
+  db,
+  appId,
+  handleGoogleLogin,
+  allUsers = [],
 }) {
   const [activeTab, setActiveTab] = useState('hearts');
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
   const [hoveredSticker, setHoveredSticker] = useState(null);
+
+  // ✅ rewards(object[]) -> id Set
+  const rewardIds = useMemo(() => {
+    const arr = userProfile?.rewards;
+    if (!Array.isArray(arr) || arr.length === 0) return new Set();
+    if (typeof arr[0] === "string") return new Set(arr);
+    return new Set(arr.map(r => r?.id).filter(Boolean));
+  }, [userProfile?.rewards]);
+
+  // ✅ reward id -> reward object
+  const rewardMap = useMemo(() => {
+    const m = new Map();
+    const arr = userProfile?.rewards;
+    if (!Array.isArray(arr)) return m;
+    for (const r of arr) if (r?.id) m.set(r.id, r);
+    return m;
+  }, [userProfile?.rewards]);
 
   const myRank = useMemo(() => {
     if (!user || !allUsers?.length) return '?';
@@ -85,15 +206,24 @@ export default function Archive({
   }, [user, allUsers]);
 
   const profileBorderStyle = useMemo(() => {
-    if (membership?.name === 'Family' || userProfile?.rewards?.includes('archive_master')) {
+    if (membership?.name === 'Family' || rewardIds.has('archive_master')) {
       return "before:absolute before:inset-[-6px] before:rounded-full before:bg-gradient-to-r before:from-[#a78bfa] before:via-[#fb7185] before:to-[#60a5fa] before:animate-spin-slow before:-z-10 shadow-[0_0_35px_rgba(167,139,250,0.4)]";
     }
     return "border-4 border-white/10";
-  }, [membership, userProfile]);
+  }, [membership, rewardIds]);
+
+  const achievementCount = useMemo(
+    () => Array.from(rewardIds).filter(id => ACHIEVEMENT_LIBRARY[id]).length,
+    [rewardIds]
+  );
+  const collectiveCount = useMemo(
+    () => Array.from(rewardIds).filter(id => COLLECTIVE_LIBRARY[id]).length,
+    [rewardIds]
+  );
 
   const handleProfileImageUpload = async (e) => {
     const file = e.target.files?.[0];
-    if (!file || !user) return;
+    if (!file || !user || !db) return;
 
     setIsUploadingProfile(true);
 
@@ -109,6 +239,7 @@ export default function Archive({
           const canvas = document.createElement('canvas');
           canvas.width = 512;
           canvas.height = 512;
+
           const ctx = canvas.getContext('2d');
           if (!ctx) { setIsUploadingProfile(false); return; }
 
@@ -148,82 +279,19 @@ export default function Archive({
     }
   };
 
-  // ✅ hover 무한 반복 해결: 바깥은 크기 고정, scale은 안쪽 래퍼만 (2.3 포함)
-  const StickerItem = ({ id, data, isActive, type }) => {
-    const isAchievement = type === 'achievement';
-    const isCollective = type === 'collective';
+  // ✅ reward 공유 핸들러: unlockedAt 포함해서 App 카드로 전달
+  const onShareReward = useCallback((e, id) => {
+    const data = ACHIEVEMENT_LIBRARY[id] || COLLECTIVE_LIBRARY[id];
+    if (!data) return;
 
-    const Icon = data?.icon;
-    const safeTitle = data?.title ?? "Artifact";
-    const safeDesc = data?.desc ?? "";
-    const safeColor = data?.color ?? "#7dd3fc";
-    const safeGlow = data?.glow ?? "rgba(125,211,252,0.35)";
-
-    // 스티커북은 무조건 6각형
-    const useHex = isCollective;
-
-    const core = (
-      <div
-        className={`w-full h-full flex items-center justify-center border-2 overflow-hidden transition-all duration-700
-          ${isAchievement ? 'rounded-2xl bg-zinc-900/50' : (useHex ? '' : 'rounded-full')}
-          ${isActive ? 'border-white/20' : 'border-white/5 bg-black/20'}`}
-        style={{
-          boxShadow: (isActive && isAchievement) ? `0 0 20px ${safeGlow}` : 'none',
-          background: (isActive && isAchievement) ? `radial-gradient(circle at center, ${safeGlow} 0%, transparent 70%)` : ''
-        }}
-      >
-        {Icon ? (
-          <Icon className={`w-1/2 h-1/2 ${isActive ? '' : 'grayscale opacity-30'}`} style={{ color: isActive ? safeColor : 'white' }} />
-        ) : (
-          <div className="text-white/20 text-[10px] font-black uppercase">N/A</div>
-        )}
-      </div>
-    );
-
-    return (
-      <div
-        onMouseEnter={() => setHoveredSticker(id)}
-        onMouseLeave={() => setHoveredSticker(null)}
-        onClick={(e) => isActive && handleShare?.(e, { ...data, id }, 'reward')}
-        className={`relative aspect-square flex items-center justify-center transition-opacity duration-300 ${isActive ? 'cursor-pointer' : 'opacity-40 hover:opacity-70'}`}
-      >
-        {/* ✅ scale은 내부에서만 */}
-        <div className={`w-full h-full transition-transform duration-300 ${isActive ? 'hover:scale-110' : ''}`}>
-          {useHex ? (
-            <HexShell border={isActive ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.06)"}>
-              {core}
-            </HexShell>
-          ) : (
-            core
-          )}
-        </div>
-
-        {!isActive && <Lock className="absolute w-4 h-4 text-white/20 z-10" />}
-
-        <AnimatePresence>
-          {hoveredSticker === id && (
-            <motion.div
-              initial={{ opacity: 0, y: 15, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 10 }}
-              className="absolute bottom-full left-1/2 -translate-x-1/2 mb-6 z-200 w-56 pointer-events-none"
-            >
-              <div className="bg-[#0c0c0e] border border-white/20 p-4 rounded-3xl shadow-[0_30px_70px_rgba(0,0,0,0.9)] text-center backdrop-blur-3xl">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1.5" style={{ color: isActive ? safeColor : '#71717a' }}>
-                  {isActive ? 'Unlocked' : 'Locked Artifact'}
-                </p>
-                <h4 className="text-sm font-black text-white mb-1 uppercase tracking-tight">{safeTitle}</h4>
-                <p className="text-[10px] leading-relaxed text-zinc-400 font-bold uppercase">
-                  {isActive ? safeDesc : "아직 기록되지 않은 순간입니다."}
-                </p>
-                <div className="absolute top-full left-1/2 -translate-x-1/2 w-3 h-3 bg-[#0c0c0e] border-r border-b border-white/20 rotate-45 -translate-y-1.5" />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-    );
-  };
+    const r = rewardMap.get(id);
+    handleShare?.(e, {
+      ...data,
+      id,
+      type: 'reward',
+      unlockedAt: r?.unlockedAt || null,
+    }, 'reward');
+  }, [handleShare, rewardMap]);
 
   // 로그인 안 된 경우
   if (!user) {
@@ -269,13 +337,14 @@ export default function Archive({
                 </div>
               </div>
 
+              {/* ✅ membership = 레벨 배지(App에서 계산됨) */}
               {membership && (
                 <div
                   className="absolute -bottom-2 -right-2 px-4 py-1.5 rounded-full text-[9px] lg:text-[10px] font-black uppercase border border-white/10 shadow-2xl flex items-center gap-1.5 z-30"
                   style={{ color: membership.color || "#fff", backgroundColor: membership.bg || "rgba(255,255,255,0.08)" }}
                 >
                   {membership.icon ? React.createElement(membership.icon, { className: "w-3 h-3" }) : null}
-                  {membership.name || "HELLO"}
+                  {membership.name || "USER"}
                 </div>
               )}
             </div>
@@ -310,12 +379,21 @@ export default function Archive({
               <h3 className="text-[9px] font-black uppercase tracking-[0.4em] flex items-center gap-3 text-zinc-400">
                 <Medal className="w-3 h-3 text-[#a78bfa]" /> Achievements
               </h3>
-              <p className="text-[8px] font-black text-[#a78bfa]">{userProfile?.rewards?.filter(r => ACHIEVEMENT_LIBRARY[r]).length || 0} / 16</p>
+              <p className="text-[8px] font-black text-[#a78bfa]">{achievementCount} / {Object.keys(ACHIEVEMENT_LIBRARY).length}</p>
             </div>
 
             <div className="grid grid-cols-4 gap-3 relative overflow-visible">
               {Object.entries(ACHIEVEMENT_LIBRARY).map(([key, data]) => (
-                <StickerItem key={key} id={key} data={data} isActive={userProfile?.rewards?.includes(key)} type="achievement" />
+                <StickerItem
+                  key={key}
+                  id={key}
+                  data={data}
+                  isActive={rewardIds.has(key)}
+                  type="achievement"
+                  hoveredSticker={hoveredSticker}
+                  setHoveredSticker={setHoveredSticker}
+                  onShareReward={onShareReward}
+                />
               ))}
             </div>
           </div>
@@ -389,7 +467,7 @@ export default function Archive({
                     </div>
                     <div className="text-right">
                       <p className="text-4xl font-black italic text-white">
-                        {userProfile?.rewards?.filter(r => COLLECTIVE_LIBRARY[r]).length || 0}
+                        {collectiveCount}
                         <span className="text-xl text-zinc-600 ml-1">/ 30</span>
                       </p>
                     </div>
@@ -398,7 +476,7 @@ export default function Archive({
                   <div className="h-4 bg-black/40 rounded-full overflow-hidden p-1 border border-white/5 shadow-inner">
                     <motion.div
                       initial={{ width: 0 }}
-                      animate={{ width: `${((userProfile?.rewards?.filter(r => COLLECTIVE_LIBRARY[r]).length || 0) / 30) * 100}%` }}
+                      animate={{ width: `${Math.min((collectiveCount / 30) * 100, 100)}%` }}
                       className="h-full bg-linear-to-r from-[#fb7185] via-[#fbbf24] to-[#34d399] rounded-full shadow-[0_0_20px_rgba(251,113,133,0.6)]"
                     />
                   </div>
@@ -406,13 +484,21 @@ export default function Archive({
 
                 <div className="grid grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-5 lg:gap-6 overflow-visible">
                   {Object.entries(COLLECTIVE_LIBRARY).map(([key, data]) => (
-                    <StickerItem key={key} id={key} data={data} isActive={userProfile?.rewards?.includes(key)} type="collective" />
+                    <StickerItem
+                      key={key}
+                      id={key}
+                      data={data}
+                      isActive={rewardIds.has(key)}
+                      type="collective"
+                      hoveredSticker={hoveredSticker}
+                      setHoveredSticker={setHoveredSticker}
+                      onShareReward={onShareReward}
+                    />
                   ))}
 
-                  {/* 빈 슬롯도 6각형 */}
                   {[...Array(25)].map((_, i) => (
                     <HexShell key={i} border="rgba(255,255,255,0.06)">
-                      <div className="w-full h-full flex items-center justify-center bg-white/[0.02]">
+                      <div className="w-full h-full flex items-center justify-center bg-white/2">
                         <Layers size={18} className="text-white/20" />
                       </div>
                     </HexShell>
@@ -442,7 +528,6 @@ export default function Archive({
 
         @keyframes spin-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .animate-spin-slow { animation: spin-slow 12s linear infinite; }
-        .container { perspective: 2000px; }
       `}</style>
     </motion.div>
   );

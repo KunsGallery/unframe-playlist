@@ -16,16 +16,16 @@ const MiniPlayer = ({
       animate={{ y: 0, opacity: 1 }} 
       exit={{ y: 150, opacity: 0 }} 
       transition={{ type: "spring", stiffness: 150, damping: 20 }} 
-      className="fixed bottom-4 lg:bottom-10 left-0 w-full z-[200] px-4 lg:px-8 flex justify-center cursor-pointer"
+      className="fixed bottom-4 lg:bottom-10 left-0 w-full z-200 px-4 lg:px-8 flex justify-center cursor-pointer"
       onClick={() => setIsPlayerExpanded(true)}
     >
       {/* 🚀 relative 그룹: overflow 설정을 하지 않음 (볼륨바 노출 위함) */}
-      <div className={`${glass} w-full max-w-5xl p-2.5 px-3 lg:p-4 lg:px-6 rounded-[2rem] lg:rounded-full flex items-center justify-between border-white/20 shadow-2xl group/mini relative`}>
+      <div className={`${glass} w-full max-w-5xl p-2.5 px-3 lg:p-4 lg:px-6 rounded-4xl lg:rounded-full flex items-center justify-between border-white/20 shadow-2xl group/mini relative`}>
         
         {/* 🚀 [수정됨] 배경만 따로 absolute로 빼서 overflow-hidden 적용 */}
-        <div className="absolute inset-0 rounded-[2rem] lg:rounded-full overflow-hidden pointer-events-none z-0">
-            <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-[#004aad]/20 via-[#004aad]/40 to-[#004aad]/60 transition-all duration-300 ease-linear" style={{ width: `${progressPct}%` }}>
-                <div className="absolute right-0 top-0 bottom-0 w-[2px] bg-blue-400 shadow-[0_0_15px_2px_rgba(59,130,246,1)] box-content" />
+        <div className="absolute inset-0 rounded-4xl lg:rounded-full overflow-hidden pointer-events-none z-0">
+            <div className="absolute inset-y-0 left-0 bg-linear-to-r from-[#004aad]/20 via-[#004aad]/40 to-[#004aad]/60 transition-all duration-300 ease-linear" style={{ width: `${progressPct}%` }}>
+                <div className="absolute right-0 top-0 bottom-0 w-0.5 bg-blue-400 shadow-[0_0_15px_2px_rgba(59,130,246,1)] box-content" />
             </div>
         </div>
 
@@ -48,7 +48,7 @@ const MiniPlayer = ({
                     {isMuted || volume === 0 ? <VolumeX className="w-5 h-5 lg:w-6 lg:h-6" /> : <Volume2 className="w-5 h-5 lg:w-6 lg:h-6" />}
                 </button>
                 {/* 🚀 이제 여기가 잘리지 않습니다! */}
-                <div className="absolute bottom-[120%] mb-2 w-10 h-32 bg-zinc-900 border border-white/10 rounded-[2rem] opacity-0 invisible group-hover/vol:opacity-100 group-hover/vol:visible transition-all flex flex-col items-center justify-center shadow-2xl z-50">
+                <div className="absolute bottom-[120%] mb-2 w-10 h-32 bg-zinc-900 border border-white/10 rounded-4xl opacity-0 invisible group-hover/vol:opacity-100 group-hover/vol:visible transition-all flex flex-col items-center justify-center shadow-2xl z-50">
                     <input
                       type="range"
                       min="0"

@@ -63,13 +63,14 @@ export default function Home({
     return (tracks || []).filter(t => t?.id && likeSet.has(t.id));
   }, [tracks, userLikes]);
 
-  // ✅ 1.2: 안전 재생 래퍼
-  const safePlay = useCallback((idx, queue) => {
+  // ✅ 1.1: 안전 재생 래퍼 + context(playlistId) 전달 지원
+  const safePlay = useCallback((idx, queue, context = null) => {
     if (typeof playTrack !== "function") return;
     const q = Array.isArray(queue) ? queue.filter(Boolean) : [];
     if (q.length === 0) return;
     const i = Math.max(0, Math.min(idx ?? 0, q.length - 1));
-    playTrack(i, q);
+    // ✅ 1.1: App.jsx의 playTrack(idx, queue, context)로 전달
+    playTrack(i, q, context ?? undefined);
   }, [playTrack]);
 
   // IG widget script
@@ -145,11 +146,13 @@ export default function Home({
     return () => container.removeEventListener('wheel', handleWheel);
   }, []);
 
-  // ✅ 1.3: 모달 데이터 정규화(절대 안 터짐)
+  // ✅ 모달 데이터 정규화(절대 안 터짐)
   const normalizedSelectedPlaylist = useMemo(() => {
     if (!selectedPlaylist) return null;
     return {
       ...selectedPlaylist,
+      // ✅ 1.1: playlistId 확보 (Firestore playlist는 id가 있음 / liked는 직접 넣음)
+      id: selectedPlaylist.id ?? selectedPlaylist.playlistId ?? selectedPlaylist.title ?? "playlist",
       title: selectedPlaylist.title ?? "Playlist",
       desc: selectedPlaylist.desc ?? "",
       image: selectedPlaylist.image ?? "",
@@ -202,7 +205,11 @@ export default function Home({
                   </p>
 
                   <button
-                    onClick={() => { safePlay(0, normalizedSelectedPlaylist.items); setSelectedPlaylist(null); }}
+                    onClick={() => {
+                      // ✅ 1.1: playlistId 전달
+                      safePlay(0, normalizedSelectedPlaylist.items, { playlistId: normalizedSelectedPlaylist.id });
+                      setSelectedPlaylist(null);
+                    }}
                     className="px-8 py-3 bg-[#004aad] text-white rounded-full font-black uppercase text-xs tracking-widest hover:bg-white hover:text-black transition-all flex items-center gap-2 shadow-xl mt-4"
                   >
                     <Play className="w-4 h-4 fill-current" /> Play Playlist
@@ -216,7 +223,7 @@ export default function Home({
                   return (
                     <div
                       key={track?.id ?? `${idx}`}
-                      onClick={() => safePlay(idx, normalizedSelectedPlaylist.items)}
+                      onClick={() => safePlay(idx, normalizedSelectedPlaylist.items, { playlistId: normalizedSelectedPlaylist.id })} // ✅ 1.1
                       className="flex items-center gap-4 p-3 rounded-xl hover:bg-white/5 cursor-pointer group transition-colors border-b border-white/5 last:border-0"
                     >
                       <div className="w-8 text-center text-zinc-600 font-bold text-xs">{idx + 1}</div>
@@ -307,7 +314,11 @@ export default function Home({
 
               {featuredTrack && (
                 <button
-                  onClick={(e) => { e.stopPropagation(); safePlay(0, [featuredTrack]); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    // ✅ 1.1: directors_pick playlistId로 기록 가능
+                    safePlay(0, [featuredTrack], { playlistId: 'directors_pick' });
+                  }}
                   className="flex items-center gap-3 px-8 py-4 bg-white text-black rounded-full font-black uppercase text-xs tracking-widest hover:bg-[#004aad] hover:text-white transition-all"
                 >
                   <Play className="w-4 h-4 fill-current" /> Play Selection
@@ -326,7 +337,7 @@ export default function Home({
                   )}
 
                   <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={(e) => { e.stopPropagation(); safePlay(0, [featuredTrack]); }}>
+                    <button onClick={(e) => { e.stopPropagation(); safePlay(0, [featuredTrack], { playlistId: 'directors_pick' }); }}>
                       <Play className="w-16 h-16 text-white fill-white hover:scale-110 transition-transform" />
                     </button>
                   </div>
@@ -441,7 +452,7 @@ export default function Home({
           <motion.div
             initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}
             className="snap-start shrink-0 w-32 md:w-40 lg:w-48 group cursor-pointer"
-            onClick={() => setSelectedPlaylist({ title: "My Liked Songs", desc: "내가 수집한 취향의 조각들", isLike: true, items: myLikedTracks })}
+            onClick={() => setSelectedPlaylist({ id: 'liked', title: "My Liked Songs", desc: "내가 수집한 취향의 조각들", isLike: true, items: myLikedTracks })}
           >
             <div className="aspect-square rounded-3xl overflow-hidden mb-4 relative shadow-lg border border-white/10 bg-linear-to-br from-red-500/20 to-pink-500/20 flex items-center justify-center">
               <Heart className="w-10 h-10 text-red-500 fill-current drop-shadow-[0_0_15px_rgba(239,68,68,0.5)]" />
@@ -466,7 +477,7 @@ export default function Home({
                 initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}
                 transition={{ delay: 0.1 * idx }}
                 className="snap-start shrink-0 w-32 md:w-40 lg:w-48 group cursor-pointer"
-                onClick={() => setSelectedPlaylist({ ...pl, items: plItems })}
+                onClick={() => setSelectedPlaylist({ ...pl, items: plItems })} // ✅ pl.id 유지됨
               >
                 <div className="aspect-square rounded-3xl overflow-hidden mb-4 relative shadow-lg border border-white/10 bg-zinc-900 flex items-center justify-center">
                   {plImg ? (

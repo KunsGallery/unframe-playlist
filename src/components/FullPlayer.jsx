@@ -38,9 +38,9 @@ const FullPlayer = ({
     <motion.div 
       key="full-player"
       initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ duration: 0.3, ease: "easeInOut" }} 
-      className="fixed inset-0 z-[400] bg-zinc-950 flex flex-col pt-safe-top"
+      className="fixed inset-0 z-400 bg-zinc-950 flex flex-col pt-safe-top"
     >
-        <div className="flex items-center justify-between p-6 px-8 relative z-10 bg-gradient-to-b from-zinc-950 to-transparent">
+        <div className="flex items-center justify-between p-6 px-8 relative z-10 bg-linear-to-b from-zinc-950 to-transparent">
           <button onClick={() => setIsPlayerExpanded(false)} className="p-2 -ml-2 text-white/70 hover:text-white"><ChevronDown className="w-8 h-8" /></button>
           <div className="text-center flex-1"><p className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.3em]">Now Playing</p><p className="text-xs font-black uppercase text-white mt-1">Unframe Project UP</p></div><div className="w-8 h-8" /> 
         </div>
@@ -101,7 +101,7 @@ const FullPlayer = ({
           </AnimatePresence>
         </div>
 
-        <div className="p-8 pb-12 lg:pb-16 w-full max-w-2xl mx-auto space-y-8 bg-gradient-to-t from-black via-zinc-950/90 to-transparent relative z-10">
+        <div className="p-8 pb-12 lg:pb-16 w-full max-w-2xl mx-auto space-y-8 bg-linear-to-t from-black via-zinc-950/90 to-transparent relative z-10">
           <div className="flex items-end justify-between gap-4">
             <div className="min-w-0"><h2 className="text-3xl lg:text-4xl font-black uppercase tracking-tighter truncate text-white">{currentTrack.title}</h2><p className="text-sm lg:text-lg font-bold text-[#004aad] uppercase tracking-widest mt-2 truncate">{currentTrack.artist}</p></div>
             <button onClick={(e) => handleToggleLike(e, currentTrack.id)} className={`p-3 rounded-full transition-all ${userLikes.includes(currentTrack.id) ? 'bg-red-500/10 text-red-500' : 'bg-white/5 text-white'}`}><Heart className={`w-7 h-7 ${userLikes.includes(currentTrack.id) ? 'fill-current' : ''}`} /></button>
