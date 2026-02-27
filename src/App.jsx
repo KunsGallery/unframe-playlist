@@ -1118,78 +1118,46 @@ export default function App() {
               fontFamily: "'Inter', 'Pretendard', sans-serif"
             }}
           >
-            <div style={{
-              width: '560px', height: '810px', border: '1.5px solid #7dd3fc', position: 'relative',
-              overflow: 'hidden', display: 'flex', flexDirection: 'column', alignItems: 'center',
-              justifyContent: 'space-between', padding: '60px 40px', boxSizing: 'border-box'
-            }}>
+            <div style={{ width: '560px', height: '810px', border: '1.5px solid #7dd3fc', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', padding: '60px 40px', boxSizing: 'border-box' }}>
 
-              {/* 4모서리 내부 곡선 장식 */}
+              {/* corners */}
               <svg style={{ position: 'absolute', top: '10px', left: '10px', width: '40px', height: '40px', fill: 'none', stroke: '#7dd3fc', strokeWidth: '1.5' }} viewBox="0 0 40 40"><path d="M0,40 A40,40 0 0,1 40,0" /></svg>
               <svg style={{ position: 'absolute', top: '10px', right: '10px', width: '40px', height: '40px', fill: 'none', stroke: '#7dd3fc', strokeWidth: '1.5', transform: 'rotate(90deg)' }} viewBox="0 0 40 40"><path d="M0,40 A40,40 0 0,1 40,0" /></svg>
               <svg style={{ position: 'absolute', bottom: '10px', left: '10px', width: '40px', height: '40px', fill: 'none', stroke: '#7dd3fc', strokeWidth: '1.5', transform: 'rotate(-90deg)' }} viewBox="0 0 40 40"><path d="M0,40 A40,40 0 0,1 40,0" /></svg>
               <svg style={{ position: 'absolute', bottom: '10px', right: '10px', width: '40px', height: '40px', fill: 'none', stroke: '#7dd3fc', strokeWidth: '1.5', transform: 'rotate(180deg)' }} viewBox="0 0 40 40"><path d="M0,40 A40,40 0 0,1 40,0" /></svg>
 
-              {/* 상단 타이틀 및 곡선 라인 */}
+              {/* title + curve */}
               <div style={{ textAlign: 'center', position: 'relative', width: '100%' }}>
-                <h1 style={{
-                  fontSize: '56px', fontWeight: 300, color: '#ffffff', letterSpacing: '0.1em',
-                  margin: 0, textShadow: '0 0 10px rgba(125, 211, 252, 0.5)',
-                  position: 'relative', zIndex: 2
-                }}>
-                  {shareItem.title || "UNFRAME"}
+                <h1 style={{ fontSize: '56px', fontWeight: 300, color: '#ffffff', letterSpacing: '0.1em', margin: 0, textShadow: '0 0 10px rgba(125, 211, 252, 0.5)', position: 'relative', zIndex: 2 }}>
+                  {shareItem.title}
                 </h1>
-                <svg style={{
-                  position: 'absolute', top: '70px', left: '50%', transform: 'translateX(-50%)',
-                  width: '380px', height: '60px', fill: 'none', stroke: '#7dd3fc',
-                  strokeWidth: 1, opacity: 0.6, zIndex: 1
-                }}>
+                <svg style={{ position: 'absolute', top: '45px', left: '50%', transform: 'translateX(-50%)', width: '380px', height: '60px', fill: 'none', stroke: '#7dd3fc', strokeWidth: 1, opacity: 0.6, zIndex: 1 }}>
                   <path d="M0,30 Q190,-20 380,30" />
                 </svg>
               </div>
 
-              {/* 중앙 아이콘 */}
+              {/* icon */}
               <div style={{ position: 'relative', width: '320px', height: '320px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <div style={{
-                  position: 'absolute', width: '260px', height: '260px',
-                  background: `radial-gradient(circle, ${shareItem.color || '#7dd3fc'}44 0%, transparent 60%)`,
-                  filter: 'blur(50px)', zIndex: 1, mixBlendMode: 'screen'
-                }} />
-
-                <div style={{
-                  zIndex: 5,
-                  filter: `drop-shadow(0 0 8px ${shareItem.color || '#7dd3fc'}) drop-shadow(0 0 15px ${(shareItem.color || '#7dd3fc')}66)`
-                }}>
-                  {shareItem.type === 'reward' ? (
-                    shareItem.icon
-                      ? React.createElement(shareItem.icon, { size: 180, color: '#ffffff', strokeWidth: 1.5 })
-                      : <Heart size={180} color="#ffffff" strokeWidth={1.5} />
-                  ) : (
-                    shareItem.image
-                      ? (
-                        <div style={{ width: '200px', height: '200px', border: '4px solid #ffffff', borderRadius: '40px', overflow: 'hidden' }}>
-                          <img
-                            src={shareItem.image}
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                            crossOrigin="anonymous"
-                            alt=""
-                          />
+                <div style={{ position: 'absolute', width: '260px', height: '260px', background: `radial-gradient(circle, ${shareItem.color || '#7dd3fc'}44 0%, transparent 60%)`, filter: 'blur(50px)', zIndex: 1, mixBlendMode: 'screen' }} />
+                <div style={{ zIndex: 5, filter: `drop-shadow(0 0 8px ${shareItem.color || '#7dd3fc'}) drop-shadow(0 0 15px ${shareItem.color || '#7dd3fc'}66)` }}>
+                  {shareItem.type === 'reward'
+                    ? React.createElement(shareItem.icon || Heart, { size: 180, color: '#ffffff', strokeWidth: 1.5 })
+                    : (shareItem.image
+                      ? <div style={{ width: '200px', height: '200px', border: '4px solid #ffffff', borderRadius: '40px', overflow: 'hidden' }}>
+                          <img src={shareItem.image} style={{ width: '100%', height: '100%', objectFit: 'cover' }} crossOrigin="anonymous" alt="" />
                         </div>
-                      )
                       : <Music size={150} color="#ffffff" />
-                  )}
+                    )
+                  }
                 </div>
               </div>
 
-              {/* 유저 이름 및 설명 */}
+              {/* user + desc */}
               <div style={{ textAlign: 'center', zIndex: 10, width: '80%' }}>
                 <p style={{ fontSize: '26px', fontWeight: 400, color: '#ffffff', margin: 0 }}>
                   <span style={{ fontWeight: 800, color: '#7dd3fc' }}>{user?.displayName || 'Collector'}</span> 님,
                 </p>
-                <p style={{
-                  fontSize: '20px', fontWeight: 300, color: '#ffffff', marginTop: '12px',
-                  opacity: 0.9, wordBreak: 'keep-all', lineHeight: 1.4
-                }}>
+                <p style={{ fontSize: '20px', fontWeight: 300, color: '#ffffff', marginTop: '12px', opacity: 0.9, wordBreak: 'keep-all', lineHeight: 1.4 }}>
                   {shareItem.desc || "당신의 취향을 기록합니다."}
                 </p>
               </div>
@@ -1202,6 +1170,14 @@ export default function App() {
                 </p>
                 <p style={{ fontSize: '22px', fontWeight: 900, color: '#ffffff', letterSpacing: '0.15em', textShadow: '0 0 10px rgba(125, 211, 252, 0.3)' }}>UNFRAME PLAYLIST</p>
               </div>
+
+              {/* decor */}
+              <div style={{ position: 'absolute', top: '160px', left: '50px', color: '#7dd3fc', fontSize: '24px', filter: 'drop-shadow(0 0 5px #7dd3fc)' }}>✦</div>
+              <div style={{ position: 'absolute', top: '200px', right: '60px', color: '#ffffff', fontSize: '18px', filter: 'drop-shadow(0 0 5px #ffffff)' }}>◆</div>
+              <div style={{ position: 'absolute', bottom: '240px', left: '70px', color: '#ffffff', fontSize: '20px', filter: 'drop-shadow(0 0 5px #ffffff)' }}>◆</div>
+              <div style={{ position: 'absolute', bottom: '180px', right: '40px', color: '#7dd3fc', fontSize: '28px', filter: 'drop-shadow(0 0 5px #7dd3fc)' }}>✦</div>
+              <div style={{ position: 'absolute', left: '20px', top: '50%', color: '#ffffff', fontSize: '14px', filter: 'drop-shadow(0 0 5px #ffffff)' }}>✨</div>
+              <div style={{ position: 'absolute', right: '20px', top: '50%', color: '#ffffff', fontSize: '14px', filter: 'drop-shadow(0 0 5px #ffffff)' }}>✨</div>
             </div>
           </div>
         )}
@@ -1247,7 +1223,7 @@ export default function App() {
       }
     } catch {}
   }}
-  onLoadedMetadata={(e) => {
+  ononLoadedMetadata={(e) => {
   const a = e.currentTarget;
   setDuration(a.duration);
 
