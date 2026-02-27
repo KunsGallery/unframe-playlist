@@ -4,11 +4,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   User, Camera, Music, Heart, Share2, Zap,
   Trophy, Medal, Calendar,
-  Star, Moon, Coffee, Ghost, LogIn, Target,
-  Lock, Clock, Repeat, Navigation,
-  Smartphone, Sparkles, Sunrise, Crown, Layers, Flame
+  Star, Moon, LogIn, Target,
+  Lock, Repeat, Navigation,
+  Sparkles, Sunrise, Crown, Layers, Flame,
+  X
 } from 'lucide-react';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, setDoc } from 'firebase/firestore';
+import { LEVELS, getLevelInfo } from '../levels';
 
 const glass = "bg-white/[0.03] backdrop-blur-[40px] border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]";
 const h1Title = "font-black uppercase tracking-[-0.07em] leading-[0.8] italic";
@@ -49,7 +51,6 @@ const COLLECTIVE_LIBRARY = {
   pioneer_26: { title: "Pioneer 26", desc: "프로젝트 초기 개척자", icon: Target, color: "#2dd4bf", shape: 'hex' },
   insadong_wave: { title: "Insadong First Wave", desc: "인사동 공간의 첫 번째 파동", icon: Sparkles, color: "#3b82f6", shape: 'hex' },
 
-  // ✅ 배치 지급 예시(Admin에서 지급)
   annual_bronze_2026: { title: "2026 Bronze", desc: "2026년 기록 정산 브론즈", icon: Medal, color: "#cd7f32", shape: 'hex' },
   annual_silver_2026: { title: "2026 Silver", desc: "2026년 기록 정산 실버", icon: Medal, color: "#c0c0c0", shape: 'hex' },
   annual_gold_2026: { title: "2026 Gold", desc: "2026년 기록 정산 골드", icon: Trophy, color: "#fbbf24", shape: 'hex' },
@@ -96,7 +97,6 @@ const StickerItem = memo(function StickerItem({
   const safeColor = data?.color ?? "#7dd3fc";
   const safeGlow = data?.glow ?? "rgba(125,211,252,0.35)";
 
-  // 스티커북은 6각형
   const useHex = isCollective;
 
   const core = (
@@ -182,6 +182,31 @@ export default function Archive({
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
   const [hoveredSticker, setHoveredSticker] = useState(null);
 
+  // ✅ 레벨 안내 팝업
+  const [isLevelModalOpen, setIsLevelModalOpen] = useState(false);
+
+  // ✅ 닉네임 1회 변경 팝업
+  const [isNickModalOpen, setIsNickModalOpen] = useState(false);
+  const [nickDraft, setNickDraft] = useState("");
+  const [nickSaving, setNickSaving] = useState(false);
+  const [nickError, setNickError] = useState("");
+
+  const nicknameChanged = !!userProfile?.nicknameChanged;
+
+  // ✅ 표시 이름: nickname 우선
+  const displayName = useMemo(() => {
+    const nick = (userProfile?.nickname || "").trim();
+    if (nick) return nick;
+    return user?.displayName || (user?.isAnonymous ? "Guest" : "Collector");
+  }, [userProfile?.nickname, user]);
+
+  const openNickModal = useCallback(() => {
+    if (!user || user?.isAnonymous) return;
+    setNickError("");
+    setNickDraft((userProfile?.nickname || user?.displayName || "").trim());
+    setIsNickModalOpen(true);
+  }, [user, userProfile?.nickname]);
+
   // ✅ rewards(object[]) -> id Set
   const rewardIds = useMemo(() => {
     const arr = userProfile?.rewards;
@@ -220,6 +245,12 @@ export default function Archive({
     () => Array.from(rewardIds).filter(id => COLLECTIVE_LIBRARY[id]).length,
     [rewardIds]
   );
+
+  // ✅ XP/레벨 정보(Archive 내부에서도 안전하게 계산)
+  const levelMeta = useMemo(() => {
+    if (membership?.xp !== undefined) return membership;
+    return getLevelInfo(userProfile?.xp || 0);
+  }, [membership, userProfile?.xp]);
 
   const handleProfileImageUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -279,6 +310,60 @@ export default function Archive({
     }
   };
 
+  // ✅ 닉네임 저장(1회)
+  const saveNicknameOnce = useCallback(async () => {
+    if (!user || !db || !appId) return;
+    if (user?.isAnonymous) return;
+
+    setNickError("");
+
+    if (nicknameChanged) {
+      setNickError("이미 닉네임을 변경했습니다. 추가 변경은 관리자에게 요청해주세요.");
+      return;
+    }
+
+    const next = String(nickDraft || "").trim();
+    if (!next) {
+      setNickError("닉네임을 입력해주세요.");
+      return;
+    }
+
+    // 간단한 제약(원하면 바꿔도 됨)
+    if (next.length < 2 || next.length > 16) {
+      setNickError("닉네임은 2~16자 사이로 입력해주세요.");
+      return;
+    }
+
+    // 너무 공격적인 필터는 안 씀. 공백만/연속 공백만 방지
+    if (/^\s+$/.test(next)) {
+      setNickError("닉네임 형식이 올바르지 않습니다.");
+      return;
+    }
+
+    setNickSaving(true);
+
+    try {
+      // private stats
+      const privateRef = doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'stats');
+      await updateDoc(privateRef, { nickname: next, nicknameChanged: true });
+
+      // public_stats도 가능하면 동기화 (규칙이 막으면 실패할 수 있음 → 무시)
+      try {
+        const publicRef = doc(db, 'artifacts', appId, 'public_stats', user.uid);
+        await setDoc(publicRef, { displayName: next, nickname: next }, { merge: true });
+      } catch {
+        // ignore
+      }
+
+      setIsNickModalOpen(false);
+    } catch (e) {
+      console.error(e);
+      setNickError("저장에 실패했습니다. 잠시 후 다시 시도해주세요.");
+    } finally {
+      setNickSaving(false);
+    }
+  }, [user, db, appId, nickDraft, nicknameChanged]);
+
   // ✅ reward 공유 핸들러: unlockedAt 포함해서 App 카드로 전달
   const onShareReward = useCallback((e, id) => {
     const data = ACHIEVEMENT_LIBRARY[id] || COLLECTIVE_LIBRARY[id];
@@ -315,6 +400,171 @@ export default function Archive({
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="pt-32 lg:pt-40 px-6 lg:px-8 container mx-auto pb-32 lg:pb-40 min-h-screen relative z-20 overflow-visible">
+      {/* ✅ 닉네임 1회 변경 팝업 */}
+      <AnimatePresence>
+        {isNickModalOpen && (
+          <div className="fixed inset-0 z-13000 bg-black/80 backdrop-blur-xl flex items-center justify-center p-6" onClick={() => setIsNickModalOpen(false)}>
+            <motion.div
+              initial={{ y: 30, opacity: 0, scale: 0.98 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: 20, opacity: 0, scale: 0.98 }}
+              className={`${glass} w-full max-w-xl rounded-[3rem] p-8 lg:p-10 relative`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={() => setIsNickModalOpen(false)}
+                className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center"
+                aria-label="close"
+              >
+                <X className="w-5 h-5 text-white/80" />
+              </button>
+
+              <div className="space-y-2">
+                <p className="text-[10px] font-black uppercase tracking-[0.35em] text-zinc-500">Nickname</p>
+                <h3 className="text-2xl lg:text-3xl font-black uppercase italic tracking-tighter">
+                  닉네임을 설정하세요
+                </h3>
+                <p className="text-[11px] text-zinc-500 font-bold leading-relaxed">
+                  {nicknameChanged
+                    ? "이미 1회 변경을 사용했습니다. 추가 변경은 관리자에게 요청해주세요."
+                    : "닉네임은 딱 1번만 변경할 수 있어요. (이후 변경 불가)"}
+                </p>
+              </div>
+
+              <div className="mt-6 space-y-3">
+                <input
+                  value={nickDraft}
+                  onChange={(e) => setNickDraft(e.target.value)}
+                  disabled={nicknameChanged || nickSaving}
+                  className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-4 text-sm font-black uppercase tracking-widest outline-none focus:border-[#004aad] disabled:opacity-50"
+                  placeholder="2~16 chars"
+                />
+                {nickError ? (
+                  <p className="text-[11px] font-bold text-red-400">{nickError}</p>
+                ) : (
+                  <p className="text-[10px] text-zinc-600 font-bold">
+                    * 공백/특수문자 제한은 빡세게 걸지 않았어요. 필요하면 말해줘.
+                  </p>
+                )}
+              </div>
+
+              <div className="mt-8 grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setIsNickModalOpen(false)}
+                  className="py-4 bg-white/5 rounded-2xl text-[10px] font-black uppercase transition-all hover:bg-white/10"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={saveNicknameOnce}
+                  disabled={nicknameChanged || nickSaving}
+                  className="py-4 bg-[#004aad] rounded-2xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-50"
+                >
+                  {nickSaving ? "Saving..." : "Save (1x)"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ✅ 레벨 안내 팝업 */}
+      <AnimatePresence>
+        {isLevelModalOpen && (
+          <div className="fixed inset-0 z-12000 bg-black/80 backdrop-blur-xl flex items-center justify-center p-6" onClick={() => setIsLevelModalOpen(false)}>
+            <motion.div
+              initial={{ y: 30, opacity: 0, scale: 0.98 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: 20, opacity: 0, scale: 0.98 }}
+              className={`${glass} w-full max-w-2xl rounded-[3rem] p-8 lg:p-12 relative overflow-hidden`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={() => setIsLevelModalOpen(false)}
+                className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center"
+                aria-label="close"
+              >
+                <X className="w-5 h-5 text-white/80" />
+              </button>
+
+              <div className="space-y-2">
+                <p className="text-[10px] font-black uppercase tracking-[0.35em] text-zinc-500">Level System</p>
+                <h3 className="text-3xl lg:text-4xl font-black uppercase italic tracking-tighter">
+                  {levelMeta?.name || "User"}
+                  <span className="ml-2 text-zinc-600 not-italic text-base lg:text-lg font-black">
+                    (Lv.{levelMeta?.level || 1})
+                  </span>
+                </h3>
+              </div>
+
+              {/* 내 XP 진행 */}
+              <div className="mt-8 space-y-3">
+                <div className="flex justify-between items-end">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">XP Progress</p>
+                  <p className="text-[11px] font-black" style={{ color: levelMeta?.color || "#004AAD" }}>
+                    {levelMeta?.isMax ? `MAX • ${levelMeta?.xp || 0} XP` : `${levelMeta?.xp || 0} / ${levelMeta?.xpNext || 0} XP`}
+                  </p>
+                </div>
+                <div className="h-3 rounded-full bg-black/40 border border-white/5 overflow-hidden shadow-inner p-0.5">
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${Math.max(0, Math.min(100, Number(levelMeta?.progressPct || 0)))}%`,
+                      background: `linear-gradient(90deg, ${levelMeta?.color || "#004AAD"} 0%, rgba(255,255,255,0.35) 120%)`,
+                      boxShadow: `0 0 18px ${(levelMeta?.color || "#004AAD")}55`,
+                    }}
+                  />
+                </div>
+                <p className="text-[10px] text-zinc-500 font-bold leading-relaxed">
+                  * XP는 감상/완주/좋아요/공유 등의 활동으로 누적됩니다. (가중치는 추후 조정 가능)
+                </p>
+              </div>
+
+              {/* 레벨 테이블 */}
+              <div className="mt-10">
+                <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-4">All Levels</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {LEVELS.map((lv) => {
+                    const active = (lv.key === levelMeta?.key);
+                    return (
+                      <div
+                        key={lv.key}
+                        className={`rounded-2xl border p-4 flex items-center justify-between ${
+                          active ? 'border-white/20 bg-white/5' : 'border-white/10 bg-black/20'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div
+                            className="w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm"
+                            style={{
+                              background: `${lv.color}22`,
+                              color: lv.color,
+                              border: `1px solid ${lv.color}55`,
+                              boxShadow: active ? `0 0 18px ${lv.color}33` : 'none',
+                            }}
+                          >
+                            {lv.level}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-black uppercase truncate" style={{ color: lv.color }}>{lv.name}</p>
+                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">from {lv.xpMin} XP</p>
+                          </div>
+                        </div>
+                        {active && (
+                          <span className="text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-white/5 border border-white/10">
+                            Current
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <div className="grid lg:grid-cols-12 gap-8 lg:gap-16 overflow-visible">
 
         {/* Left */}
@@ -337,17 +587,49 @@ export default function Archive({
                 </div>
               </div>
 
-              {/* ✅ membership = 레벨 배지(App에서 계산됨) */}
-              {membership && (
-                <div
-                  className="absolute -bottom-2 -right-2 px-4 py-1.5 rounded-full text-[9px] lg:text-[10px] font-black uppercase border border-white/10 shadow-2xl flex items-center gap-1.5 z-30"
-                  style={{ color: membership.color || "#fff", backgroundColor: membership.bg || "rgba(255,255,255,0.08)" }}
+              {/* ✅ membership = 레벨 배지 (클릭하면 안내 팝업) */}
+              {levelMeta && (
+                <button
+                  type="button"
+                  onClick={() => setIsLevelModalOpen(true)}
+                  className="absolute -bottom-2 -right-2 px-4 py-1.5 rounded-full text-[9px] lg:text-[10px] font-black uppercase border border-white/10 shadow-2xl flex items-center gap-1.5 z-30 hover:brightness-110 transition-all"
+                  style={{ color: levelMeta.color || "#fff", backgroundColor: levelMeta.bg || `${(levelMeta.color || "#004AAD")}22` }}
+                  title="레벨 안내 보기"
                 >
-                  {membership.icon ? React.createElement(membership.icon, { className: "w-3 h-3" }) : null}
-                  {membership.name || "USER"}
-                </div>
+                  {levelMeta.icon ? React.createElement(levelMeta.icon, { className: "w-3 h-3" }) : <Sparkles className="w-3 h-3" />}
+                  {levelMeta.name || "USER"}
+                </button>
               )}
             </div>
+
+            {/* ✅ XP Bar (프로필 사진 아래) */}
+            {!!levelMeta && (
+              <div className="space-y-2 -mt-2">
+                <div className="flex items-center justify-between px-2">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">XP</p>
+                  <p className="text-[9px] font-black" style={{ color: levelMeta.color || "#004AAD" }}>
+                    {levelMeta.isMax ? `MAX • ${levelMeta.xp || 0}` : `${levelMeta.xp || 0} / ${levelMeta.xpNext || 0}`}
+                  </p>
+                </div>
+                <div className="h-3 rounded-full bg-black/40 border border-white/5 overflow-hidden shadow-inner p-0.5">
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${Math.max(0, Math.min(100, Number(levelMeta.progressPct || 0)))}%`,
+                      background: `linear-gradient(90deg, ${levelMeta.color || "#004AAD"} 0%, rgba(255,255,255,0.35) 120%)`,
+                      boxShadow: `0 0 16px ${(levelMeta.color || "#004AAD")}55`,
+                    }}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsLevelModalOpen(true)}
+                  className="text-[9px] font-black uppercase tracking-widest text-zinc-500 hover:text-white transition-colors"
+                >
+                  View level guide →
+                </button>
+              </div>
+            )}
 
             <div className="space-y-4">
               {user?.isAnonymous ? (
@@ -359,16 +641,40 @@ export default function Archive({
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <h2 className="text-2xl lg:text-3xl font-black uppercase italic tracking-tighter leading-none">{user?.displayName || "Collector"}</h2>
-                  <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-[0.3em]">No. {user?.uid?.slice(0, 8)}</p>
+                  {/* ✅ 닉네임 우선 표시 + 클릭하면 1회 변경 팝업 */}
+                  <button
+                    type="button"
+                    onClick={openNickModal}
+                    className="block mx-auto hover:opacity-90 transition-opacity"
+                    title={nicknameChanged ? "닉네임 변경 완료 (관리자만 수정 가능)" : "닉네임 1회 변경 가능"}
+                  >
+                    <h2 className="text-2xl lg:text-3xl font-black uppercase italic tracking-tighter leading-none">
+                      {displayName || "Collector"}
+                    </h2>
+                  </button>
+
+                  <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-[0.3em]">
+                    No. {user?.uid?.slice(0, 8)}
+                  </p>
+
+                  {!nicknameChanged && (
+                    <p className="text-[9px] text-zinc-600 font-bold uppercase tracking-widest">
+                      Tap name to set nickname (1x)
+                    </p>
+                  )}
+                  {nicknameChanged && (
+                    <p className="text-[9px] text-zinc-600 font-bold uppercase tracking-widest">
+                      Nickname locked
+                    </p>
+                  )}
                 </div>
               )}
             </div>
 
             <div className="grid grid-cols-4 gap-2 border-t border-white/10 pt-8">
               <div className="space-y-1"><Music className="w-3 h-3 mx-auto text-indigo-400" /><p className="text-[7px] font-black text-zinc-600 uppercase">Listen</p><p className="text-lg font-black">{userProfile?.listenCount || 0}</p></div>
-              <div className="space-y-1"><Heart className="w-3 h-3 mx-auto text-red-400" /><p className="text-[7px] font-black text-zinc-600 uppercase">Saved</p><p className="text-lg font-black">{userLikes.length}</p></div>
-              <div className="space-y-1"><Share2 className="w-3 h-3 mx-auto text-blue-400" /><p className="text-[7px] font-black text-zinc-600 uppercase">Share</p><p className="text-lg font-black">{userProfile?.shareCount || 0}</p></div>
+              <div className="space-y-1"><Heart className="w-3 h-3 mx-auto text-red-400" /><p className="text-[7px] font-black text-zinc-600 uppercase">Likes</p><p className="text-lg font-black">{userLikes.length}</p></div>
+              <div className="space-y-1"><Share2 className="w-3 h-3 mx-auto text-blue-400" /><p className="text-[7px] font-black text-zinc-600 uppercase">Shares</p><p className="text-lg font-black">{userProfile?.shareCount || 0}</p></div>
               <div className="space-y-1"><Zap className="w-3 h-3 mx-auto text-yellow-400" /><p className="text-[7px] font-black text-zinc-600 uppercase">Rank</p><p className="text-lg font-black">#{myRank}</p></div>
             </div>
           </motion.div>
@@ -525,7 +831,6 @@ export default function Archive({
           background: rgba(0,0,0,0.25);
           backdrop-filter: blur(10px);
         }
-
         @keyframes spin-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .animate-spin-slow { animation: spin-slow 12s linear infinite; }
       `}</style>

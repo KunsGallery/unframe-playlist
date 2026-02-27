@@ -12,7 +12,6 @@ const glass = "bg-white/[0.03] backdrop-blur-[40px] border border-white/10 shado
 const h1Title = "font-black uppercase tracking-[-0.07em] leading-[0.8] italic";
 const subTitle = "font-bold uppercase tracking-[0.4em] text-[#004aad]";
 
-// ✅ src="" 방지
 const safeSrc = (v) => (typeof v === "string" && v.trim() ? v : null);
 
 export default function Home({
@@ -37,43 +36,37 @@ export default function Home({
 
   const scrollContainerRef = useRef(null);
 
-  // ✅ 1.1: rankingTheme undefined 방지
   const safeRankingTheme = useMemo(
     () => rankingTheme ?? { title: "심야의 감상자", desc: "", icon: Sparkles },
     [rankingTheme]
   );
 
-  // ✅ 1.4(성능/안정성): id->track map
   const trackMap = useMemo(() => {
     const m = new Map();
     (tracks || []).forEach(t => { if (t?.id) m.set(t.id, t); });
     return m;
   }, [tracks]);
 
-  // ✅ top3: 정렬 후 slice
+  // ✅ listenCount 기준 랭킹 유지
   const topThree = useMemo(() => {
     const arr = Array.isArray(allUsers) ? [...allUsers] : [];
     arr.sort((a, b) => (b?.listenCount || 0) - (a?.listenCount || 0));
     return arr.slice(0, 3);
   }, [allUsers]);
 
-  // ✅ 내가 좋아요한 트랙
   const myLikedTracks = useMemo(() => {
     const likeSet = new Set(userLikes || []);
     return (tracks || []).filter(t => t?.id && likeSet.has(t.id));
   }, [tracks, userLikes]);
 
-  // ✅ 1.1: 안전 재생 래퍼 + context(playlistId) 전달 지원
   const safePlay = useCallback((idx, queue, context = null) => {
     if (typeof playTrack !== "function") return;
     const q = Array.isArray(queue) ? queue.filter(Boolean) : [];
     if (q.length === 0) return;
     const i = Math.max(0, Math.min(idx ?? 0, q.length - 1));
-    // ✅ 1.1: App.jsx의 playTrack(idx, queue, context)로 전달
     playTrack(i, q, context ?? undefined);
   }, [playTrack]);
 
-  // IG widget script
   useEffect(() => {
     const script = document.createElement("script");
     script.src = "https://cdn.lightwidget.com/widgets/lightwidget.js";
@@ -84,7 +77,6 @@ export default function Home({
     };
   }, []);
 
-  // Featured fetch
   useEffect(() => {
     if (!db) return;
 
@@ -107,7 +99,6 @@ export default function Home({
     fetchFeatured();
   }, [db, tracks]);
 
-  // 랜덤 추천 (검색 없을 때)
   useEffect(() => {
     if (!tracks?.length) return;
     if (searchTerm !== "") return;
@@ -116,7 +107,6 @@ export default function Home({
     setDisplayTracks(shuffled.slice(0, 9));
   }, [tracks, searchTerm]);
 
-  // 검색 결과
   useEffect(() => {
     const term = searchTerm.trim().toLowerCase();
     if (!term) return;
@@ -130,7 +120,6 @@ export default function Home({
     );
   }, [searchTerm, tracks]);
 
-  // horizontal wheel
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
@@ -146,13 +135,13 @@ export default function Home({
     return () => container.removeEventListener('wheel', handleWheel);
   }, []);
 
-  // ✅ 모달 데이터 정규화(절대 안 터짐)
   const normalizedSelectedPlaylist = useMemo(() => {
     if (!selectedPlaylist) return null;
+
+    const pid = selectedPlaylist.id ?? selectedPlaylist.playlistId ?? selectedPlaylist.title ?? "playlist";
     return {
       ...selectedPlaylist,
-      // ✅ 1.1: playlistId 확보 (Firestore playlist는 id가 있음 / liked는 직접 넣음)
-      id: selectedPlaylist.id ?? selectedPlaylist.playlistId ?? selectedPlaylist.title ?? "playlist",
+      id: pid,
       title: selectedPlaylist.title ?? "Playlist",
       desc: selectedPlaylist.desc ?? "",
       image: selectedPlaylist.image ?? "",
@@ -163,7 +152,6 @@ export default function Home({
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="pb-24 lg:pb-0">
-      {/* Playlists Modal */}
       <AnimatePresence>
         {normalizedSelectedPlaylist && (
           <motion.div
@@ -206,8 +194,7 @@ export default function Home({
 
                   <button
                     onClick={() => {
-                      // ✅ 1.1: playlistId 전달
-                      safePlay(0, normalizedSelectedPlaylist.items, { playlistId: normalizedSelectedPlaylist.id });
+                      safePlay(0, normalizedSelectedPlaylist.items, { playlistKey: normalizedSelectedPlaylist.id });
                       setSelectedPlaylist(null);
                     }}
                     className="px-8 py-3 bg-[#004aad] text-white rounded-full font-black uppercase text-xs tracking-widest hover:bg-white hover:text-black transition-all flex items-center gap-2 shadow-xl mt-4"
@@ -223,7 +210,7 @@ export default function Home({
                   return (
                     <div
                       key={track?.id ?? `${idx}`}
-                      onClick={() => safePlay(idx, normalizedSelectedPlaylist.items, { playlistId: normalizedSelectedPlaylist.id })} // ✅ 1.1
+                      onClick={() => safePlay(idx, normalizedSelectedPlaylist.items, { playlistKey: normalizedSelectedPlaylist.id })}
                       className="flex items-center gap-4 p-3 rounded-xl hover:bg-white/5 cursor-pointer group transition-colors border-b border-white/5 last:border-0"
                     >
                       <div className="w-8 text-center text-zinc-600 font-bold text-xs">{idx + 1}</div>
@@ -316,8 +303,7 @@ export default function Home({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    // ✅ 1.1: directors_pick playlistId로 기록 가능
-                    safePlay(0, [featuredTrack], { playlistId: 'directors_pick' });
+                    safePlay(0, [featuredTrack], { playlistKey: 'directors_pick' });
                   }}
                   className="flex items-center gap-3 px-8 py-4 bg-white text-black rounded-full font-black uppercase text-xs tracking-widest hover:bg-[#004aad] hover:text-white transition-all"
                 >
@@ -337,7 +323,7 @@ export default function Home({
                   )}
 
                   <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={(e) => { e.stopPropagation(); safePlay(0, [featuredTrack], { playlistId: 'directors_pick' }); }}>
+                    <button onClick={(e) => { e.stopPropagation(); safePlay(0, [featuredTrack], { playlistKey: 'directors_pick' }); }}>
                       <Play className="w-16 h-16 text-white fill-white hover:scale-110 transition-transform" />
                     </button>
                   </div>
@@ -363,6 +349,7 @@ export default function Home({
       {/* Dynamic Honor Hall */}
       <section className="py-40 lg:py-60 px-6 lg:px-8 container mx-auto">
         <div className="grid lg:grid-cols-2 gap-8 lg:gap-16">
+          {/* Ranking */}
           <div className={`${glass} p-8 lg:p-12 rounded-[3rem] relative overflow-hidden group min-h-100`}>
             <div className="absolute top-0 right-0 p-8 opacity-20 group-hover:opacity-50 transition-opacity">
               {safeRankingTheme?.icon ? React.createElement(safeRankingTheme.icon, { className: "w-32 h-32 text-[#004aad]" }) : null}
@@ -375,30 +362,47 @@ export default function Home({
             </h4>
 
             <div className="space-y-4">
-              {topThree.map((u, idx) => (
-                <div key={u?.id ?? idx} className="flex items-center gap-4 lg:gap-6 p-4 rounded-2xl hover:bg-white/5 transition-colors border-b border-white/5 last:border-0">
-                  <div className={`w-12 h-12 lg:w-14 lg:h-14 rounded-full flex items-center justify-center font-black text-lg lg:text-2xl ${idx === 0 ? 'bg-yellow-400 text-black shadow-[0_0_15px_rgba(250,204,21,0.5)]' : idx === 1 ? 'bg-zinc-400 text-black' : 'bg-orange-700 text-white'}`}>
-                    {idx + 1}
-                  </div>
+              {topThree.map((u, idx) => {
+                const levelName = u?.levelName || "User";
+                const levelColor = u?.levelColor || "#71717a";
+                const name = (u?.nickname || u?.displayName || "Collector");
 
-                  <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-full overflow-hidden bg-zinc-800 shrink-0 flex items-center justify-center">
-                    {safeSrc(u?.profileImg) ? <img src={safeSrc(u?.profileImg)} className="w-full h-full object-cover" alt="" /> : <User size={16} className="text-white/20" />}
-                  </div>
+                return (
+                  <div key={u?.id ?? idx} className="flex items-center gap-4 lg:gap-6 p-4 rounded-2xl hover:bg-white/5 transition-colors border-b border-white/5 last:border-0">
+                    <div className={`w-12 h-12 lg:w-14 lg:h-14 rounded-full flex items-center justify-center font-black text-lg lg:text-2xl ${
+                      idx === 0 ? 'bg-yellow-400 text-black shadow-[0_0_15px_rgba(250,204,21,0.5)]'
+                      : idx === 1 ? 'bg-zinc-400 text-black'
+                      : 'bg-orange-700 text-white'
+                    }`}>
+                      {idx + 1}
+                    </div>
 
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-lg lg:text-xl truncate">{u?.displayName ?? "Collector"}</p>
-                    <p className="text-[10px] text-zinc-500 uppercase tracking-widest">{u?.membership || 'HELLO'}</p>
-                  </div>
+                    <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-full overflow-hidden bg-zinc-800 shrink-0 flex items-center justify-center">
+                      {safeSrc(u?.profileImg) ? <img src={safeSrc(u?.profileImg)} className="w-full h-full object-cover" alt="" /> : <User size={16} className="text-white/20" />}
+                    </div>
 
-                  <div className="text-right">
-                    <p className="font-black text-2xl lg:text-3xl text-[#004aad]">{u?.listenCount || 0}</p>
-                    <p className="text-[10px] text-zinc-600 font-bold uppercase">Points</p>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-lg lg:text-xl truncate">{name}</p>
+                      <p
+                        className="text-[10px] uppercase tracking-widest font-black"
+                        style={{ color: levelColor }}
+                        title={levelName}
+                      >
+                        {levelName}
+                      </p>
+                    </div>
+
+                    <div className="text-right">
+                      <p className="font-black text-2xl lg:text-3xl text-[#004aad]">{u?.listenCount || 0}</p>
+                      <p className="text-[10px] text-zinc-600 font-bold uppercase">Points</p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
+          {/* Trending */}
           <div className={`${glass} p-8 lg:p-12 rounded-[3rem] relative overflow-hidden group min-h-100`}>
             <div className="absolute top-0 right-0 p-8 opacity-20 group-hover:opacity-50 transition-opacity">
               <Sparkles className="w-32 h-32 text-red-500" />
@@ -448,7 +452,6 @@ export default function Home({
         </div>
 
         <div ref={scrollContainerRef} className="flex overflow-x-auto gap-6 pb-20 px-6 lg:px-8 snap-x snap-mandatory no-scrollbar">
-          {/* Liked Songs */}
           <motion.div
             initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}
             className="snap-start shrink-0 w-32 md:w-40 lg:w-48 group cursor-pointer"
@@ -466,7 +469,6 @@ export default function Home({
             </div>
           </motion.div>
 
-          {/* Curated playlists */}
           {(playlists || []).map((pl, idx) => {
             const plItems = pl?.trackIds ? pl.trackIds.map(id => trackMap.get(id)).filter(Boolean) : [];
             const plImg = safeSrc(pl?.image);
@@ -477,7 +479,7 @@ export default function Home({
                 initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}
                 transition={{ delay: 0.1 * idx }}
                 className="snap-start shrink-0 w-32 md:w-40 lg:w-48 group cursor-pointer"
-                onClick={() => setSelectedPlaylist({ ...pl, items: plItems })} // ✅ pl.id 유지됨
+                onClick={() => setSelectedPlaylist({ ...pl, items: plItems })}
               >
                 <div className="aspect-square rounded-3xl overflow-hidden mb-4 relative shadow-lg border border-white/10 bg-zinc-900 flex items-center justify-center">
                   {plImg ? (

@@ -5,10 +5,23 @@ import { initializeApp } from 'firebase/app';
 import { domToPng } from 'modern-screenshot';
 import confetti from 'canvas-confetti';
 import {
-  getAuth, onAuthStateChanged, signInAnonymously, signOut, signInWithPopup, GoogleAuthProvider
+  getAuth,
+  onAuthStateChanged,
+  signInAnonymously,
+  signOut,
+  signInWithPopup,
+  GoogleAuthProvider,
 } from 'firebase/auth';
 import {
-  getFirestore, doc, setDoc, collection, onSnapshot, query, updateDoc, deleteDoc, getDoc, getDocs, writeBatch, Timestamp
+  getFirestore,
+  doc,
+  setDoc,
+  collection,
+  onSnapshot,
+  query,
+  deleteDoc,
+  getDoc,
+  updateDoc,
 } from 'firebase/firestore';
 import {
   Loader2,
@@ -25,6 +38,7 @@ import {
   Star,
   Target,
   Medal,
+  X,
 } from "lucide-react";
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -36,6 +50,7 @@ import About from './pages/About';
 import ScrollToTop from './components/ScrollToTop';
 
 import { createAchievementEngine } from './store';
+import { getLevelInfo } from './levels';
 
 // --- ⚙️ Firebase 설정 ---
 const firebaseConfig = {
@@ -53,45 +68,6 @@ const db = getFirestore(app);
 
 const appId = 'unframe-playlist-v1';
 const ADMIN_EMAILS = ['gallerykuns@gmail.com', 'sylove887@gmail.com'];
-
-// ---------------------
-// ✅ 레벨 시스템 (1.3)
-// ---------------------
-const LEVELS = [
-  { name: "User", color: "#004AAD", minXp: 0 },
-  { name: "Newbie", color: "#1E6BFF", minXp: 30 },
-  { name: "Fan", color: "#2F8CFF", minXp: 80 },
-  { name: "Regular", color: "#3FA9FF", minXp: 150 },
-  { name: "Active", color: "#00BFFF", minXp: 260 },
-  { name: "Maker", color: "#4B5DFF", minXp: 400 },
-  { name: "Explorer", color: "#6C63FF", minXp: 600 },
-  { name: "Player", color: "#FF3CAC", minXp: 850 },
-  { name: "Listener", color: "#A855F7", minXp: 1150 },
-  { name: "Advanced", color: "#FF7A00", minXp: 1500 },
-  { name: "YourPick", color: "#FFD600", minXp: 1900 },
-  { name: "Leader", color: "#00E676", minXp: 2400 },
-  { name: "Influencer", color: "#00F0FF", minXp: 3000 },
-  { name: "Star", color: "#FFC400", minXp: 3800 },
-  { name: "Trendsetter", color: "#FF1744", minXp: 4800 },
-];
-
-const calcXp = (profile) => {
-  const listens = profile?.counters?.listens ?? profile?.listenCount ?? 0;
-  const completes = profile?.counters?.completes ?? 0;
-  const likes = profile?.counters?.likes ?? 0;
-  const shares = profile?.counters?.shares ?? profile?.shareCount ?? 0;
-  // 가중치(원하면 바꾸자)
-  return (listens * 1) + (completes * 2) + (likes * 2) + (shares * 3);
-};
-
-const getLevelFromXp = (xp) => {
-  let cur = LEVELS[0];
-  for (const l of LEVELS) {
-    if (xp >= l.minXp) cur = l;
-    else break;
-  }
-  return cur;
-};
 
 // ---------------------
 // 날짜 포맷
@@ -237,7 +213,7 @@ export default function App() {
   const [playlists, setPlaylists] = useState([]);
   const [userLikes, setUserLikes] = useState([]);
 
-  // ✅ rewards object[]
+  // ✅ rewards object[] + xp/level + nickname
   const [userProfile, setUserProfile] = useState({
     listenCount: 0,
     shareCount: 0,
@@ -249,13 +225,20 @@ export default function App() {
     streak: {},
     timeFlags: {},
     profileImg: '',
+    xp: 0,
+    levelKey: 'user',
+    level: 1,
+
+    // ✅ 닉네임 시스템
+    nickname: '',
+    nicknameUpdatedCount: 0,  // 0이면 1회 변경 가능, 1이면 잠금
+    nicknamePrompted: false,  // 최초 안내 팝업 보여줬는지
   });
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTrackIdx, setCurrentTrackIdx] = useState(0);
 
-  // ⚠️ currentTime/duration은 AudioPlayer가 쓰지만, App이 너무 자주 리렌더 되면 hover가 반복됨.
-  // 그래서 App에 두되, Routes는 memo로 격리해둠.
+  // ⚠️ player time updates are frequent → Routes are memo’d
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
 
@@ -284,11 +267,16 @@ export default function App() {
 
   const [siteConfig, setSiteConfig] = useState({ title: 'UNFRAME', subTitle: 'PLAYLIST' });
 
-  // ✅ 업적 팝업: 이제 {id, unlockedAt, meta} 형태
+  // ✅ 업적 팝업: {id, unlockedAt, meta}
   const [newAchievement, setNewAchievement] = useState(null);
 
   // ✅ 토스트 클릭 다운로드용
   const [lastCardUrl, setLastCardUrl] = useState(null);
+
+  // ✅ 닉네임 1회 변경 팝업
+  const [isNickModalOpen, setIsNickModalOpen] = useState(false);
+  const [nickInput, setNickInput] = useState("");
+  const [nickError, setNickError] = useState("");
 
   // refs
   const audioRef = useRef(null);
@@ -299,7 +287,15 @@ export default function App() {
 
   // ✅ 완주 이벤트 1회 처리
   const completedOnceRef = useRef(new Set());
-  const playSessionRef = useRef({ startedAt: 0, trackId: null, playlistId: null });
+  const playSessionRef = useRef({ startedAt: 0, trackId: null, playlistKey: null });
+
+  // ✅ MediaSession action handlers용 최신값 refs (iOS 잠금화면 next/prev 안정)
+  const queueRef = useRef([]);
+  const idxRef = useRef(0);
+  const playTrackRef = useRef(null);
+
+  useEffect(() => { queueRef.current = currentQueue || []; }, [currentQueue]);
+  useEffect(() => { idxRef.current = currentTrackIdx || 0; }, [currentTrackIdx]);
 
   // --- derived ---
   const publicTracks = useMemo(() => tracks.filter(t => !t.isHidden), [tracks]);
@@ -309,19 +305,32 @@ export default function App() {
     return currentQueue[currentTrackIdx] ?? null;
   }, [currentQueue, currentTrackIdx]);
 
-  // ✅ 레벨 계산(1.3)
-  const myXp = useMemo(() => calcXp(userProfile), [userProfile]);
-  const myLevel = useMemo(() => getLevelFromXp(myXp), [myXp]);
+  // ✅ 엔진에서 관리하는 XP/레벨 기반
+  const levelInfo = useMemo(() => getLevelInfo(userProfile?.xp || 0), [userProfile?.xp]);
 
-  // ✅ membership prop를 “레벨 배지”로 교체
+  // ✅ membership prop를 “레벨 배지”로 사용
   const membership = useMemo(() => {
     return {
-      name: myLevel.name,
-      color: myLevel.color,
-      bg: `${myLevel.color}22`,
+      name: levelInfo?.name || "User",
+      color: levelInfo?.color || "#004AAD",
+      bg: `${(levelInfo?.color || "#004AAD")}22`,
       icon: Sparkles,
+      key: levelInfo?.key || "user",
+      level: levelInfo?.level || 1,
+      xp: levelInfo?.xp || 0,
+      progressPct: levelInfo?.progressPct || 0,
+      xpMin: levelInfo?.xpMin || 0,
+      xpNext: levelInfo?.xpNext || 0,
+      isMax: !!levelInfo?.isMax,
     };
-  }, [myLevel]);
+  }, [levelInfo]);
+
+  // ✅ UI에 쓰는 이름(닉네임 우선)
+  const displayName = useMemo(() => {
+    const nick = (userProfile?.nickname || "").trim();
+    if (nick) return nick;
+    return user?.displayName || (user?.isAnonymous ? "Guest" : "Collector");
+  }, [userProfile?.nickname, user]);
 
   const formatTime = useCallback((time) => {
     if (isNaN(time)) return "0:00";
@@ -334,6 +343,7 @@ export default function App() {
   const emit = useCallback(async (event) => {
     const engine = engineRef.current;
     if (!engine || !user) return;
+
     const res = await engine.processEvent({ ...event, at: event.at || new Date() });
 
     if (res?.unlockedRewards?.length) {
@@ -344,14 +354,15 @@ export default function App() {
   }, [user]);
 
   // --- 재생 ---
+  // ✅ playlistKey 우선 지원 (store.js가 playlistKey 먼저 봄)
   const playTrack = useCallback(async (idx, queue = null, context = null) => {
     const audio = audioRef.current;
     if (!audio) return;
 
-    const activeQueue = queue ?? currentQueue;
+    const activeQueue = queue ?? queueRef.current ?? currentQueue;
     if (queue && queue !== currentQueue) setCurrentQueue(queue);
 
-    const targetIdx = idx !== undefined ? idx : currentTrackIdx;
+    const targetIdx = idx !== undefined ? idx : idxRef.current ?? currentTrackIdx;
     const targetTrack = activeQueue?.[targetIdx];
     if (!targetTrack) return;
 
@@ -364,18 +375,24 @@ export default function App() {
         audio.src = directUrl;
         audio.load();
       }
+
       if (idx !== undefined) setCurrentTrackIdx(targetIdx);
 
       playSessionRef.current = {
         startedAt: Date.now(),
         trackId: targetTrack.id,
-        playlistId: context?.playlistId || null,
+        playlistKey: context?.playlistKey || context?.playlistId || null,
       };
 
       await emit({ type: "track_play_start", trackId: targetTrack.id });
 
-      if (context?.playlistId) {
-        await emit({ type: "playlist_play", playlistId: context.playlistId, trackId: targetTrack.id });
+      if (context?.playlistKey || context?.playlistId) {
+        await emit({
+          type: "playlist_play",
+          playlistKey: context?.playlistKey || null,
+          playlistId: context?.playlistId || null,
+          trackId: targetTrack.id,
+        });
       }
 
       const playPromise = audio.play();
@@ -388,6 +405,28 @@ export default function App() {
       setIsPlaying(false);
     }
   }, [currentQueue, currentTrackIdx, emit]);
+
+  // ✅ MediaSession에서 참조하도록 ref에 최신 playTrack 보관
+  useEffect(() => {
+    playTrackRef.current = playTrack;
+  }, [playTrack]);
+
+  // ✅ 다음/이전 트랙 함수(잠금화면에서도 사용)
+  const playNext = useCallback(() => {
+    const q = queueRef.current || [];
+    if (!q.length) return;
+    const i = idxRef.current || 0;
+    const nextIdx = (i + 1) % q.length;
+    playTrackRef.current?.(nextIdx, q, null);
+  }, []);
+
+  const playPrev = useCallback(() => {
+    const q = queueRef.current || [];
+    if (!q.length) return;
+    const i = idxRef.current || 0;
+    const prevIdx = (i - 1 + q.length) % q.length;
+    playTrackRef.current?.(prevIdx, q, null);
+  }, []);
 
   const handleToggleLike = useCallback(async (e, trackId) => {
     if (e) e.stopPropagation();
@@ -403,7 +442,6 @@ export default function App() {
     await setDoc(likeDoc, { likedAt: Date.now() });
     setToastMessage("아카이브에 기록되었습니다 💗");
 
-    // ✅ like_added 이벤트: all_tracks_liked 조건에 필요한 값 전달
     await emit({
       type: "like_added",
       trackId,
@@ -463,9 +501,36 @@ export default function App() {
     engineRef.current.migrateRewardsToObjects().catch(() => {});
 
     const profileRef = doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'stats');
-    const unsubProfile = onSnapshot(profileRef, (snap) => {
+    const unsubProfile = onSnapshot(profileRef, async (snap) => {
       if (!snap.exists()) return;
-      setUserProfile(snap.data());
+      const data = snap.data();
+      setUserProfile(data);
+
+      // ✅ 닉네임 기본값/필드 보강 + 최초 안내 팝업
+      // - google 로그인(anonymous 아님)일 때만 적용
+      if (!user.isAnonymous) {
+        const hasNickname = typeof data?.nickname === 'string' && data.nickname.trim();
+        const prompted = !!data?.nicknamePrompted;
+        const updatedCount = Number(data?.nicknameUpdatedCount || 0);
+
+        // nickname이 아예 없으면: 구글 displayName을 기본 닉네임으로 세팅(변경권은 유지)
+        if (!hasNickname) {
+          const base = (user.displayName || "Collector").trim();
+          await setDoc(profileRef, {
+            nickname: base,
+            nicknameUpdatedCount: Number.isFinite(updatedCount) ? updatedCount : 0,
+            nicknamePrompted: prompted,
+          }, { merge: true }).catch(() => {});
+        }
+
+        // 아직 안내 안 했으면: 1회 변경 안내 팝업
+        if (!prompted) {
+          setNickInput((data?.nickname || user.displayName || "").trim());
+          setNickError("");
+          setIsNickModalOpen(true);
+          await setDoc(profileRef, { nicknamePrompted: true }, { merge: true }).catch(() => {});
+        }
+      }
     });
 
     const unsubPublicUsers = onSnapshot(
@@ -505,21 +570,27 @@ export default function App() {
     };
   }, [user]);
 
-  // ✅ public_stats 업데이트(레벨/컬러 반영)
+  // ✅ public_stats 업데이트 (랭킹/홈 표시용) — nickname 우선 반영 + 엔진 XP/레벨 반영
   useEffect(() => {
     if (!user) return;
 
-    const xp = calcXp(userProfile);
-    const lvl = getLevelFromXp(xp);
+    const xp = Number(userProfile?.xp || 0) || 0;
+    const lv = getLevelInfo(xp);
+    const nameForPublic = (userProfile?.nickname || "").trim()
+      || user?.displayName
+      || (user?.isAnonymous ? "Guest" : "Collector");
 
     setDoc(doc(db, 'artifacts', appId, 'public_stats', user.uid), {
-      displayName: user.displayName || (user.isAnonymous ? "Guest" : "Collector"),
+      displayName: nameForPublic,
       profileImg: userProfile?.profileImg || "",
       listenCount: userProfile?.listenCount || 0,
       shareCount: userProfile?.shareCount || 0,
+
       xp,
-      levelName: lvl.name,
-      levelColor: lvl.color,
+      levelKey: lv.key,
+      level: lv.level,
+      levelName: lv.name,
+      levelColor: lv.color,
     }, { merge: true }).catch(() => {});
   }, [user, userProfile]);
 
@@ -550,24 +621,132 @@ export default function App() {
     return () => audio.removeEventListener("timeupdate", onTime);
   }, [currentTrack?.id, emit]);
 
-  // ✅ Media Session
+  // ✅ 트랙 끝나면 다음 곡 자동 재생
   useEffect(() => {
-    if (!currentTrack) return;
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const onEnded = () => {
+      playNext();
+    };
+
+    audio.addEventListener("ended", onEnded);
+    return () => audio.removeEventListener("ended", onEnded);
+  }, [playNext]);
+
+  // ✅ Media Session: 메타데이터 + action handlers (아이폰 잠금화면 next/prev 핵심)
+  useEffect(() => {
     if (!('mediaSession' in navigator)) return;
+
+    const audio = audioRef.current;
+
+    // action handlers는 트랙이 없어도 미리 등록해두는 게 안정적
+    try {
+      navigator.mediaSession.setActionHandler('play', async () => {
+        if (!audio) return;
+        try {
+          await audio.play();
+          setIsPlaying(true);
+        } catch {}
+      });
+      navigator.mediaSession.setActionHandler('pause', () => {
+        if (!audio) return;
+        audio.pause();
+        setIsPlaying(false);
+      });
+
+      navigator.mediaSession.setActionHandler('previoustrack', () => playPrev());
+      navigator.mediaSession.setActionHandler('nexttrack', () => playNext());
+
+      navigator.mediaSession.setActionHandler('seekto', (details) => {
+        if (!audio) return;
+        if (typeof details.seekTime === 'number') {
+          audio.currentTime = details.seekTime;
+        }
+      });
+
+      navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+        if (!audio) return;
+        const offset = details.seekOffset || 10;
+        audio.currentTime = Math.max(0, audio.currentTime - offset);
+      });
+
+      navigator.mediaSession.setActionHandler('seekforward', (details) => {
+        if (!audio) return;
+        const offset = details.seekOffset || 10;
+        audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + offset);
+      });
+
+      navigator.mediaSession.setActionHandler('stop', () => {
+        if (!audio) return;
+        audio.pause();
+        audio.currentTime = 0;
+        setIsPlaying(false);
+      });
+    } catch {
+      // iOS 일부 버전에서 setActionHandler가 throw 될 수 있음
+    }
+
+    // metadata는 currentTrack 기준
+    if (!currentTrack) return;
 
     const artworkUrl = currentTrack.image ? getDirectLink(currentTrack.image) : "";
 
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: currentTrack.title ?? 'UNFRAME',
-      artist: currentTrack.artist ?? '',
-      album: currentTrack.album ?? 'UNFRAME PLAYLIST',
-      artwork: artworkUrl ? [
-        { src: artworkUrl, sizes: '96x96', type: 'image/png' },
-        { src: artworkUrl, sizes: '192x192', type: 'image/png' },
-        { src: artworkUrl, sizes: '512x512', type: 'image/png' },
-      ] : [],
-    });
-  }, [currentTrack]);
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: currentTrack.title ?? 'UNFRAME',
+        artist: currentTrack.artist ?? '',
+        album: currentTrack.album ?? 'UNFRAME PLAYLIST',
+        artwork: artworkUrl ? [
+          { src: artworkUrl, sizes: '96x96', type: 'image/png' },
+          { src: artworkUrl, sizes: '192x192', type: 'image/png' },
+          { src: artworkUrl, sizes: '512x512', type: 'image/png' },
+        ] : [],
+      });
+    } catch {}
+  }, [currentTrack, playNext, playPrev]);
+
+  // ✅ 닉네임 저장(1회)
+  const saveNicknameOnce = useCallback(async () => {
+    if (!user || user.isAnonymous) return;
+
+    const nextNick = (nickInput || "").trim();
+    if (nextNick.length < 2) {
+      setNickError("닉네임은 2자 이상 입력해 주세요.");
+      return;
+    }
+    if (nextNick.length > 16) {
+      setNickError("닉네임은 16자 이하로 입력해 주세요.");
+      return;
+    }
+    // 간단한 허용 문자(한글/영문/숫자/공백/_-)
+    const ok = /^[a-zA-Z0-9가-힣 _-]+$/.test(nextNick);
+    if (!ok) {
+      setNickError("닉네임은 한글/영문/숫자/공백/_- 만 사용할 수 있어요.");
+      return;
+    }
+
+    const count = Number(userProfile?.nicknameUpdatedCount || 0);
+    if (count >= 1) {
+      setNickError("닉네임은 1회만 변경할 수 있어요.");
+      return;
+    }
+
+    const profileRef = doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'stats');
+
+    try {
+      await setDoc(profileRef, {
+        nickname: nextNick,
+        nicknameUpdatedCount: 1,
+      }, { merge: true });
+
+      setToastMessage("닉네임이 설정되었습니다 ✨");
+      setIsNickModalOpen(false);
+    } catch (e) {
+      console.error(e);
+      setNickError("저장에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+    }
+  }, [user, userProfile?.nicknameUpdatedCount, nickInput]);
 
   // --- 카드 캡처 & 공유/다운로드 ---
   useEffect(() => {
@@ -639,7 +818,7 @@ export default function App() {
     );
   }
 
-  // ✅ 업적 메타(제목/설명/아이콘) - store.js 기반이지만 App에서 최소 매핑
+  // ✅ 업적 메타(제목/설명/아이콘) - 최소 매핑
   const ACH_META = {
     first_listen: { title: "첫 감상", desc: "처음으로 소리를 재생함", icon: Music, color: "#a78bfa" },
     first_complete: { title: "첫 완주", desc: "처음으로 한 곡을 끝까지 감상함", icon: Trophy, color: "#fb7185" },
@@ -656,14 +835,15 @@ export default function App() {
     all_tracks_liked: { title: "올 컬렉션", desc: "전체 곡을 좋아요", icon: Medal, color: "#a78bfa" },
   };
 
-  const popupMeta = newAchievement?.id ? (ACH_META[newAchievement.id] || { title: newAchievement.id, desc: "새로운 기록을 획득했습니다.", icon: Sparkles, color: "#7dd3fc" }) : null;
+  const popupMeta = newAchievement?.id
+    ? (ACH_META[newAchievement.id] || { title: newAchievement.id, desc: "새로운 기록을 획득했습니다.", icon: Sparkles, color: "#7dd3fc" })
+    : null;
 
   return (
     <Router>
       <ScrollToTop />
 
       <div className={`min-h-screen bg-[#050505] text-zinc-100 font-sans relative overflow-x-hidden ${isPlayerExpanded ? 'h-screen overflow-hidden' : ''} pb-40`}>
-
         <header className={`fixed top-0 w-full z-100 transition-all ${scrolled ? 'py-4 bg-black/40 backdrop-blur-xl border-b border-white/5' : 'py-6 lg:py-10'}`}>
           <div className="container mx-auto px-6 flex justify-between items-end">
             <Link to="/">
@@ -729,7 +909,66 @@ export default function App() {
           setPlayerView={setPlayerView}
         />
 
-        {/* ✅ 1.2 업적 팝업: 카드 프리뷰 + 버튼 */}
+        {/* ✅ 닉네임 1회 변경 팝업 (전역) */}
+        <AnimatePresence>
+          {isNickModalOpen && user && !user.isAnonymous && (
+            <div className="fixed inset-0 z-10050 flex items-center justify-center p-6 bg-black/85 backdrop-blur-xl">
+              <motion.div
+                initial={{ y: 30, opacity: 0, scale: 0.98 }}
+                animate={{ y: 0, opacity: 1, scale: 1 }}
+                exit={{ y: 20, opacity: 0, scale: 0.98 }}
+                className="w-full max-w-lg rounded-[2.5rem] border border-white/10 bg-zinc-950/70 shadow-2xl overflow-hidden"
+              >
+                <div className="p-8 lg:p-10 relative">
+                  <button
+                    onClick={() => setIsNickModalOpen(false)}
+                    className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center"
+                    aria-label="close"
+                  >
+                    <X className="w-5 h-5 text-white/80" />
+                  </button>
+
+                  <h3 className="text-2xl font-black uppercase tracking-tight italic">Choose Your Nickname</h3>
+                  <p className="mt-2 text-sm text-zinc-400 leading-relaxed">
+                    UP에서 사용할 닉네임을 설정할 수 있어요. <br />
+                    <span className="text-white/80 font-bold">닉네임 변경은 1회만 가능</span>합니다.
+                  </p>
+
+                  <div className="mt-6 space-y-2">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Nickname</p>
+                    <input
+                      value={nickInput}
+                      onChange={(e) => { setNickInput(e.target.value); setNickError(""); }}
+                      className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white font-bold outline-none focus:border-[#004aad]"
+                      placeholder="2~16자 (한글/영문/숫자/_-)"
+                    />
+                    {nickError ? <p className="text-[11px] text-red-400 font-bold">{nickError}</p> : null}
+                    <p className="text-[11px] text-zinc-500 font-bold">
+                      예: unframe, 감상자, blue_wave, my-pick
+                    </p>
+                  </div>
+
+                  <div className="mt-8 grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => setIsNickModalOpen(false)}
+                      className="py-4 bg-white/5 rounded-2xl text-[10px] font-black uppercase hover:bg-white/10 transition-all"
+                    >
+                      Later
+                    </button>
+                    <button
+                      onClick={saveNicknameOnce}
+                      className="py-4 bg-[#004aad] rounded-2xl text-[10px] font-black uppercase hover:brightness-110 transition-all"
+                    >
+                      Save (1 time)
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* ✅ 업적 팝업: 카드 프리뷰 + 버튼 */}
         <AnimatePresence>
           {newAchievement && popupMeta && (
             <div className="fixed inset-0 z-10000 flex items-center justify-center p-6 bg-black/90 backdrop-blur-xl">
@@ -739,7 +978,6 @@ export default function App() {
                 exit={{ y: 20, opacity: 0, scale: 0.98 }}
                 className="w-full max-w-140 relative"
               >
-                {/* 카드 프리뷰 그대로 렌더 */}
                 <div className="rounded-4xl overflow-hidden shadow-2xl border border-white/10">
                   <div className="scale-[0.92] origin-top-left" style={{ width: 600, height: 850, transform: 'scale(0.92)' }}>
                     <div style={{
@@ -760,7 +998,7 @@ export default function App() {
                         <svg style={{ position: 'absolute', bottom: '10px', left: '10px', width: '40px', height: '40px', fill: 'none', stroke: '#7dd3fc', strokeWidth: '1.5', transform: 'rotate(-90deg)' }} viewBox="0 0 40 40"><path d="M0,40 A40,40 0 0,1 40,0" /></svg>
                         <svg style={{ position: 'absolute', bottom: '10px', right: '10px', width: '40px', height: '40px', fill: 'none', stroke: '#7dd3fc', strokeWidth: '1.5', transform: 'rotate(180deg)' }} viewBox="0 0 40 40"><path d="M0,40 A40,40 0 0,1 40,0" /></svg>
 
-                        {/* ✅ 업적 제목: 곡선 위 */}
+                        {/* title */}
                         <div style={{ textAlign: 'center', position: 'relative', width: '100%' }}>
                           <h1 style={{
                             fontSize: '56px', fontWeight: 300, color: '#ffffff', letterSpacing: '0.1em',
@@ -777,7 +1015,7 @@ export default function App() {
                           </svg>
                         </div>
 
-                        {/* 아이콘 */}
+                        {/* icon */}
                         <div style={{ position: 'relative', width: '320px', height: '320px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           <div style={{
                             position: 'absolute', width: '260px', height: '260px',
@@ -792,10 +1030,10 @@ export default function App() {
                           </div>
                         </div>
 
-                        {/* ✅ 유저 + 한글 설명 */}
+                        {/* user + desc */}
                         <div style={{ textAlign: 'center', zIndex: 10, width: '80%' }}>
                           <p style={{ fontSize: '26px', fontWeight: 400, color: '#ffffff', margin: 0 }}>
-                            <span style={{ fontWeight: 800, color: '#7dd3fc' }}>{user?.displayName || 'Collector'}</span> 님,
+                            <span style={{ fontWeight: 800, color: '#7dd3fc' }}>{displayName}</span> 님,
                           </p>
                           <p style={{ fontSize: '20px', fontWeight: 300, color: '#ffffff', marginTop: '12px', opacity: 0.9, wordBreak: 'keep-all', lineHeight: 1.4 }}>
                             {popupMeta.desc}
@@ -810,20 +1048,12 @@ export default function App() {
                           </p>
                           <p style={{ fontSize: '22px', fontWeight: 900, color: '#ffffff', letterSpacing: '0.15em', textShadow: '0 0 10px rgba(125, 211, 252, 0.3)' }}>UNFRAME PLAYLIST</p>
                         </div>
-
-                        {/* decor */}
-                        <div style={{ position: 'absolute', top: '160px', left: '50px', color: '#7dd3fc', fontSize: '24px', filter: 'drop-shadow(0 0 5px #7dd3fc)' }}>✦</div>
-                        <div style={{ position: 'absolute', top: '200px', right: '60px', color: '#ffffff', fontSize: '18px', filter: 'drop-shadow(0 0 5px #ffffff)' }}>◆</div>
-                        <div style={{ position: 'absolute', bottom: '240px', left: '70px', color: '#ffffff', fontSize: '20px', filter: 'drop-shadow(0 0 5px #ffffff)' }}>◆</div>
-                        <div style={{ position: 'absolute', bottom: '180px', right: '40px', color: '#7dd3fc', fontSize: '28px', filter: 'drop-shadow(0 0 5px #7dd3fc)' }}>✦</div>
-                        <div style={{ position: 'absolute', left: '20px', top: '50%', color: '#ffffff', fontSize: '14px', filter: 'drop-shadow(0 0 5px #ffffff)' }}>✨</div>
-                        <div style={{ position: 'absolute', right: '20px', top: '50%', color: '#ffffff', fontSize: '14px', filter: 'drop-shadow(0 0 5px #ffffff)' }}>✨</div>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* 버튼 바 */}
+                {/* buttons */}
                 <div className="mt-4 grid grid-cols-2 gap-3">
                   <button
                     onClick={() => setNewAchievement(null)}
@@ -834,7 +1064,6 @@ export default function App() {
 
                   <button
                     onClick={() => {
-                      // ✅ 카드 공유: shareItem에 아이콘/설명/달성시간 넣기
                       setShareItem({
                         title: popupMeta.title,
                         desc: popupMeta.desc,
@@ -863,7 +1092,7 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        {/* ✅ Hidden 공유 카드(캡처용) - 기존 너 디자인 그대로 */}
+        {/* ✅ Hidden 공유 카드(캡처용) */}
         {shareItem && (
           <div ref={shareCardRef} style={{
             position: 'fixed', top: 0, left: 0, width: '600px', height: '850px',
@@ -873,7 +1102,6 @@ export default function App() {
             fontFamily: "'Inter', 'Pretendard', sans-serif"
           }}>
             <div style={{ width: '560px', height: '810px', border: '1.5px solid #7dd3fc', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', padding: '60px 40px', boxSizing: 'border-box' }}>
-
               {/* corners */}
               <svg style={{ position: 'absolute', top: '10px', left: '10px', width: '40px', height: '40px', fill: 'none', stroke: '#7dd3fc', strokeWidth: '1.5' }} viewBox="0 0 40 40"><path d="M0,40 A40,40 0 0,1 40,0" /></svg>
               <svg style={{ position: 'absolute', top: '10px', right: '10px', width: '40px', height: '40px', fill: 'none', stroke: '#7dd3fc', strokeWidth: '1.5', transform: 'rotate(90deg)' }} viewBox="0 0 40 40"><path d="M0,40 A40,40 0 0,1 40,0" /></svg>
@@ -885,7 +1113,7 @@ export default function App() {
                 <h1 style={{ fontSize: '56px', fontWeight: 300, color: '#ffffff', letterSpacing: '0.1em', margin: 0, textShadow: '0 0 10px rgba(125, 211, 252, 0.5)', position: 'relative', zIndex: 2 }}>
                   {shareItem.title}
                 </h1>
-                <svg style={{ position: 'absolute', top: '70px', left: '50%', transform: 'translateX(-50%)', width: '380px', height: '60px', fill: 'none', stroke: '#7dd3fc', strokeWidth: 1, opacity: 0.6, zIndex: 1 }}>
+                <svg style={{ position: 'absolute', top: '45px', left: '50%', transform: 'translateX(-50%)', width: '380px', height: '60px', fill: 'none', stroke: '#7dd3fc', strokeWidth: 1, opacity: 0.6, zIndex: 1 }}>
                   <path d="M0,30 Q190,-20 380,30" />
                 </svg>
               </div>
@@ -906,10 +1134,10 @@ export default function App() {
                 </div>
               </div>
 
-              {/* user + desc (Korean) */}
+              {/* user + desc */}
               <div style={{ textAlign: 'center', zIndex: 10, width: '80%' }}>
                 <p style={{ fontSize: '26px', fontWeight: 400, color: '#ffffff', margin: 0 }}>
-                  <span style={{ fontWeight: 800, color: '#7dd3fc' }}>{user?.displayName || 'Collector'}</span> 님,
+                  <span style={{ fontWeight: 800, color: '#7dd3fc' }}>{displayName}</span> 님,
                 </p>
                 <p style={{ fontSize: '20px', fontWeight: 300, color: '#ffffff', marginTop: '12px', opacity: 0.9, wordBreak: 'keep-all', lineHeight: 1.4 }}>
                   {shareItem.desc || "당신의 취향을 기록합니다."}
@@ -924,14 +1152,6 @@ export default function App() {
                 </p>
                 <p style={{ fontSize: '22px', fontWeight: 900, color: '#ffffff', letterSpacing: '0.15em', textShadow: '0 0 10px rgba(125, 211, 252, 0.3)' }}>UNFRAME PLAYLIST</p>
               </div>
-
-              {/* decor */}
-              <div style={{ position: 'absolute', top: '160px', left: '50px', color: '#7dd3fc', fontSize: '24px', filter: 'drop-shadow(0 0 5px #7dd3fc)' }}>✦</div>
-              <div style={{ position: 'absolute', top: '200px', right: '60px', color: '#ffffff', fontSize: '18px', filter: 'drop-shadow(0 0 5px #ffffff)' }}>◆</div>
-              <div style={{ position: 'absolute', bottom: '240px', left: '70px', color: '#ffffff', fontSize: '20px', filter: 'drop-shadow(0 0 5px #ffffff)' }}>◆</div>
-              <div style={{ position: 'absolute', bottom: '180px', right: '40px', color: '#7dd3fc', fontSize: '28px', filter: 'drop-shadow(0 0 5px #7dd3fc)' }}>✦</div>
-              <div style={{ position: 'absolute', left: '20px', top: '50%', color: '#ffffff', fontSize: '14px', filter: 'drop-shadow(0 0 5px #ffffff)' }}>✨</div>
-              <div style={{ position: 'absolute', right: '20px', top: '50%', color: '#ffffff', fontSize: '14px', filter: 'drop-shadow(0 0 5px #ffffff)' }}>✨</div>
             </div>
           </div>
         )}

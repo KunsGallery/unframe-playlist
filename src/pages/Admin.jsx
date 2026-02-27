@@ -4,13 +4,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   ShieldCheck, Trash2, Eye, Edit2, Upload, Loader2, FileText, Sparkles,
   Save, Type, ListMusic, Settings2, Plus, CheckCircle2, Users, Search, Award,
-  Flame, Crown, Sunrise, Target, Waves, Music, Heart, Share2, Zap, Medal, Navigation,
-  Calendar, Star, Moon, Coffee, Ghost, Repeat, Smartphone, Clock, User, ArrowRight, MousePointer2,
-  Trophy
+  Flame, Crown, Sunrise, Target, Waves, Music, Heart, Share2, Zap, Medal,
+  Calendar, Star, Moon, Repeat, User, ArrowRight, MousePointer2, Trophy
 } from 'lucide-react';
 import {
   doc, addDoc, updateDoc, deleteDoc, collection, getDoc, setDoc, getDocs, Timestamp
 } from 'firebase/firestore';
+
+import { LEVELS } from '../levels';
 
 const glass = "bg-white/[0.03] backdrop-blur-[40px] border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]";
 const h1Title = "font-black uppercase tracking-[-0.07em] leading-[0.8] italic";
@@ -44,7 +45,6 @@ const COLLECTIVE_DATA = {
   pioneer_26: { title: "Pioneer 26", icon: Target, color: "#2dd4bf" },
   insadong_wave: { title: "Insadong Wave", icon: Waves, color: "#3b82f6" },
 
-  // ✅ 배치 지급 스티커 예시
   annual_bronze_2026: { title: "2026 Bronze", icon: Medal, color: "#cd7f32" },
   annual_silver_2026: { title: "2026 Silver", icon: Medal, color: "#c0c0c0" },
   annual_gold_2026: { title: "2026 Gold", icon: Trophy, color: "#fbbf24" },
@@ -63,7 +63,6 @@ const asObjectRewards = (rewards) => {
   if (!Array.isArray(rewards)) return [];
   if (rewards.length === 0) return [];
   if (typeof rewards[0] === 'object') return rewards.filter(Boolean);
-  // string[] -> object[]
   const year = new Date().getFullYear();
   const nowTs = Timestamp.fromMillis(Date.now());
   return rewards
@@ -76,10 +75,7 @@ const addRewardObject = (rewards, id, meta = {}) => {
   const ids = normalizeRewardIds(base);
   if (ids.has(id)) return base;
   const year = new Date().getFullYear();
-  return [
-    ...base,
-    { id, unlockedAt: Timestamp.fromMillis(Date.now()), year, meta },
-  ];
+  return [...base, { id, unlockedAt: Timestamp.fromMillis(Date.now()), year, meta }];
 };
 
 const removeRewardById = (rewards, id) => {
@@ -92,7 +88,7 @@ const safeSrc = (v) => (typeof v === "string" && v.trim() ? v : null);
 export default function Admin({
   isAdmin,
   user,
-  signInWithPopup,
+  signInWithPopup, // (선택) App에서 안 넘겨도 됨
   tracks = [],
   playlists = [],
   db,
@@ -133,6 +129,11 @@ export default function Admin({
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [selectedUserForSticker, setSelectedUserForSticker] = useState(null);
 
+  // ✅ 유저 닉네임/레벨 관리 input
+  const [nicknameDraft, setNicknameDraft] = useState("");
+  const [levelOverrideName, setLevelOverrideName] = useState("");
+  const [levelOverrideColor, setLevelOverrideColor] = useState("");
+
   // 배치 정산
   const [settleYear, setSettleYear] = useState(String(new Date().getFullYear()));
   const [isSettling, setIsSettling] = useState(false);
@@ -160,7 +161,7 @@ export default function Admin({
   // 유저 리스트 로드
   // -------------------------
   const fetchUsers = async () => {
-    if (!isAdmin) return;
+    if (!isAdmin || !db) return;
     setIsLoadingUsers(true);
     try {
       const querySnapshot = await getDocs(collection(db, 'artifacts', appId, 'public_stats'));
@@ -176,25 +177,71 @@ export default function Admin({
 
   useEffect(() => {
     if (activeTab === 'users' && isAdmin) fetchUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, isAdmin]);
 
+  // ✅ 검색: displayName + nickname + uid
   const filteredUsers = useMemo(() => {
-    const term = userSearchTerm.toLowerCase();
-    return allUsers.filter(u =>
-      (u.displayName || '').toLowerCase().includes(term) ||
-      (u.id || '').toLowerCase().includes(term)
-    );
+    const term = userSearchTerm.toLowerCase().trim();
+    if (!term) return allUsers;
+
+    return allUsers.filter(u => {
+      const dn = (u.displayName || '').toLowerCase();
+      const nn = (u.nickname || '').toLowerCase();
+      const id = (u.id || '').toLowerCase();
+      return dn.includes(term) || nn.includes(term) || id.includes(term);
+    });
   }, [allUsers, userSearchTerm]);
 
   const selectedUserRewardIds = useMemo(() => {
     return normalizeRewardIds(selectedUserForSticker?.rewards || []);
   }, [selectedUserForSticker?.rewards]);
 
+  // ✅ 선택 유저 바뀌면 private stats까지 불러와서 최신화
+  useEffect(() => {
+    if (!db || !isAdmin) return;
+    if (!selectedUserForSticker?.id) return;
+
+    const uid = selectedUserForSticker.id;
+
+    (async () => {
+      try {
+        const privateRef = doc(db, 'artifacts', appId, 'users', uid, 'profile', 'stats');
+        const snap = await getDoc(privateRef);
+
+        if (snap.exists()) {
+          const stats = snap.data();
+
+          setSelectedUserForSticker(prev => ({ ...prev, ...stats }));
+
+          const currentNickname =
+            (stats?.nickname || "").trim() ||
+            (selectedUserForSticker.nickname || "").trim() ||
+            (selectedUserForSticker.displayName || "");
+          setNicknameDraft(currentNickname);
+
+          const mn = (stats?.manualLevelName || "").trim();
+          const mc = (stats?.manualLevelColor || "").trim();
+          setLevelOverrideName(mn);
+          setLevelOverrideColor(mc);
+        } else {
+          const fallbackName = (selectedUserForSticker.nickname || selectedUserForSticker.displayName || "");
+          setNicknameDraft(fallbackName);
+          setLevelOverrideName("");
+          setLevelOverrideColor("");
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedUserForSticker?.id, db, isAdmin, appId]);
+
   // -------------------------
   // ✅ rewards object[] 지급/회수
   // -------------------------
   const handleStickerToggle = async (targetUid, stickerId, isGiving) => {
-    if (!isAdmin) return;
+    if (!isAdmin || !db) return;
 
     const privateRef = doc(db, 'artifacts', appId, 'users', targetUid, 'profile', 'stats');
     const publicRef = doc(db, 'artifacts', appId, 'public_stats', targetUid);
@@ -224,11 +271,10 @@ export default function Admin({
   };
 
   // -------------------------
-  // ✅ 연말/월말 배치 정산 (연도 기준)
-  // - yearly[YYYY].unlocked 기준으로 Bronze/Silver/Gold 지급
+  // ✅ 연말 배치 정산(연도)
   // -------------------------
   const runYearlySettlement = async () => {
-    if (!isAdmin) return;
+    if (!isAdmin || !db) return;
 
     const year = String(settleYear).trim();
     if (!/^\d{4}$/.test(year)) {
@@ -282,6 +328,119 @@ export default function Admin({
       setAuthError?.("정산 실행 실패");
     } finally {
       setIsSettling(false);
+    }
+  };
+
+  // -------------------------
+  // ✅ (신규) 닉네임 관리자 저장
+  // - private: nickname 저장
+  // - public : displayName 동기화 (홈 랭킹에 즉시 반영)
+  // -------------------------
+  const adminSaveNickname = async () => {
+    if (!isAdmin || !db || !selectedUserForSticker?.id) return;
+    const uid = selectedUserForSticker.id;
+    const next = String(nicknameDraft || "").trim();
+    if (!next) {
+      setToastMessage?.("닉네임이 비어있습니다.");
+      return;
+    }
+
+    const privateRef = doc(db, 'artifacts', appId, 'users', uid, 'profile', 'stats');
+    const publicRef = doc(db, 'artifacts', appId, 'public_stats', uid);
+
+    try {
+      await setDoc(privateRef, { nickname: next }, { merge: true });
+      await setDoc(publicRef, { displayName: next, nickname: next }, { merge: true });
+
+      setToastMessage?.("닉네임 저장 완료 ✨");
+
+      setSelectedUserForSticker(prev => ({ ...prev, nickname: next, displayName: next }));
+      setAllUsers(prev => prev.map(u => u.id === uid ? { ...u, displayName: next, nickname: next } : u));
+    } catch (e) {
+      console.error(e);
+      setAuthError?.("닉네임 저장 실패");
+    }
+  };
+
+  // ✅ (신규) 닉네임 1회 변경권 리셋
+  const adminResetNicknameChance = async () => {
+    if (!isAdmin || !db || !selectedUserForSticker?.id) return;
+    const uid = selectedUserForSticker.id;
+    const privateRef = doc(db, 'artifacts', appId, 'users', uid, 'profile', 'stats');
+
+    try {
+      await setDoc(privateRef, { nicknameChanged: false }, { merge: true });
+      setToastMessage?.("닉네임 변경권을 리셋했습니다 ✅");
+      setSelectedUserForSticker(prev => ({ ...prev, nicknameChanged: false }));
+    } catch (e) {
+      console.error(e);
+      setAuthError?.("리셋 실패");
+    }
+  };
+
+  // ✅ (신규) 레벨 수동 지정(override)
+  const adminApplyManualLevel = async () => {
+    if (!isAdmin || !db || !selectedUserForSticker?.id) return;
+    const uid = selectedUserForSticker.id;
+
+    const name = String(levelOverrideName || "").trim();
+    const color = String(levelOverrideColor || "").trim();
+
+    if (!name) {
+      setToastMessage?.("레벨을 선택하세요.");
+      return;
+    }
+
+    const privateRef = doc(db, 'artifacts', appId, 'users', uid, 'profile', 'stats');
+    const publicRef = doc(db, 'artifacts', appId, 'public_stats', uid);
+
+    try {
+      await setDoc(privateRef, { manualLevelName: name, manualLevelColor: color }, { merge: true });
+      await setDoc(publicRef, { levelName: name, levelColor: color }, { merge: true });
+
+      setToastMessage?.("수동 레벨 지정 완료 ✨");
+      setSelectedUserForSticker(prev => ({
+        ...prev,
+        manualLevelName: name,
+        manualLevelColor: color,
+        levelName: name,
+        levelColor: color
+      }));
+      setAllUsers(prev => prev.map(u => u.id === uid ? { ...u, levelName: name, levelColor: color } : u));
+    } catch (e) {
+      console.error(e);
+      setAuthError?.("레벨 지정 실패");
+    }
+  };
+
+  // ✅ (신규) 레벨 수동 지정 해제 (public_stats도 즉시 빈값으로)
+  const adminClearManualLevel = async () => {
+    if (!isAdmin || !db || !selectedUserForSticker?.id) return;
+    const uid = selectedUserForSticker.id;
+
+    const privateRef = doc(db, 'artifacts', appId, 'users', uid, 'profile', 'stats');
+    const publicRef = doc(db, 'artifacts', appId, 'public_stats', uid);
+
+    try {
+      await setDoc(privateRef, { manualLevelName: "", manualLevelColor: "" }, { merge: true });
+      await setDoc(publicRef, { levelName: "", levelColor: "" }, { merge: true }); // ✅ 즉시 반영
+
+      setToastMessage?.("수동 레벨을 해제했습니다 ✅");
+
+      setSelectedUserForSticker(prev => ({
+        ...prev,
+        manualLevelName: "",
+        manualLevelColor: "",
+        levelName: prev?.levelName || "",
+        levelColor: prev?.levelColor || "",
+      }));
+      setAllUsers(prev => prev.map(u => u.id === uid ? { ...u, levelName: "", levelColor: "" } : u));
+
+      setLevelOverrideName("");
+      setLevelOverrideColor("");
+    } catch (e) {
+      console.error(e);
+      setAuthError?.("해제 실패");
     }
   };
 
@@ -355,7 +514,7 @@ export default function Admin({
 
   const handleAddOrUpdateTrack = async (e) => {
     e.preventDefault();
-    if (!isAdmin) return;
+    if (!isAdmin || !db) return;
 
     try {
       if (editingId) {
@@ -392,7 +551,7 @@ export default function Admin({
   };
 
   const handleToggleVisibility = async (track) => {
-    if (!isAdmin) return;
+    if (!isAdmin || !db) return;
     try {
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tracks', track.id), { isHidden: !track.isHidden });
       setToastMessage?.(track.isHidden ? "공개됨 👁️" : "숨김 처리됨 🚫");
@@ -404,7 +563,7 @@ export default function Admin({
   // -------------------------
   const handleAddOrUpdatePlaylist = async (e) => {
     e.preventDefault();
-    if (!isAdmin) return;
+    if (!isAdmin || !db) return;
 
     try {
       if (editingPlaylistId) {
@@ -465,7 +624,7 @@ export default function Admin({
   };
 
   const handleSaveAllConfig = async () => {
-    if (!isAdmin) return;
+    if (!isAdmin || !db) return;
 
     try {
       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'featured', 'directors_pick'), featuredData);
@@ -487,11 +646,14 @@ export default function Admin({
         <div className={glass + " p-16 lg:p-32 rounded-[3rem] text-center space-y-8"}>
           <ShieldCheck className="w-16 h-16 lg:w-24 lg:h-24 mx-auto text-[#004aad]" />
           <button
-            onClick={signInWithPopup}
+            onClick={() => signInWithPopup?.()}
             className="bg-white text-black px-12 lg:px-20 py-4 lg:py-6 rounded-full font-black uppercase text-xs lg:text-sm tracking-widest shadow-2xl"
           >
             Verify Admin
           </button>
+          <p className="text-zinc-600 text-xs font-bold">
+            App.jsx에서 isAdmin이 true면 자동으로 열립니다.
+          </p>
         </div>
       ) : (
         <>
@@ -513,7 +675,7 @@ export default function Admin({
                   <div className={`${glass} p-4 rounded-full flex items-center gap-4 px-6`}>
                     <Search className="w-5 h-5 text-zinc-500" />
                     <input
-                      placeholder="유저 닉네임 또는 UID 검색..."
+                      placeholder="닉네임/이름/UID 검색..."
                       className="bg-transparent border-none outline-none flex-1 font-bold text-white uppercase text-sm"
                       value={userSearchTerm}
                       onChange={e => setUserSearchTerm(e.target.value)}
@@ -547,31 +709,38 @@ export default function Admin({
                   </div>
 
                   <div className="space-y-3 max-h-175 overflow-y-auto no-scrollbar pr-2">
-                    {filteredUsers.map(u => (
-                      <div
-                        key={u.id}
-                        onClick={() => setSelectedUserForSticker(u)}
-                        className={`${glass} p-5 rounded-3xl flex justify-between items-center cursor-pointer transition-all border-white/5 hover:border-[#004aad]/50 ${selectedUserForSticker?.id === u.id ? 'bg-[#004aad]/10 border-[#004aad]/40' : ''}`}
-                      >
-                        <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 rounded-full bg-zinc-800 overflow-hidden border border-white/10 flex items-center justify-center">
-                            {safeSrc(u.profileImg) ? <img src={u.profileImg} className="w-full h-full object-cover" alt="" /> : <User className="w-6 h-6 text-white/20" />}
+                    {filteredUsers.map(u => {
+                      const name = (u.nickname || u.displayName || 'Guest');
+                      return (
+                        <div
+                          key={u.id}
+                          onClick={() => setSelectedUserForSticker(u)}
+                          className={`${glass} p-5 rounded-3xl flex justify-between items-center cursor-pointer transition-all border-white/5 hover:border-[#004aad]/50 ${selectedUserForSticker?.id === u.id ? 'bg-[#004aad]/10 border-[#004aad]/40' : ''}`}
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-full bg-zinc-800 overflow-hidden border border-white/10 flex items-center justify-center">
+                              {safeSrc(u.profileImg) ? <img src={u.profileImg} className="w-full h-full object-cover" alt="" /> : <User className="w-6 h-6 text-white/20" />}
+                            </div>
+                            <div className="min-w-0 pr-2">
+                              <p className="font-black uppercase text-lg truncate">{name}</p>
+                              <p className="text-[9px] text-zinc-500 font-bold">{u.id?.slice(0, 16)}...</p>
+                            </div>
                           </div>
-                          <div className="min-w-0 pr-2">
-                            <p className="font-black uppercase text-lg truncate">{u.displayName || 'Guest'}</p>
-                            <p className="text-[9px] text-zinc-500 font-bold">{u.id?.slice(0, 16)}...</p>
-                          </div>
+                          <ArrowRight size={14} className="text-zinc-600" />
                         </div>
-                        <ArrowRight size={14} className="text-zinc-600" />
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
 
                 {/* RIGHT */}
                 <div className="lg:col-span-7">
                   {selectedUserForSticker ? (
-                    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className={`${glass} p-8 lg:p-12 rounded-[4rem] border-white/10 space-y-12 shadow-2xl relative overflow-visible`}>
+                    <motion.div
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className={`${glass} p-8 lg:p-12 rounded-[4rem] border-white/10 space-y-12 shadow-2xl relative overflow-visible`}
+                    >
                       <div className="flex items-center gap-6 pb-8 border-b border-white/10">
                         <div className="w-20 h-20 rounded-full bg-zinc-900 border-2 border-[#004aad] p-1 flex items-center justify-center overflow-hidden">
                           {safeSrc(selectedUserForSticker.profileImg)
@@ -579,10 +748,110 @@ export default function Admin({
                             : <User className="w-8 h-8 text-white/20" />
                           }
                         </div>
-                        <div className="flex-1">
-                          <h3 className="text-3xl font-black uppercase italic tracking-tighter text-white">{selectedUserForSticker.displayName || "Collector"}</h3>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-3xl font-black uppercase italic tracking-tighter text-white truncate">
+                            {selectedUserForSticker.nickname || selectedUserForSticker.displayName || "Collector"}
+                          </h3>
                           <p className="text-[10px] text-zinc-500 font-bold">{selectedUserForSticker.id}</p>
+                          <div className="mt-2 flex items-center gap-2">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Level:</span>
+                            <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: selectedUserForSticker.levelColor || "#71717a" }}>
+                              {selectedUserForSticker.levelName || "User"}
+                            </span>
+                            {selectedUserForSticker.xp !== undefined && (
+                              <span className="text-[10px] font-black uppercase tracking-widest text-zinc-600">
+                                • XP {selectedUserForSticker.xp}
+                              </span>
+                            )}
+                          </div>
                         </div>
+                      </div>
+
+                      {/* ✅ User Profile Controls */}
+                      <div className="space-y-5">
+                        <div className="flex items-center gap-3">
+                          <Settings2 className="w-4 h-4 text-[#004aad]" />
+                          <h4 className="text-xs font-black uppercase tracking-widest text-[#004aad]">Profile Controls</h4>
+                        </div>
+
+                        {/* Nickname */}
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+                          <div className="lg:col-span-2">
+                            <p className="text-[10px] text-zinc-500 font-black uppercase mb-1 ml-1">Nickname</p>
+                            <input
+                              value={nicknameDraft}
+                              onChange={(e) => setNicknameDraft(e.target.value)}
+                              className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest outline-none focus:border-[#004aad]"
+                              placeholder="Nickname"
+                            />
+                            <p className="text-[9px] text-zinc-600 font-bold mt-2 ml-1">
+                              nicknameChanged: <span className="text-white/70">{String(!!selectedUserForSticker.nicknameChanged)}</span>
+                            </p>
+                          </div>
+                          <div className="flex flex-col gap-2 justify-end">
+                            <button
+                              onClick={adminSaveNickname}
+                              className="px-4 py-3 rounded-2xl bg-[#004aad] text-white font-black uppercase text-[10px] tracking-widest hover:brightness-110"
+                            >
+                              SAVE
+                            </button>
+                            <button
+                              onClick={adminResetNicknameChance}
+                              className="px-4 py-3 rounded-2xl bg-white/5 text-white font-black uppercase text-[10px] tracking-widest hover:bg-white/10"
+                            >
+                              RESET 1X
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Manual Level Override */}
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+                          <div className="lg:col-span-2">
+                            <p className="text-[10px] text-zinc-500 font-black uppercase mb-1 ml-1">Manual Level Override</p>
+                            <select
+                              value={levelOverrideName}
+                              onChange={(e) => {
+                                const name = e.target.value;
+                                setLevelOverrideName(name);
+                                const found = LEVELS.find(x => x.name === name);
+                                setLevelOverrideColor(found?.color || "");
+                              }}
+                              className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest outline-none focus:border-[#004aad] cursor-pointer"
+                            >
+                              <option value="">-- AUTO (NONE) --</option>
+                              {LEVELS.map(l => (
+                                <option key={l.key} value={l.name}>{l.name}</option>
+                              ))}
+                            </select>
+
+                            <div className="mt-2 flex items-center gap-2">
+                              <span className="text-[9px] font-black uppercase tracking-widest text-zinc-600">Color</span>
+                              <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: levelOverrideColor || "#71717a" }}>
+                                {levelOverrideColor || "(auto)"}
+                              </span>
+                              <div className="w-5 h-5 rounded-full border border-white/10" style={{ background: (levelOverrideColor || "#71717a") + "33" }} />
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col gap-2 justify-end">
+                            <button
+                              onClick={adminApplyManualLevel}
+                              className="px-4 py-3 rounded-2xl bg-[#004aad] text-white font-black uppercase text-[10px] tracking-widest hover:brightness-110"
+                            >
+                              APPLY
+                            </button>
+                            <button
+                              onClick={adminClearManualLevel}
+                              className="px-4 py-3 rounded-2xl bg-white/5 text-white font-black uppercase text-[10px] tracking-widest hover:bg-white/10"
+                            >
+                              CLEAR
+                            </button>
+                          </div>
+                        </div>
+
+                        <p className="text-[10px] text-zinc-600 font-bold leading-relaxed">
+                          * Manual override는 private에 저장되며, 즉시 public_stats에도 반영됩니다.
+                        </p>
                       </div>
 
                       {/* Achievements */}
@@ -648,7 +917,7 @@ export default function Admin({
                   ) : (
                     <div className={`${glass} p-20 rounded-[4rem] flex flex-col items-center justify-center text-center space-y-6 border-dashed border-white/10`}>
                       <Users size={64} className="text-zinc-800" />
-                      <p className="text-xs text-zinc-600 font-black uppercase">Select a user to grant records</p>
+                      <p className="text-xs text-zinc-600 font-black uppercase">Select a user to manage</p>
                     </div>
                   )}
                 </div>
