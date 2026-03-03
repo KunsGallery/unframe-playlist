@@ -1131,7 +1131,7 @@ export default function App() {
                 <h1 style={{ fontSize: '56px', fontWeight: 300, color: '#ffffff', letterSpacing: '0.1em', margin: 0, textShadow: '0 0 10px rgba(125, 211, 252, 0.5)', position: 'relative', zIndex: 2 }}>
                   {shareItem.title}
                 </h1>
-                <svg style={{ position: 'absolute', top: '45px', left: '50%', transform: 'translateX(-50%)', width: '380px', height: '60px', fill: 'none', stroke: '#7dd3fc', strokeWidth: 1, opacity: 0.6, zIndex: 1 }}>
+                <svg style={{ position: 'absolute', top: '70px', left: '50%', transform: 'translateX(-50%)', width: '380px', height: '60px', fill: 'none', stroke: '#7dd3fc', strokeWidth: 1, opacity: 0.6, zIndex: 1 }}>
                   <path d="M0,30 Q190,-20 380,30" />
                 </svg>
               </div>
