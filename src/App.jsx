@@ -302,6 +302,13 @@ export default function App() {
   useEffect(() => { queueRef.current = currentQueue || []; }, [currentQueue]);
   useEffect(() => { idxRef.current = currentTrackIdx || 0; }, [currentTrackIdx]);
 
+  useEffect(() => {
+  const audio = audioRef.current
+  if (!audio) return
+
+  audio.volume = isMuted ? 0 : volume
+}, [volume, isMuted])
+
   // --- derived ---
   const publicTracks = useMemo(() => tracks.filter(t => !t.isHidden), [tracks]);
 
@@ -1211,42 +1218,39 @@ export default function App() {
 
         <audio
          ref={audioRef}
+
          onTimeUpdate={(e) => {
-          const a = e.currentTarget;
-          setCurrentTime(a.currentTime);
+           const a = e.currentTarget
+           setCurrentTime(a.currentTime)
 
-          // ✅ iOS MediaSession positionState
-          try {
-           if ('mediaSession' in navigator && navigator.mediaSession.setPositionState) {
-        navigator.mediaSession.setPositionState({
-          duration: a.duration || 0,
-          playbackRate: a.playbackRate || 1,
-          position: a.currentTime || 0,
-        });
-      }
-    } catch {}
-  }}
-  ononLoadedMetadata={(e) => {
-  const a = e.currentTarget;
-  setDuration(a.duration);
+           try {
+            if ('mediaSession' in navigator && navigator.mediaSession.setPositionState) {
+               navigator.mediaSession.setPositionState({
+                 duration: a.duration || 0,
+                 playbackRate: a.playbackRate || 1,
+                 position: a.currentTime || 0,
+               })
+             }
+           } catch {}
+         }}
 
-  try {
-    const ms = navigator.mediaSession;
+         onLoadedMetadata={(e) => {
+           const a = e.currentTarget
+          setDuration(a.duration || 0)
 
-    if (ms && typeof ms.setPositionState === 'function') {
-      ms.setPositionState({
-        duration: a.duration || 0,
-        playbackRate: a.playbackRate || 1,
-        position: a.currentTime || 0,
-      });
-    }
-  } catch (err) {}
-}}
-  onEnded={() => {
-   // ✅ addEventListener보다 이게 더 안정적인 경우 많음
-   playNext();
-  }}
-  playsInline
+           try {
+             const ms = navigator.mediaSession
+             if (ms && typeof ms.setPositionState === 'function') {
+               ms.setPositionState({
+                 duration: a.duration || 0,
+                 playbackRate: a.playbackRate || 1,
+                 position: a.currentTime || 0,
+               })
+             }
+           } catch {}
+         }}
+
+         playsInline
 />
       </div>
     </Router>
