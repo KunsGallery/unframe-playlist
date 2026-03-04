@@ -81,7 +81,7 @@ const FullPlayer = ({
                       {publicTracks.map((track, idx) => {
                           const isCurrent = currentTrack.id === track.id;
                           return (
-                              <div key={track.id} id={`track-${track.id}`} onClick={() => playTrack(idx)} className={`flex items-center gap-4 p-4 rounded-2xl cursor-pointer transition-all ${isCurrent ? 'bg-white/10 border border-white/10' : 'hover:bg-white/5 border border-transparent'}`}>
+                              <div key={track.id} id={`track-${track.id}`} onClick={() => playTrack(idx, publicTracks)} className={`flex items-center gap-4 p-4 rounded-2xl cursor-pointer transition-all ${isCurrent ? 'bg-white/10 border border-white/10' : 'hover:bg-white/5 border border-transparent'}`}>
                                   <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 relative">
                                       <img src={track.image} className={`w-full h-full object-cover ${isCurrent && isPlaying ? 'opacity-50' : ''}`} alt="" />
                                       {isCurrent && isPlaying && <div className="absolute inset-0 flex items-center justify-center"><Loader2 className="w-5 h-5 animate-spin text-white" /></div>}

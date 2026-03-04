@@ -128,6 +128,7 @@ const AppRoutes = memo(function AppRoutes({
   publicTracks,
   playlists,
   isPlaying,
+  currentTrack,
   playTrack,
   userLikes,
   handleToggleLike,
@@ -153,6 +154,7 @@ const AppRoutes = memo(function AppRoutes({
             tracks={publicTracks}
             playlists={playlists}
             isPlaying={isPlaying}
+            currentTrack={currentTrack}
             playTrack={playTrack}
             userLikes={userLikes}
             handleToggleLike={handleToggleLike}
@@ -239,6 +241,7 @@ export default function App() {
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTrackIdx, setCurrentTrackIdx] = useState(0);
+  
 
   // ⚠️ player time updates are frequent → Routes are memo’d
   const [currentTime, setCurrentTime] = useState(0);

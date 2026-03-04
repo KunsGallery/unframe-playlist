@@ -18,6 +18,7 @@ export default function Home({
   tracks = [],
   playlists = [],
   isPlaying = false,
+  currentTrack,
   playTrack,
   userLikes = [],
   handleToggleLike,
@@ -415,7 +416,7 @@ export default function Home({
               {(tracks || []).slice(0, 2).map((track, idx) => {
                 const tImg = safeSrc(track?.image);
                 return (
-                  <div key={track?.id ?? idx} onClick={() => setSelectedTrack?.(track)} className="flex items-center gap-4 lg:gap-6 cursor-pointer hover:bg-white/5 p-3 rounded-2xl transition-all">
+                  <div key={track?.id ?? idx} onClick={() => safeplaay(idx, track)} className="flex items-center gap-4 lg:gap-6 cursor-pointer hover:bg-white/5 p-3 rounded-2xl transition-all">
                     <div className="w-20 h-20 lg:w-24 lg:h-24 rounded-2xl overflow-hidden shrink-0 relative bg-white/5 flex items-center justify-center">
                       {tImg ? <img src={tImg} className="w-full h-full object-cover" alt="" /> : <ListMusic className="w-10 h-10 text-white/20" />}
                       <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
@@ -532,11 +533,21 @@ export default function Home({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-12 gap-y-4">
             {displayTracks.length > 0 ? displayTracks.map((track) => {
               const img = safeSrc(track?.image);
+              const isActive = currentTrack?.id === track?.id;
+
               return (
                 <div
                   key={track?.id}
-                  onClick={() => setSelectedTrack?.(track)}
-                  className="flex items-center gap-4 p-3 rounded-xl hover:bg-white/5 cursor-pointer group transition-colors border-b border-white/5 last:border-0 md:border-0"
+                  onClick={() => safePlay(displayTracks.findIndex(t => t?.id === track?.id), displayTracks)}
+                  className={`
+                    flex items-center gap-4 p-3 rounded-xl cursor-pointer group
+                    border-b border-white/5 last:border-0 md:border-0
+                    transition-all duration-300
+                    ${isActive
+                      ? 'bg-white/10 border-l-2 border-[#004aad] shadow-[0_0_20px_rgba(0,74,173,0.25)]'
+                      : 'hover:bg-white/5 hover:shadow-[0_0_20px_rgba(0,74,173,0.2)] hover:scale-[1.01]'
+                    }
+                  `}
                 >
                   <div className="w-12 h-12 rounded-lg overflow-hidden shrink-0 relative bg-white/5 flex items-center justify-center">
                     {img ? <img src={img} className="w-full h-full object-cover" alt="" /> : <ListMusic className="w-6 h-6 text-white/20" />}
