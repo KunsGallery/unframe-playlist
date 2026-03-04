@@ -56,13 +56,13 @@ const MiniPlayer = ({
 
             {/* 리빌 */}
             <div
-              className="absolute top-0 left-0 bottom-0 bg-gradient-to-r from-[#004aad]/5 via-[#004aad]/30 to-[#004aad]/70 transition-[width] duration-150 ease-linear"
+              className="absolute top-0 left-0 bottom-0 bg-linear-to-r from-[#004aad]/5 via-[#004aad]/30 to-[#004aad]/70 transition-[width] duration-150 ease-linear"
               style={{ width: `${progressPct}%` }}
             />
 
             {/* 네온 라인 */}
             <div
-              className="absolute top-0 bottom-0 w-[2px]"
+              className="absolute top-0 bottom-0 w-0.5"
               style={{
                 left: `calc(${progressPct}% - 1px)`,
                 backgroundColor: '#004aad',
