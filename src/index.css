@@ -4,3 +4,15 @@ body {
   margin: 0;
   background-color: #050505;
 }
+
+/* ===== 가사창 스크롤바 숨김 ===== */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}

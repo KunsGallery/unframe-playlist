@@ -62,10 +62,25 @@ const FullPlayer = ({
                   <div className="space-y-6 lg:space-y-10 pb-[40vh] pt-[20vh] w-full max-w-xl mx-auto">
                     {parsedLyrics.map((lyric, idx) => {
                       const isActive = idx === activeLyricIdx;
-                      if (parsedLyrics.length === 1 && lyric.time === 0) { return <p key={idx} className="text-xl lg:text-3xl text-center font-bold text-zinc-300 leading-loose whitespace-pre-wrap">{lyric.text}</p> }
+                      if (parsedLyrics.length === 1 && lyric.time === 0) { return <p key={idx} className="text-xl lg:text-4xl text-center font-bold text-zinc-300 leading-loose whitespace-pre-wrap">{lyric.text}</p> }
                       return (
-                        <div key={idx} id={`lyric-${idx}`} className={`transition-all duration-500 origin-left py-2 ${isActive ? 'scale-[1.15] opacity-100' : 'opacity-30 blur-[1px]'}`}>
-                          <p className={`text-xl lg:text-3xl font-black tracking-tight leading-tight ${isActive ? 'text-white' : 'text-zinc-300'}`}>{lyric.text || '🎵'}</p>
+                        <div key={idx} id={`lyric-${idx}`}
+                        className={`transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] py-3 ${
+                          isActive
+                            ? 'scale-[1.08] opacity-100 blur-0 translate-y-0'
+                            : 'opacity-20 blur-[3px] scale-[0.98] translate-y-1'
+                        }`}>
+                          <p className={`
+                               text-xl lg:text-3xl font-black tracking-tight leading-tight
+                               transition-all duration-700
+                               ${
+                                 isActive
+                                   ? 'text-[#5297ff] drop-shadow-[0_0_16px_rgba(0,74,173,0.7)]'
+                                   : 'text-zinc-300'
+                               }
+                             `}
+                          >
+                            {lyric.text || '🎵'}</p>
                         </div>
                       )
                     })}
@@ -106,11 +121,43 @@ const FullPlayer = ({
             <div className="min-w-0"><h2 className="text-3xl lg:text-4xl font-black uppercase tracking-tighter truncate text-white">{currentTrack.title}</h2><p className="text-sm lg:text-lg font-bold text-[#004aad] uppercase tracking-widest mt-2 truncate">{currentTrack.artist}</p></div>
             <button onClick={(e) => handleToggleLike(e, currentTrack.id)} className={`p-3 rounded-full transition-all ${userLikes.includes(currentTrack.id) ? 'bg-red-500/10 text-red-500' : 'bg-white/5 text-white'}`}><Heart className={`w-7 h-7 ${userLikes.includes(currentTrack.id) ? 'fill-current' : ''}`} /></button>
           </div>
-          <div className="space-y-3 relative py-2">
-            <div className="h-2 bg-white/10 rounded-full relative overflow-hidden"><div className="absolute inset-y-0 left-0 bg-white rounded-full shadow-[0_0_15px_rgba(255,255,255,0.5)] transition-all duration-100 ease-linear" style={{ width: `${progressPct}%` }} /></div>
-            <input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => { if(audioRef.current) audioRef.current.currentTime = parseFloat(e.target.value); }} className="absolute inset-0 w-full opacity-0 cursor-pointer h-full z-10" />
-            <div className="flex justify-between text-[11px] font-bold text-zinc-400"><span>{formatTime(currentTime)}</span><span>{formatTime(duration)}</span></div>
+          <div className="space-y-4 py-3 relative">
+
+            <div className="relative h-2 bg-white/10 rounded-full overflow-hidden">
+
+              <div
+                className="absolute inset-y-0 left-0 bg-[#004aad] transition-all duration-150 ease-linear"
+                style={{ width: `${(currentTime / duration) * 100 || 0}%` }}
+              />
+
+              <div
+                className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full shadow-lg"
+                style={{
+                  left: `calc(${(currentTime / duration) * 100 || 0}% - 8px)`
+                }}
+              />
+            </div>
+
+            <input
+              type="range"
+              min="0"
+              max={duration || 0}
+              step="0.1"
+              value={currentTime}
+              onChange={(e) => {
+                if (audioRef.current) {
+                  audioRef.current.currentTime = parseFloat(e.target.value);
+                }
+              }}
+              className="absolute top-0 left-0 w-full h-6 opacity-0 cursor-pointer"
+            />
+
+            <div className="flex justify-between text-[11px] font-bold text-zinc-400">
+              <span>{formatTime(currentTime)}</span>
+              <span>{formatTime(duration)}</span>
+            </div>
           </div>
+          
           <div className="flex items-center justify-between px-2">
             <button onClick={toggleShuffle} className={`p-3 transition-colors ${isShuffle ? 'text-[#004aad]' : 'text-zinc-500 hover:text-white'}`}><Shuffle className="w-6 h-6" /></button>
             <button onClick={() => playTrack((currentTrackIdx - 1 + publicTracks.length) % publicTracks.length)} className="p-4 text-white hover:scale-110 transition-transform"><SkipBack className="w-10 h-10 fill-current" /></button>

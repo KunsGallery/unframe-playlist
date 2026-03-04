@@ -40,7 +40,7 @@ const AudioPlayer = (props) => {
     if (!parsedLyrics || parsedLyrics.length <= 1) return -1;
     let idx = -1;
     for (let i = 0; i < parsedLyrics.length; i++) {
-      if (currentTime >= parsedLyrics[i].time - 0.2) {
+      if (currentTime >= parsedLyrics[i].time - 0.4) {
         idx = i;
       } else { break; }
     }

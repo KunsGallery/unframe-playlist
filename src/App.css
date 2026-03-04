@@ -40,3 +40,18 @@
 .read-the-docs {
   color: #888;
 }
+
+@keyframes eq1 {
+  0%,100% { height: 4px }
+  50% { height: 14px }
+}
+
+@keyframes eq2 {
+  0%,100% { height: 10px }
+  50% { height: 4px }
+}
+
+@keyframes eq3 {
+  0%,100% { height: 6px }
+  50% { height: 16px }
+}

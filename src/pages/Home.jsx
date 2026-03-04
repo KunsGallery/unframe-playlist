@@ -540,17 +540,42 @@ export default function Home({
                   key={track?.id}
                   onClick={() => safePlay(displayTracks.findIndex(t => t?.id === track?.id), displayTracks)}
                   className={`
-                    flex items-center gap-4 p-3 rounded-xl cursor-pointer group
+                    relative flex items-center gap-4 p-3 rounded-xl cursor-pointer group
                     border-b border-white/5 last:border-0 md:border-0
-                    transition-all duration-300
+                   transition-all duration-300 ease-out
                     ${isActive
-                      ? 'bg-white/10 border-l-2 border-[#004aad] shadow-[0_0_20px_rgba(0,74,173,0.25)]'
-                      : 'hover:bg-white/5 hover:shadow-[0_0_20px_rgba(0,74,173,0.2)] hover:scale-[1.01]'
+                      ? 'bg-[#004aad]/10 shadow-[0_0_20px_rgba(0,74,173,0.25)] scale-[1.01]'
+                      : 'hover:bg-white/5 hover:scale-[1.01]'
                     }
                   `}
                 >
+
+                  {/* 🔥 왼쪽 네온 액티브 라인 */}
+                  {isActive && (
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#004aad] shadow-[0_0_12px_#004aad]" />
+                  )}
+
                   <div className="w-12 h-12 rounded-lg overflow-hidden shrink-0 relative bg-white/5 flex items-center justify-center">
-                    {img ? <img src={img} className="w-full h-full object-cover" alt="" /> : <ListMusic className="w-6 h-6 text-white/20" />}
+                    {img ? (
+                      <img
+                        src={img}
+                        className={`w-full h-full object-cover transition-all duration-300 ${isActive ? 'brightness-110' : ''}`}
+                        alt=""
+                      />
+                    ) : (
+                      <ListMusic className="w-6 h-6 text-white/20" />
+                    )}
+
+                    {/* 🔥 Equalizer 애니메이션 (현재 재생 중일 때만) */}
+                    {isActive && isPlaying && (
+                      <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex gap-0.75 items-end h-4">
+                        <span className="w-0.5 bg-[#004aad] shadow-[0_0_6px_#004aad] animate-[eq1_1s_ease-in-out_infinite]" />
+                        <span className="w-0.5 bg-[#004aad] shadow-[0_0_6px_#004aad] animate-[eq2_1s_ease-in-out_infinite]" />
+                        <span className="w-0.5 bg-[#004aad] shadow-[0_0_6px_#004aad] animate-[eq3_1s_ease-in-out_infinite]" />
+                      </div>
+                    )}
+
+                    {/* Hover Play */}
                     <div className="absolute inset-0 bg-black/40 hidden group-hover:flex items-center justify-center">
                       <button
                         onClick={(e) => {
@@ -564,8 +589,12 @@ export default function Home({
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-white truncate">{track?.title ?? "Untitled"}</p>
-                    <p className="text-xs text-zinc-500 truncate">{track?.artist ?? ""}</p>
+                    <p className={`text-sm font-black uppercase truncate tracking-tight transition-colors duration-300 ${isActive ? 'text-[#004aad]' : 'text-white'}`}>
+                      {track.title}
+                    </p>
+                    <p className="text-[10px] text-zinc-400 uppercase tracking-widest truncate">
+                      {track.artist}
+                    </p>
                   </div>
 
                   <button
