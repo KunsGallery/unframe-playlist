@@ -1,5 +1,6 @@
 // src/components/FullPlayer.jsx
 import React, { useEffect, useRef } from 'react';
+import { formatTime, getDirectLink } from "../utils/PlayerUtils";
 import { motion, AnimatePresence } from 'framer-motion';
 import { Play, Pause, SkipBack, SkipForward, Heart, Share2, Volume2, VolumeX, Loader2, ChevronDown, AlignLeft, Repeat, Shuffle, Repeat1, ListMusic } from 'lucide-react';
 
@@ -7,8 +8,7 @@ const FullPlayer = ({
   currentTrack, setIsPlayerExpanded, isPlaying, progressPct, volume, isMuted, setIsMuted, setVolume,
   handleShare, handleToggleLike, userLikes, togglePlay, playTrack, currentTrackIdx, publicTracks, isBuffering,
   playerView, setPlayerView, 
-  parsedLyrics, activeLyricIdx, duration, currentTime, audioRef, formatTime,
-  loopMode, toggleLoop, isShuffle, toggleShuffle
+  parsedLyrics, activeLyricIdx, duration, currentTime, audioRef, loopMode, toggleLoop, isShuffle, toggleShuffle
 }) => {
   
   const lyricsContainerRef = useRef(null);

@@ -416,7 +416,7 @@ export default function Home({
               {(tracks || []).slice(0, 2).map((track, idx) => {
                 const tImg = safeSrc(track?.image);
                 return (
-                  <div key={track?.id ?? idx} onClick={() => safeplaay(idx, track)} className="flex items-center gap-4 lg:gap-6 cursor-pointer hover:bg-white/5 p-3 rounded-2xl transition-all">
+                  <div key={track?.id ?? idx} onClick={() => safeplay(idx, track)} className="flex items-center gap-4 lg:gap-6 cursor-pointer hover:bg-white/5 p-3 rounded-2xl transition-all">
                     <div className="w-20 h-20 lg:w-24 lg:h-24 rounded-2xl overflow-hidden shrink-0 relative bg-white/5 flex items-center justify-center">
                       {tImg ? <img src={tImg} className="w-full h-full object-cover" alt="" /> : <ListMusic className="w-10 h-10 text-white/20" />}
                       <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
@@ -628,7 +628,7 @@ export default function Home({
 
         <div className="rounded-[3rem] overflow-hidden border border-white/10 shadow-2xl bg-black/40">
           <iframe
-            src="//lightwidget.com/widgets/2c45aca067de5705bece3725c4e2ca5d.html"
+            src="//cdn.lightwidget.com/widgets/2c45aca067de5705bece3725c4e2ca5d.html"
             scrolling="no"
             allowtransparency="true"
             className="lightwidget-widget"

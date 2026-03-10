@@ -49,7 +49,7 @@ import {
   getDocs,
   Timestamp,
 } from "firebase/firestore";
-
+import { auth, ADMIN_EMAILS } from "../firebase";
 import { LEVELS } from "../levels";
 
 const glass =
@@ -128,7 +128,7 @@ const safeSrc = (v) => (typeof v === "string" && v.trim() ? v : null);
 export default function Admin({
   isAdmin,
   user,
-  signInWithPopup, // (선택) App에서 안 넘겨도 됨
+  signInWithPopup,
   tracks = [],
   playlists = [],
   db,
@@ -394,15 +394,46 @@ export default function Admin({
     }
   };
 
+  const ensureAdminSession = async () => {
+    const me = auth.currentUser;
+    if (!me) {
+      setAuthError?.("관리자 로그인이 필요합니다.");
+      return false;
+    }
+
+    try {
+      await me.getIdToken(true);
+    } catch (e) {
+      console.error(e);
+      setAuthError?.("관리자 인증 갱신 실패");
+      return false;
+    }
+
+    const email = (me.email || "").toLowerCase();
+    const ok = ADMIN_EMAILS.includes(email);
+
+    if (!ok) {
+      setAuthError?.("관리자 계정이 아닙니다.");
+      return false;
+    }
+
+    return true;
+  };
+
   // -------------------------
-  // ✅ (신규) 닉네임 관리자 저장
+  // ✅ 닉네임 관리자 저장
   // - private: nickname 저장
   // - public : displayName 동기화 (홈 랭킹에 즉시 반영)
   // -------------------------
   const adminSaveNickname = async () => {
     if (!isAdmin || !db || !selectedUserForSticker?.id) return;
+
+    const ok = await ensureAdminSession();
+    if (!ok) return;
+
     const uid = selectedUserForSticker.id;
     const next = String(nicknameDraft || "").trim();
+
     if (!next) {
       setToastMessage?.("닉네임이 비어있습니다.");
       return;
@@ -411,41 +442,90 @@ export default function Admin({
     const privateRef = doc(db, "artifacts", appId, "users", uid, "profile", "stats");
     const publicRef = doc(db, "artifacts", appId, "public_stats", uid);
 
-    try {
-      await setDoc(privateRef, { nickname: next }, { merge: true });
-      await setDoc(publicRef, { displayName: next, nickname: next }, { merge: true });
+    const results = await Promise.allSettled([
+      setDoc(privateRef, { nickname: next }, { merge: true }),
+      setDoc(publicRef, { displayName: next, nickname: next }, { merge: true }),
+    ]);
 
+    const privateOk = results[0].status === "fulfilled";
+    const publicOk = results[1].status === "fulfilled";
+
+    if (!privateOk) {
+      console.error("private nickname save failed:", results[0].reason);
+    }
+    if (!publicOk) {
+      console.error("public nickname save failed:", results[1].reason);
+    }
+
+    if (privateOk && publicOk) {
       setToastMessage?.("닉네임 저장 완료 ✨");
 
-      setSelectedUserForSticker((prev) => ({ ...prev, nickname: next, displayName: next }));
-      setAllUsers((prev) => prev.map((u) => (u.id === uid ? { ...u, displayName: next, nickname: next } : u)));
-    } catch (e) {
-      console.error(e);
-      setAuthError?.("닉네임 저장 실패");
+      setSelectedUserForSticker((prev) => ({
+        ...prev,
+        nickname: next,
+        displayName: next,
+      }));
+
+      setAllUsers((prev) =>
+        prev.map((u) =>
+          u.id === uid ? { ...u, displayName: next, nickname: next } : u
+        )
+      );
+      return;
     }
+
+    if (privateOk && !publicOk) {
+      setAuthError?.("개인 프로필 닉네임은 저장됐지만 public_stats 반영은 실패했습니다.");
+      return;
+    }
+
+    if (!privateOk && publicOk) {
+      setAuthError?.("public_stats는 반영됐지만 개인 프로필 닉네임 저장은 실패했습니다.");
+      return;
+    }
+
+    setAuthError?.("닉네임 저장 실패");
   };
 
-  // ✅ (신규) 닉네임 1회 변경권 리셋
+  // ✅ 닉네임 1회 변경권 리셋
   const adminResetNicknameChance = async () => {
     if (!isAdmin || !db || !selectedUserForSticker?.id) return;
+
+    const ok = await ensureAdminSession();
+    if (!ok) return;
+
     const uid = selectedUserForSticker.id;
     const privateRef = doc(db, "artifacts", appId, "users", uid, "profile", "stats");
 
     try {
-      await setDoc(privateRef, { nicknameChanged: false }, { merge: true });
+      await setDoc(
+        privateRef,
+        {
+          nicknameUpdatedCount: 0,
+        },
+        { merge: true }
+      );
+
       setToastMessage?.("닉네임 변경권을 리셋했습니다 ✅");
-      setSelectedUserForSticker((prev) => ({ ...prev, nicknameChanged: false }));
+
+      setSelectedUserForSticker((prev) => ({
+        ...prev,
+        nicknameUpdatedCount: 0,
+      }));
     } catch (e) {
       console.error(e);
       setAuthError?.("리셋 실패");
     }
   };
 
-  // ✅ (신규) 레벨 수동 지정(override)
+  // ✅ 레벨 수동 지정(override)
   const adminApplyManualLevel = async () => {
     if (!isAdmin || !db || !selectedUserForSticker?.id) return;
-    const uid = selectedUserForSticker.id;
 
+    const ok = await ensureAdminSession();
+    if (!ok) return;
+
+    const uid = selectedUserForSticker.id;
     const name = String(levelOverrideName || "").trim();
     const color = String(levelOverrideColor || "").trim();
 
@@ -457,11 +537,24 @@ export default function Admin({
     const privateRef = doc(db, "artifacts", appId, "users", uid, "profile", "stats");
     const publicRef = doc(db, "artifacts", appId, "public_stats", uid);
 
-    try {
-      await setDoc(privateRef, { manualLevelName: name, manualLevelColor: color }, { merge: true });
-      await setDoc(publicRef, { levelName: name, levelColor: color }, { merge: true });
+    const results = await Promise.allSettled([
+      setDoc(privateRef, { manualLevelName: name, manualLevelColor: color }, { merge: true }),
+      setDoc(publicRef, { levelName: name, levelColor: color }, { merge: true }),
+    ]);
 
+    const privateOk = results[0].status === "fulfilled";
+    const publicOk = results[1].status === "fulfilled";
+
+    if (!privateOk) {
+      console.error("private manual level save failed:", results[0].reason);
+    }
+    if (!publicOk) {
+      console.error("public manual level save failed:", results[1].reason);
+    }
+
+    if (privateOk && publicOk) {
       setToastMessage?.("수동 레벨 지정 완료 ✨");
+
       setSelectedUserForSticker((prev) => ({
         ...prev,
         manualLevelName: name,
@@ -469,25 +562,55 @@ export default function Admin({
         levelName: name,
         levelColor: color,
       }));
-      setAllUsers((prev) => prev.map((u) => (u.id === uid ? { ...u, levelName: name, levelColor: color } : u)));
-    } catch (e) {
-      console.error(e);
-      setAuthError?.("레벨 지정 실패");
+
+      setAllUsers((prev) =>
+        prev.map((u) =>
+          u.id === uid ? { ...u, levelName: name, levelColor: color } : u
+        )
+      );
+      return;
     }
+
+    if (privateOk && !publicOk) {
+      setAuthError?.("개인 프로필 레벨은 저장됐지만 public_stats 반영은 실패했습니다.");
+      return;
+    }
+
+    if (!privateOk && publicOk) {
+      setAuthError?.("public_stats는 반영됐지만 개인 프로필 레벨 저장은 실패했습니다.");
+      return;
+    }
+
+    setAuthError?.("레벨 지정 실패");
   };
 
-  // ✅ (신규) 레벨 수동 지정 해제 (public_stats도 즉시 빈값으로)
+  // ✅ 레벨 수동 지정 해제
   const adminClearManualLevel = async () => {
     if (!isAdmin || !db || !selectedUserForSticker?.id) return;
-    const uid = selectedUserForSticker.id;
 
+    const ok = await ensureAdminSession();
+    if (!ok) return;
+
+    const uid = selectedUserForSticker.id;
     const privateRef = doc(db, "artifacts", appId, "users", uid, "profile", "stats");
     const publicRef = doc(db, "artifacts", appId, "public_stats", uid);
 
-    try {
-      await setDoc(privateRef, { manualLevelName: "", manualLevelColor: "" }, { merge: true });
-      await setDoc(publicRef, { levelName: "", levelColor: "" }, { merge: true }); // ✅ 즉시 반영
+    const results = await Promise.allSettled([
+      setDoc(privateRef, { manualLevelName: "", manualLevelColor: "" }, { merge: true }),
+      setDoc(publicRef, { levelName: "", levelColor: "" }, { merge: true }),
+    ]);
 
+    const privateOk = results[0].status === "fulfilled";
+    const publicOk = results[1].status === "fulfilled";
+
+    if (!privateOk) {
+      console.error("private manual level clear failed:", results[0].reason);
+    }
+    if (!publicOk) {
+      console.error("public manual level clear failed:", results[1].reason);
+    }
+
+    if (privateOk && publicOk) {
       setToastMessage?.("수동 레벨을 해제했습니다 ✅");
 
       setSelectedUserForSticker((prev) => ({
@@ -495,14 +618,29 @@ export default function Admin({
         manualLevelName: "",
         manualLevelColor: "",
       }));
-      setAllUsers((prev) => prev.map((u) => (u.id === uid ? { ...u, levelName: "", levelColor: "" } : u)));
+
+      setAllUsers((prev) =>
+        prev.map((u) =>
+          u.id === uid ? { ...u, levelName: "", levelColor: "" } : u
+        )
+      );
 
       setLevelOverrideName("");
       setLevelOverrideColor("");
-    } catch (e) {
-      console.error(e);
-      setAuthError?.("해제 실패");
+      return;
     }
+
+    if (privateOk && !publicOk) {
+      setAuthError?.("개인 프로필 해제는 됐지만 public_stats 반영은 실패했습니다.");
+      return;
+    }
+
+    if (!privateOk && publicOk) {
+      setAuthError?.("public_stats는 반영됐지만 개인 프로필 해제는 실패했습니다.");
+      return;
+    }
+
+    setAuthError?.("해제 실패");
   };
 
   // -------------------------
