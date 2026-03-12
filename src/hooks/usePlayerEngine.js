@@ -201,22 +201,6 @@ export function usePlayerEngine({
     safeSet("previoustrack", () => playPrev());
     safeSet("nexttrack", () => playNext());
 
-    safeSet("seekto", (details) => {
-      if (typeof details.seekTime === "number") {
-        audio.currentTime = details.seekTime;
-      }
-    });
-
-    safeSet("seekbackward", (details) => {
-      const offset = details.seekOffset || 10;
-      audio.currentTime = Math.max(0, audio.currentTime - offset);
-    });
-
-    safeSet("seekforward", (details) => {
-      const offset = details.seekOffset || 10;
-      audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + offset);
-    });
-
     safeSet("stop", () => {
       audio.pause();
       audio.currentTime = 0;
@@ -226,24 +210,37 @@ export function usePlayerEngine({
       } catch {}
     });
 
-    if (!currentTrack) return;
+    if (currentTrack) {
+      const artworkUrl = currentTrack.image ? getDirectLink(currentTrack.image) : "";
 
-    const artworkUrl = currentTrack.image ? getDirectLink(currentTrack.image) : "";
+      try {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: currentTrack.title ?? "UNFRAME",
+          artist: currentTrack.artist ?? "",
+          album: currentTrack.album ?? "UNFRAME PLAYLIST",
+          artwork: artworkUrl
+            ? [
+                { src: artworkUrl, sizes: "96x96", type: "image/png" },
+                { src: artworkUrl, sizes: "192x192", type: "image/png" },
+                { src: artworkUrl, sizes: "512x512", type: "image/png" },
+              ]
+            : [],
+        });
+      } catch {}
+    }
 
-    try {
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: currentTrack.title ?? "UNFRAME",
-        artist: currentTrack.artist ?? "",
-        album: currentTrack.album ?? "UNFRAME PLAYLIST",
-        artwork: artworkUrl
-          ? [
-              { src: artworkUrl, sizes: "96x96", type: "image/png" },
-              { src: artworkUrl, sizes: "192x192", type: "image/png" },
-              { src: artworkUrl, sizes: "512x512", type: "image/png" },
-            ]
-          : [],
-      });
-    } catch {}
+    return () => {
+      safeSet("play", null);
+      safeSet("pause", null);
+      safeSet("previoustrack", null);
+      safeSet("nexttrack", null);
+      safeSet("stop", null);
+
+      // ❌ 10초 전후 아이콘 안 뜨게 명시적으로 제거
+      safeSet("seekto", null);
+      safeSet("seekbackward", null);
+      safeSet("seekforward", null);
+    };
   }, [audioRef, currentTrack, playNext, playPrev, setIsPlaying]);
 
   return {
