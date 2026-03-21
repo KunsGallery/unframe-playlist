@@ -178,24 +178,6 @@ export function usePlayerEngine({
   }, [queueRef, idxRef, playTrackRef]);
 
   useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    const onEnded = () => {
-      const q = queueRef.current || [];
-      if (!q.length) return;
-
-      const nextIdx = (idxRef.current + 1) % q.length;
-      playTrackRef.current?.(nextIdx, q, null);
-    };
-
-    audio.addEventListener("ended", onEnded);
-    return () => {
-      audio.removeEventListener("ended", onEnded);
-    };
-  }, [audioRef, queueRef, idxRef, playTrackRef]);
-
-  useEffect(() => {
     if (!("mediaSession" in navigator)) return;
 
     const audio = audioRef.current;

@@ -612,6 +612,9 @@ useToastTimer({
               }
             } catch {}
           }}
+          onEnded={() => {
+            playNext();
+          }}
           playsInline
         />
       </div>
