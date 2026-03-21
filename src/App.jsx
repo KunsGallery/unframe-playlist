@@ -423,28 +423,84 @@ useToastTimer({
     appId,
   });
 
-  const togglePlay = useCallback(async () => {
+  const handleNaturalTrackEnd = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
-    if (isPlaying) {
-      audio.pause();
-      setIsPlaying(false);
-      return;
-    }
+    const q = currentQueue || [];
+    if (!q.length) return;
+
+    const nextIdx = (currentTrackIdx + 1) % q.length;
+    const nextTrack = q[nextIdx];
+    if (!nextTrack) return;
+
+    const nextUrl = getDirectLink(nextTrack.audioUrl);
+    if (!nextUrl) return;
+
+    setCurrentTrackIdx(nextIdx);
+    setCurrentTime(0);
+    setDuration(0);
+
+    playSessionRef.current = {
+      startedAt: Date.now(),
+      trackId: nextTrack.id,
+      playlistKey: playSessionRef.current?.playlistKey || null,
+    };
 
     try {
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        await playPromise;
+      if ("mediaSession" in navigator) {
+        const artworkUrl = nextTrack.image ? getDirectLink(nextTrack.image) : "";
+
+        try {
+          navigator.mediaSession.metadata = new MediaMetadata({
+            title: nextTrack.title ?? "UNFRAME",
+            artist: nextTrack.artist ?? "",
+            album: nextTrack.album ?? "UNFRAME PLAYLIST",
+            artwork: artworkUrl
+              ? [
+                  { src: artworkUrl, sizes: "96x96", type: "image/png" },
+                  { src: artworkUrl, sizes: "192x192", type: "image/png" },
+                  { src: artworkUrl, sizes: "512x512", type: "image/png" },
+                ]
+              : [],
+          });
+        } catch {}
+
+        try {
+          navigator.mediaSession.playbackState = "playing";
+        } catch {}
       }
-      setIsPlaying(true);
-    } catch (err) {
-      if (err?.name === "AbortError") return;
-      console.error("togglePlay error:", err);
-      setIsPlaying(false);
-    }
-  }, [audioRef, isPlaying, setIsPlaying]);
+    } catch {}
+
+    try {
+      audio.pause();
+    } catch {}
+
+    audio.src = nextUrl;
+    audio.load();
+
+    window.setTimeout(async () => {
+      try {
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          await playPromise;
+        }
+        setIsPlaying(true);
+      } catch (err) {
+        if (err?.name === "AbortError") return;
+        console.error("handleNaturalTrackEnd play error:", err);
+        setIsPlaying(false);
+      }
+    }, 120);
+  }, [
+    audioRef,
+    currentQueue,
+    currentTrackIdx,
+    setCurrentTrackIdx,
+    setCurrentTime,
+    setDuration,
+    setIsPlaying,
+  ]);
 
   if (loading) {
     return (
@@ -612,9 +668,7 @@ useToastTimer({
               }
             } catch {}
           }}
-          onEnded={() => {
-            playNext();
-          }}
+          onEnded={handleNaturalTrackEnd}
           playsInline
         />
       </div>
