@@ -423,6 +423,68 @@ export default function App() {
     appId,
   });
 
+    const resumeCurrentTrackSafely = useCallback(async () => {
+    const audio = audioRef.current;
+    if (!audio || !currentTrack) return false;
+
+    const src = getDirectLink(currentTrack.audioUrl);
+    if (!src) return false;
+
+    const restoreTime = Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
+    const needsReload =
+      !audio.src ||
+      audio.src !== src ||
+      audio.readyState < 2;
+
+    try {
+      if (needsReload) {
+        audio.src = src;
+        audio.load();
+      } else {
+        audio.load();
+      }
+
+      const seekAfterReady = () => {
+        try {
+          audio.currentTime = restoreTime;
+        } catch {}
+      };
+
+      if (audio.readyState < 1) {
+        await new Promise((resolve) => {
+          const onLoaded = () => {
+            audio.removeEventListener("loadedmetadata", onLoaded);
+            seekAfterReady();
+            resolve();
+          };
+          audio.addEventListener("loadedmetadata", onLoaded, { once: true });
+        });
+      } else {
+        seekAfterReady();
+      }
+
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        await playPromise;
+      }
+
+      setIsPlaying(true);
+
+      try {
+        if ("mediaSession" in navigator) {
+          navigator.mediaSession.playbackState = "playing";
+        }
+      } catch {}
+
+      return true;
+    } catch (err) {
+      if (err?.name === "AbortError") return false;
+      console.error("resumeCurrentTrackSafely error:", err);
+      setIsPlaying(false);
+      return false;
+    }
+  }, [audioRef, currentTrack, setIsPlaying]);
+
   const togglePlay = useCallback(async () => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -430,8 +492,18 @@ export default function App() {
     if (isPlaying) {
       audio.pause();
       setIsPlaying(false);
+
+      try {
+        if ("mediaSession" in navigator) {
+          navigator.mediaSession.playbackState = "paused";
+        }
+      } catch {}
+
       return;
     }
+
+    const resumed = await resumeCurrentTrackSafely();
+    if (resumed) return;
 
     try {
       const playPromise = audio.play();
@@ -439,12 +511,18 @@ export default function App() {
         await playPromise;
       }
       setIsPlaying(true);
+
+      try {
+        if ("mediaSession" in navigator) {
+          navigator.mediaSession.playbackState = "playing";
+        }
+      } catch {}
     } catch (err) {
       if (err?.name === "AbortError") return;
       console.error("togglePlay error:", err);
       setIsPlaying(false);
     }
-  }, [audioRef, isPlaying, setIsPlaying]);
+  }, [audioRef, isPlaying, setIsPlaying, resumeCurrentTrackSafely]);
 
   const handleNaturalTrackEnd = useCallback(() => {
     const audio = audioRef.current;
