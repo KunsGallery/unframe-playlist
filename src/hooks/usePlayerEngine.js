@@ -230,7 +230,6 @@ export function usePlayerEngine({
       safeSet("nexttrack", null);
       safeSet("stop", null);
 
-      // ❌ 10초 전후 아이콘 안 뜨게 명시적으로 제거
       safeSet("seekto", null);
       safeSet("seekbackward", null);
       safeSet("seekforward", null);

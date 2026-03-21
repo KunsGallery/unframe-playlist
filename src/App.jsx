@@ -377,40 +377,40 @@ export default function App() {
   });
 
   useAppBoot({
-  auth,
-  ADMIN_EMAILS,
-  setUser,
-  setIsAdmin,
-  setLoading,
-  setScrolled,
-});
+    auth,
+    ADMIN_EMAILS,
+    setUser,
+    setIsAdmin,
+    setLoading,
+    setScrolled,
+  });
 
-useToastTimer({
-  toastMessage,
-  setToastMessage,
-});
+  useToastTimer({
+    toastMessage,
+    setToastMessage,
+  });
 
   useAppDataSync({
-  user,
-  isAuthReady: !loading,
-  db,
-  appId,
+    user,
+    isAuthReady: !loading,
+    db,
+    appId,
 
-  setUserProfile,
-  setNickInput,
-  setNickError,
-  setIsNickModalOpen,
+    setUserProfile,
+    setNickInput,
+    setNickError,
+    setIsNickModalOpen,
 
-  setAllUsers,
-  setTracks,
-  setCurrentQueue,
-  setPlaylists,
-  setUserLikes,
-  setSiteConfig,
+    setAllUsers,
+    setTracks,
+    setCurrentQueue,
+    setPlaylists,
+    setUserLikes,
+    setSiteConfig,
 
-  engineRef,
-  userProfile,
-});
+    engineRef,
+    userProfile,
+  });
 
   const { saveNicknameOnce } = useNicknameSetup({
     user,
@@ -422,6 +422,29 @@ useToastTimer({
     db,
     appId,
   });
+
+  const togglePlay = useCallback(async () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (isPlaying) {
+      audio.pause();
+      setIsPlaying(false);
+      return;
+    }
+
+    try {
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        await playPromise;
+      }
+      setIsPlaying(true);
+    } catch (err) {
+      if (err?.name === "AbortError") return;
+      console.error("togglePlay error:", err);
+      setIsPlaying(false);
+    }
+  }, [audioRef, isPlaying, setIsPlaying]);
 
   const handleNaturalTrackEnd = useCallback(() => {
     const audio = audioRef.current;
