@@ -22,6 +22,31 @@ export function usePlayerEngine({
 }) {
   const playRequestRef = useRef(0);
 
+  const syncMediaSession = useCallback((track, state = "playing") => {
+    if (!("mediaSession" in navigator) || !track) return;
+
+    const artworkUrl = track.image ? getDirectLink(track.image) : "";
+
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: track.title ?? "UNFRAME",
+        artist: track.artist ?? "",
+        album: track.album ?? "UNFRAME PLAYLIST",
+        artwork: artworkUrl
+          ? [
+              { src: artworkUrl, sizes: "96x96", type: "image/png" },
+              { src: artworkUrl, sizes: "192x192", type: "image/png" },
+              { src: artworkUrl, sizes: "512x512", type: "image/png" },
+            ]
+          : [],
+      });
+    } catch {}
+
+    try {
+      navigator.mediaSession.playbackState = state;
+    } catch {}
+  }, []);
+
   useEffect(() => {
     queueRef.current = currentQueue || [];
   }, [currentQueue, queueRef]);
@@ -88,6 +113,8 @@ export function usePlayerEngine({
             });
           }
         }
+
+        syncMediaSession(targetTrack, "playing");
 
         const playPromise = audio.play();
 
@@ -211,22 +238,7 @@ export function usePlayerEngine({
     });
 
     if (currentTrack) {
-      const artworkUrl = currentTrack.image ? getDirectLink(currentTrack.image) : "";
-
-      try {
-        navigator.mediaSession.metadata = new MediaMetadata({
-          title: currentTrack.title ?? "UNFRAME",
-          artist: currentTrack.artist ?? "",
-          album: currentTrack.album ?? "UNFRAME PLAYLIST",
-          artwork: artworkUrl
-            ? [
-                { src: artworkUrl, sizes: "96x96", type: "image/png" },
-                { src: artworkUrl, sizes: "192x192", type: "image/png" },
-                { src: artworkUrl, sizes: "512x512", type: "image/png" },
-              ]
-            : [],
-        });
-      } catch {}
+      syncMediaSession(currentTrack, audio.paused ? "paused" : "playing");
     }
 
     return () => {
@@ -241,7 +253,7 @@ export function usePlayerEngine({
       safeSet("seekbackward", null);
       safeSet("seekforward", null);
     };
-  }, [audioRef, currentTrack, playNext, playPrev, setIsPlaying]);
+  }, [audioRef, currentTrack, playNext, playPrev, setIsPlaying, syncMediaSession]);
 
   return {
     playTrack,
