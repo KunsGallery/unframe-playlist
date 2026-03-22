@@ -90,9 +90,6 @@ const COLLECTIVE_DATA = {
   annual_gold_2026: { title: "2026 Gold", icon: Trophy, color: "#fbbf24" },
 };
 
-// -------------------------
-// ✅ rewards 유틸 (string[]/object[] 모두 대응)
-// -------------------------
 const normalizeRewardIds = (rewards) => {
   if (!Array.isArray(rewards) || rewards.length === 0) return new Set();
   if (typeof rewards[0] === "string") return new Set(rewards.filter(Boolean));
@@ -125,6 +122,68 @@ const removeRewardById = (rewards, id) => {
 
 const safeSrc = (v) => (typeof v === "string" && v.trim() ? v : null);
 
+const HERO_SLIDE_TYPES = [
+  { value: "exhibition_ost", label: "Exhibition OST" },
+  { value: "new_album", label: "New Album" },
+  { value: "featured_playlist", label: "Featured Playlist" },
+];
+
+const DEFAULT_HERO_SLIDES = [
+  {
+    id: "hero-exhibition-ost",
+    type: "exhibition_ost",
+    eyebrow: "Exhibition OST",
+    title: "Sound For The Space",
+    subtitle: "전시의 공기를 음악으로 확장하는 큐레이션",
+    description: "현재 전시의 무드와 서사를 사운드로 이어주는 OST 셀렉션입니다.",
+    buttonLabel: "Play OST",
+    backgroundImage: "",
+    coverImage: "",
+    linkedPlaylistId: "",
+    trackIds: [],
+    isActive: true,
+  },
+  {
+    id: "hero-new-album",
+    type: "new_album",
+    eyebrow: "New Release",
+    title: "New Album",
+    subtitle: "UNFRAME PLAYLIST",
+    description: "지금 가장 먼저 보여주고 싶은 최신 사운드를 전면에 배치합니다.",
+    buttonLabel: "Play Release",
+    backgroundImage: "",
+    coverImage: "",
+    linkedPlaylistId: "",
+    trackIds: [],
+    isActive: true,
+  },
+  {
+    id: "hero-featured-playlist",
+    type: "featured_playlist",
+    eyebrow: "Featured Playlist",
+    title: "Curated Collection",
+    subtitle: "Curated by UNFRAME",
+    description: "분위기와 흐름을 고려해 선별한 대표 플레이리스트입니다.",
+    buttonLabel: "Open Playlist",
+    backgroundImage: "",
+    coverImage: "",
+    linkedPlaylistId: "",
+    trackIds: [],
+    isActive: true,
+  },
+];
+
+const normalizeHeroSlides = (raw) => {
+  if (!Array.isArray(raw) || raw.length === 0) return DEFAULT_HERO_SLIDES;
+  return raw.map((slide, idx) => ({
+    ...DEFAULT_HERO_SLIDES[idx % DEFAULT_HERO_SLIDES.length],
+    ...slide,
+    id: slide?.id || DEFAULT_HERO_SLIDES[idx % DEFAULT_HERO_SLIDES.length].id || `hero-slide-${idx + 1}`,
+    trackIds: Array.isArray(slide?.trackIds) ? slide.trackIds.filter(Boolean) : [],
+    isActive: slide?.isActive !== false,
+  }));
+};
+
 export default function Admin({
   isAdmin,
   user,
@@ -138,7 +197,6 @@ export default function Admin({
 }) {
   const [activeTab, setActiveTab] = useState("tracks");
 
-  // 트랙
   const [newTrack, setNewTrack] = useState({
     title: "",
     artist: "",
@@ -151,12 +209,10 @@ export default function Admin({
   const [editingId, setEditingId] = useState(null);
   const [isUploadingImg, setIsUploadingImg] = useState(false);
 
-  // 플레이리스트
   const [newPlaylist, setNewPlaylist] = useState({ title: "", desc: "", image: "", trackIds: [] });
   const [editingPlaylistId, setEditingPlaylistId] = useState(null);
   const [isUploadingPLImg, setIsUploadingPLImg] = useState(false);
 
-  // 사이트 설정
   const [featuredData, setFeaturedData] = useState({
     headline: "",
     subHeadline: "",
@@ -164,6 +220,7 @@ export default function Admin({
     description: "",
     linkedTrackId: "",
   });
+
   const [siteConfig, setSiteConfig] = useState({
     intro_title: "UNFRAME PLAYLIST",
     intro_desc: "감각의 프레임을 넘어선 소리의 아카이브",
@@ -176,26 +233,21 @@ export default function Admin({
     guide_2: "",
     guide_3: "",
     guide_4: "",
+    heroSlides: DEFAULT_HERO_SLIDES,
   });
 
-  // 유저
   const [allUsers, setAllUsers] = useState([]);
   const [userSearchTerm, setUserSearchTerm] = useState("");
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [selectedUserForSticker, setSelectedUserForSticker] = useState(null);
 
-  // ✅ 유저 닉네임/레벨 관리 input
   const [nicknameDraft, setNicknameDraft] = useState("");
   const [levelOverrideName, setLevelOverrideName] = useState("");
   const [levelOverrideColor, setLevelOverrideColor] = useState("");
 
-  // 배치 정산
   const [settleYear, setSettleYear] = useState(String(new Date().getFullYear()));
   const [isSettling, setIsSettling] = useState(false);
 
-  // -------------------------
-  // 초기 데이터 로드 (config)
-  // -------------------------
   useEffect(() => {
     if (!db || !isAdmin) return;
     const fetchData = async () => {
@@ -208,7 +260,14 @@ export default function Admin({
         const configSnap = await getDoc(
           doc(db, "artifacts", appId, "public", "data", "site_config", "main_texts")
         );
-        if (configSnap.exists()) setSiteConfig((prev) => ({ ...prev, ...configSnap.data() }));
+        if (configSnap.exists()) {
+          const data = configSnap.data();
+          setSiteConfig((prev) => ({
+            ...prev,
+            ...data,
+            heroSlides: normalizeHeroSlides(data?.heroSlides),
+          }));
+        }
       } catch (e) {
         console.error(e);
       }
@@ -216,9 +275,6 @@ export default function Admin({
     fetchData();
   }, [db, isAdmin, appId]);
 
-  // -------------------------
-  // 유저 리스트 로드
-  // -------------------------
   const fetchUsers = async () => {
     if (!isAdmin || !db) return;
     setIsLoadingUsers(true);
@@ -236,10 +292,8 @@ export default function Admin({
 
   useEffect(() => {
     if (activeTab === "users" && isAdmin) fetchUsers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, isAdmin]);
 
-  // ✅ 검색: displayName + nickname + uid
   const filteredUsers = useMemo(() => {
     const term = userSearchTerm.toLowerCase().trim();
     if (!term) return allUsers;
@@ -256,485 +310,151 @@ export default function Admin({
     return normalizeRewardIds(selectedUserForSticker?.rewards || []);
   }, [selectedUserForSticker?.rewards]);
 
-  // ✅ 선택 유저 바뀌면 private stats까지 불러와서 최신화
   useEffect(() => {
-    if (!db || !isAdmin) return;
-    if (!selectedUserForSticker?.id) return;
+    const fetchSelectedUserStats = async () => {
+      if (!selectedUserForSticker?.id || !db) return;
 
-    const uid = selectedUserForSticker.id;
-
-    (async () => {
       try {
-        const privateRef = doc(db, "artifacts", appId, "users", uid, "profile", "stats");
-        const snap = await getDoc(privateRef);
+        const ref = doc(db, "artifacts", appId, "public_stats", selectedUserForSticker.id);
+        const snap = await getDoc(ref);
+        if (!snap.exists()) return;
 
-        if (snap.exists()) {
-          const stats = snap.data();
-
-          setSelectedUserForSticker((prev) => ({ ...prev, ...stats }));
-
-          const currentNickname =
-            (stats?.nickname || "").trim() ||
-            (selectedUserForSticker.nickname || "").trim() ||
-            (selectedUserForSticker.displayName || "");
-          setNicknameDraft(currentNickname);
-
-          const mn = (stats?.manualLevelName || "").trim();
-          const mc = (stats?.manualLevelColor || "").trim();
-          setLevelOverrideName(mn);
-          setLevelOverrideColor(mc);
-        } else {
-          const fallbackName = selectedUserForSticker.nickname || selectedUserForSticker.displayName || "";
-          setNicknameDraft(fallbackName);
-          setLevelOverrideName("");
-          setLevelOverrideColor("");
-        }
+        const latest = { id: snap.id, ...snap.data() };
+        setSelectedUserForSticker(latest);
+        setNicknameDraft(latest.nickname || "");
+        setLevelOverrideName(latest.levelOverrideName || "");
+        setLevelOverrideColor(latest.levelOverrideColor || "");
       } catch (e) {
-        console.error(e);
+        console.error("선택 유저 불러오기 실패:", e);
       }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedUserForSticker?.id, db, isAdmin, appId]);
-
-  // -------------------------
-  // ✅ rewards object[] 지급/회수
-  // -------------------------
-  const handleStickerToggle = async (targetUid, stickerId, isGiving) => {
-    if (!isAdmin || !db) return;
-
-    const privateRef = doc(db, "artifacts", appId, "users", targetUid, "profile", "stats");
-    const publicRef = doc(db, "artifacts", appId, "public_stats", targetUid);
-
-    try {
-      const privateSnap = await getDoc(privateRef);
-      const privateData = privateSnap.exists() ? privateSnap.data() : {};
-      const prevRewards = privateData?.rewards || [];
-
-      const nextRewards = isGiving
-        ? addRewardObject(prevRewards, stickerId, { manual: true, by: user?.email || "admin" })
-        : removeRewardById(prevRewards, stickerId);
-
-      await setDoc(privateRef, { rewards: nextRewards }, { merge: true });
-      await setDoc(publicRef, { rewards: nextRewards }, { merge: true });
-
-      setToastMessage?.(isGiving ? "스티커를 지급했습니다! 🎁" : "스티커를 회수했습니다. 🚫");
-
-      setAllUsers((prev) => prev.map((u) => (u.id === targetUid ? { ...u, rewards: nextRewards } : u)));
-      if (selectedUserForSticker?.id === targetUid) {
-        setSelectedUserForSticker((prev) => ({ ...prev, rewards: nextRewards }));
-      }
-    } catch (e) {
-      console.error("Sticker Update Error:", e);
-      setAuthError?.("스티커 처리에 실패했습니다. (보안 규칙/데이터 형식 확인)");
-    }
-  };
-
-  // -------------------------
-  // ✅ 연말 배치 정산(연도)
-  // -------------------------
-  const runYearlySettlement = async () => {
-    if (!isAdmin || !db) return;
-
-    const year = String(settleYear).trim();
-    if (!/^\d{4}$/.test(year)) {
-      setToastMessage?.("연도 형식이 올바르지 않습니다 (YYYY)");
-      return;
-    }
-
-    setIsSettling(true);
-
-    try {
-      const uids = (allUsers || []).map((u) => u.id).filter(Boolean);
-
-      const bronzeId = `annual_bronze_${year}`;
-      const silverId = `annual_silver_${year}`;
-      const goldId = `annual_gold_${year}`;
-
-      let updated = 0;
-
-      for (const uid of uids) {
-        const privateRef = doc(db, "artifacts", appId, "users", uid, "profile", "stats");
-        const publicRef = doc(db, "artifacts", appId, "public_stats", uid);
-
-        const snap = await getDoc(privateRef);
-        if (!snap.exists()) continue;
-        const profile = snap.data();
-
-        const yearlyUnlocked = profile?.yearly?.[year]?.unlocked || 0;
-        const prevRewards = profile?.rewards || [];
-        const ids = normalizeRewardIds(prevRewards);
-
-        let needId = null;
-        if (yearlyUnlocked >= 50) needId = goldId;
-        else if (yearlyUnlocked >= 25) needId = silverId;
-        else if (yearlyUnlocked >= 10) needId = bronzeId;
-
-        if (!needId) continue;
-        if (ids.has(needId)) continue;
-
-        const nextRewards = addRewardObject(prevRewards, needId, {
-          batch: true,
-          year,
-          unlockedCount: yearlyUnlocked,
-        });
-
-        await setDoc(privateRef, { rewards: nextRewards }, { merge: true });
-        await setDoc(publicRef, { rewards: nextRewards }, { merge: true });
-
-        updated += 1;
-      }
-
-      setToastMessage?.(`정산 완료 ✨ 지급 대상: ${updated}명`);
-      await fetchUsers();
-    } catch (e) {
-      console.error(e);
-      setAuthError?.("정산 실행 실패");
-    } finally {
-      setIsSettling(false);
-    }
-  };
-
-  const ensureAdminSession = async () => {
-    const me = auth.currentUser;
-    if (!me) {
-      setAuthError?.("관리자 로그인이 필요합니다.");
-      return false;
-    }
-
-    try {
-      await me.getIdToken(true);
-    } catch (e) {
-      console.error(e);
-      setAuthError?.("관리자 인증 갱신 실패");
-      return false;
-    }
-
-    const email = (me.email || "").toLowerCase();
-    const ok = ADMIN_EMAILS.includes(email);
-
-    if (!ok) {
-      setAuthError?.("관리자 계정이 아닙니다.");
-      return false;
-    }
-
-    return true;
-  };
-
-  // -------------------------
-  // ✅ 닉네임 관리자 저장
-  // - private: nickname 저장
-  // - public : displayName 동기화 (홈 랭킹에 즉시 반영)
-  // -------------------------
-  const adminSaveNickname = async () => {
-    if (!isAdmin || !db || !selectedUserForSticker?.id) return;
-
-    const ok = await ensureAdminSession();
-    if (!ok) return;
-
-    const uid = selectedUserForSticker.id;
-    const next = String(nicknameDraft || "").trim();
-
-    if (!next) {
-      setToastMessage?.("닉네임이 비어있습니다.");
-      return;
-    }
-
-    const privateRef = doc(db, "artifacts", appId, "users", uid, "profile", "stats");
-    const publicRef = doc(db, "artifacts", appId, "public_stats", uid);
-
-    const results = await Promise.allSettled([
-      setDoc(privateRef, { nickname: next }, { merge: true }),
-      setDoc(publicRef, { displayName: next, nickname: next }, { merge: true }),
-    ]);
-
-    const privateOk = results[0].status === "fulfilled";
-    const publicOk = results[1].status === "fulfilled";
-
-    if (!privateOk) {
-      console.error("private nickname save failed:", results[0].reason);
-    }
-    if (!publicOk) {
-      console.error("public nickname save failed:", results[1].reason);
-    }
-
-    if (privateOk && publicOk) {
-      setToastMessage?.("닉네임 저장 완료 ✨");
-
-      setSelectedUserForSticker((prev) => ({
-        ...prev,
-        nickname: next,
-        displayName: next,
-      }));
-
-      setAllUsers((prev) =>
-        prev.map((u) =>
-          u.id === uid ? { ...u, displayName: next, nickname: next } : u
-        )
-      );
-      return;
-    }
-
-    if (privateOk && !publicOk) {
-      setAuthError?.("개인 프로필 닉네임은 저장됐지만 public_stats 반영은 실패했습니다.");
-      return;
-    }
-
-    if (!privateOk && publicOk) {
-      setAuthError?.("public_stats는 반영됐지만 개인 프로필 닉네임 저장은 실패했습니다.");
-      return;
-    }
-
-    setAuthError?.("닉네임 저장 실패");
-  };
-
-  // ✅ 닉네임 1회 변경권 리셋
-  const adminResetNicknameChance = async () => {
-    if (!isAdmin || !db || !selectedUserForSticker?.id) return;
-
-    const ok = await ensureAdminSession();
-    if (!ok) return;
-
-    const uid = selectedUserForSticker.id;
-    const privateRef = doc(db, "artifacts", appId, "users", uid, "profile", "stats");
-
-    try {
-      await setDoc(
-        privateRef,
-        {
-          nicknameUpdatedCount: 0,
-        },
-        { merge: true }
-      );
-
-      setToastMessage?.("닉네임 변경권을 리셋했습니다 ✅");
-
-      setSelectedUserForSticker((prev) => ({
-        ...prev,
-        nicknameUpdatedCount: 0,
-      }));
-    } catch (e) {
-      console.error(e);
-      setAuthError?.("리셋 실패");
-    }
-  };
-
-  // ✅ 레벨 수동 지정(override)
-  const adminApplyManualLevel = async () => {
-    if (!isAdmin || !db || !selectedUserForSticker?.id) return;
-
-    const ok = await ensureAdminSession();
-    if (!ok) return;
-
-    const uid = selectedUserForSticker.id;
-    const name = String(levelOverrideName || "").trim();
-    const color = String(levelOverrideColor || "").trim();
-
-    if (!name) {
-      setToastMessage?.("레벨을 선택하세요.");
-      return;
-    }
-
-    const privateRef = doc(db, "artifacts", appId, "users", uid, "profile", "stats");
-    const publicRef = doc(db, "artifacts", appId, "public_stats", uid);
-
-    const results = await Promise.allSettled([
-      setDoc(privateRef, { manualLevelName: name, manualLevelColor: color }, { merge: true }),
-      setDoc(publicRef, { levelName: name, levelColor: color }, { merge: true }),
-    ]);
-
-    const privateOk = results[0].status === "fulfilled";
-    const publicOk = results[1].status === "fulfilled";
-
-    if (!privateOk) {
-      console.error("private manual level save failed:", results[0].reason);
-    }
-    if (!publicOk) {
-      console.error("public manual level save failed:", results[1].reason);
-    }
-
-    if (privateOk && publicOk) {
-      setToastMessage?.("수동 레벨 지정 완료 ✨");
-
-      setSelectedUserForSticker((prev) => ({
-        ...prev,
-        manualLevelName: name,
-        manualLevelColor: color,
-        levelName: name,
-        levelColor: color,
-      }));
-
-      setAllUsers((prev) =>
-        prev.map((u) =>
-          u.id === uid ? { ...u, levelName: name, levelColor: color } : u
-        )
-      );
-      return;
-    }
-
-    if (privateOk && !publicOk) {
-      setAuthError?.("개인 프로필 레벨은 저장됐지만 public_stats 반영은 실패했습니다.");
-      return;
-    }
-
-    if (!privateOk && publicOk) {
-      setAuthError?.("public_stats는 반영됐지만 개인 프로필 레벨 저장은 실패했습니다.");
-      return;
-    }
-
-    setAuthError?.("레벨 지정 실패");
-  };
-
-  // ✅ 레벨 수동 지정 해제
-  const adminClearManualLevel = async () => {
-    if (!isAdmin || !db || !selectedUserForSticker?.id) return;
-
-    const ok = await ensureAdminSession();
-    if (!ok) return;
-
-    const uid = selectedUserForSticker.id;
-    const privateRef = doc(db, "artifacts", appId, "users", uid, "profile", "stats");
-    const publicRef = doc(db, "artifacts", appId, "public_stats", uid);
-
-    const results = await Promise.allSettled([
-      setDoc(privateRef, { manualLevelName: "", manualLevelColor: "" }, { merge: true }),
-      setDoc(publicRef, { levelName: "", levelColor: "" }, { merge: true }),
-    ]);
-
-    const privateOk = results[0].status === "fulfilled";
-    const publicOk = results[1].status === "fulfilled";
-
-    if (!privateOk) {
-      console.error("private manual level clear failed:", results[0].reason);
-    }
-    if (!publicOk) {
-      console.error("public manual level clear failed:", results[1].reason);
-    }
-
-    if (privateOk && publicOk) {
-      setToastMessage?.("수동 레벨을 해제했습니다 ✅");
-
-      setSelectedUserForSticker((prev) => ({
-        ...prev,
-        manualLevelName: "",
-        manualLevelColor: "",
-      }));
-
-      setAllUsers((prev) =>
-        prev.map((u) =>
-          u.id === uid ? { ...u, levelName: "", levelColor: "" } : u
-        )
-      );
-
-      setLevelOverrideName("");
-      setLevelOverrideColor("");
-      return;
-    }
-
-    if (privateOk && !publicOk) {
-      setAuthError?.("개인 프로필 해제는 됐지만 public_stats 반영은 실패했습니다.");
-      return;
-    }
-
-    if (!privateOk && publicOk) {
-      setAuthError?.("public_stats는 반영됐지만 개인 프로필 해제는 실패했습니다.");
-      return;
-    }
-
-    setAuthError?.("해제 실패");
-  };
-
-  // -------------------------
-  // 트랙 이미지 업로드
-  // -------------------------
-  const handleImageUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setIsUploadingImg(true);
-
-    try {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-
-      reader.onload = async (event) => {
-        const img = new Image();
-        img.src = event.target.result;
-
-        img.onload = async () => {
-          const canvas = document.createElement("canvas");
-          canvas.width = 512;
-          canvas.height = 512;
-
-          const ctx = canvas.getContext("2d");
-          if (!ctx) {
-            setIsUploadingImg(false);
-            return;
-          }
-
-          const minSide = Math.min(img.width, img.height);
-          ctx.drawImage(
-            img,
-            (img.width - minSide) / 2,
-            (img.height - minSide) / 2,
-            minSide,
-            minSide,
-            0,
-            0,
-            512,
-            512
-          );
-
-          const base64Data = canvas.toDataURL("image/jpeg", 0.85).split(",")[1];
-          const formData = new FormData();
-          formData.append("image", base64Data);
-
-          const response = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
-            method: "POST",
-            body: formData,
-          });
-          const result = await response.json();
-
-          if (result?.success) setNewTrack((prev) => ({ ...prev, image: result.data.url }));
-          setIsUploadingImg(false);
-        };
-      };
-    } catch {
-      setIsUploadingImg(false);
-    }
-  };
-
-  const handleLrcUpload = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setNewTrack((prev) => ({ ...prev, lyrics: event.target.result }));
-      setToastMessage?.("가사 로드 완료 🎤");
     };
-    reader.readAsText(file);
+
+    fetchSelectedUserStats();
+  }, [selectedUserForSticker?.id, db, appId]);
+
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#050505] px-6">
+        <div className={`${glass} rounded-[3rem] p-10 lg:p-16 max-w-xl text-center space-y-8`}>
+          <ShieldCheck className="w-16 h-16 mx-auto text-[#004aad]" />
+          <div className="space-y-3">
+            <h2 className="text-4xl font-black uppercase tracking-tight">Admin Access</h2>
+            <p className="text-zinc-500 leading-relaxed">
+              Only approved administrators can enter this control room.
+            </p>
+          </div>
+          <button
+            onClick={() => signInWithPopup?.(auth)}
+            className="px-8 py-4 bg-[#004aad] text-white rounded-full font-black uppercase tracking-widest text-xs hover:bg-white hover:text-black transition-all"
+          >
+            Sign in with Google
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const uploadImageToImgBB = async (file) => {
+    const formData = new FormData();
+    formData.append("image", file);
+
+    const response = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+      method: "POST",
+      body: formData,
+    });
+
+    const result = await response.json();
+    if (!result?.success) throw new Error("IMGBB upload failed");
+    return result.data.url;
   };
 
-  const handleAddOrUpdateTrack = async (e) => {
-    e.preventDefault();
-    if (!isAdmin || !db) return;
+  const updateHeroSlide = (slideId, patch) => {
+    setSiteConfig((prev) => ({
+      ...prev,
+      heroSlides: normalizeHeroSlides(prev.heroSlides).map((slide) =>
+        slide.id === slideId ? { ...slide, ...patch } : slide
+      ),
+    }));
+  };
+
+  const toggleHeroTrack = (slideId, trackId) => {
+    setSiteConfig((prev) => ({
+      ...prev,
+      heroSlides: normalizeHeroSlides(prev.heroSlides).map((slide) => {
+        if (slide.id !== slideId) return slide;
+        const exists = slide.trackIds.includes(trackId);
+        return {
+          ...slide,
+          trackIds: exists
+            ? slide.trackIds.filter((id) => id !== trackId)
+            : [...slide.trackIds, trackId],
+        };
+      }),
+    }));
+  };
+
+  const moveHeroSlide = (slideId, direction) => {
+    setSiteConfig((prev) => {
+      const list = [...normalizeHeroSlides(prev.heroSlides)];
+      const idx = list.findIndex((slide) => slide.id === slideId);
+      if (idx === -1) return prev;
+
+      const nextIdx = direction === "up" ? idx - 1 : idx + 1;
+      if (nextIdx < 0 || nextIdx >= list.length) return prev;
+
+      [list[idx], list[nextIdx]] = [list[nextIdx], list[idx]];
+      return { ...prev, heroSlides: list };
+    });
+  };
+
+  const uploadHeroSlideImage = async (slideId, field, file) => {
+    if (!file) return;
+    try {
+      const url = await uploadImageToImgBB(file);
+      updateHeroSlide(slideId, { [field]: url });
+      setToastMessage?.("히어로 이미지 업로드 완료 ✨");
+    } catch (e) {
+      console.error(e);
+      setAuthError?.("히어로 이미지 업로드 실패");
+    }
+  };
+
+  const handleImageUpload = async (file, setter, fieldName) => {
+    if (!file) return;
+    fieldName === "track" ? setIsUploadingImg(true) : setIsUploadingPLImg(true);
 
     try {
+      const url = await uploadImageToImgBB(file);
+      setter(url);
+      setToastMessage?.("이미지 업로드 완료 ✨");
+    } catch (error) {
+      console.error("이미지 업로드 실패:", error);
+      setAuthError?.("이미지 업로드 실패");
+    } finally {
+      fieldName === "track" ? setIsUploadingImg(false) : setIsUploadingPLImg(false);
+    }
+  };
+
+  const handleSaveTrack = async () => {
+    if (!newTrack.title || !newTrack.artist || !newTrack.audioUrl) {
+      setAuthError?.("제목, 아티스트, 오디오 URL은 필수입니다.");
+      return;
+    }
+
+    try {
+      const payload = {
+        ...newTrack,
+        createdAt: Timestamp.now(),
+      };
+
       if (editingId) {
-        await updateDoc(doc(db, "artifacts", appId, "public", "data", "tracks", editingId), {
-          ...newTrack,
-          updatedAt: Date.now(),
-        });
-        setToastMessage?.("수정 완료 🛠️");
+        await updateDoc(doc(db, "artifacts", appId, "tracks", editingId), payload);
+        setToastMessage?.("트랙 수정 완료");
       } else {
-        await addDoc(collection(db, "artifacts", appId, "public", "data", "tracks"), {
-          ...newTrack,
-          isHidden: false,
-          createdAt: Date.now(),
-        });
-        setToastMessage?.("등록 성공 🚀");
+        await addDoc(collection(db, "artifacts", appId, "tracks"), payload);
+        setToastMessage?.("트랙 업로드 완료");
       }
 
-      setEditingId(null);
       setNewTrack({
         title: "",
         artist: "",
@@ -744,775 +464,794 @@ export default function Admin({
         audioUrl: "",
         lyrics: "",
       });
-    } catch {
-      setAuthError?.("저장 권한 오류");
+      setEditingId(null);
+    } catch (e) {
+      console.error(e);
+      setAuthError?.("트랙 저장 실패");
     }
   };
 
-  const handleEditClick = (track) => {
+  const handleDeleteTrack = async (id) => {
+    if (!window.confirm("이 트랙을 삭제할까요?")) return;
+    try {
+      await deleteDoc(doc(db, "artifacts", appId, "tracks", id));
+      setToastMessage?.("트랙 삭제 완료");
+    } catch (e) {
+      console.error(e);
+      setAuthError?.("트랙 삭제 실패");
+    }
+  };
+
+  const handleEditTrack = (track) => {
     setEditingId(track.id);
-    setNewTrack({ ...track });
+    setNewTrack({
+      title: track.title || "",
+      artist: track.artist || "",
+      image: track.image || "",
+      description: track.description || "",
+      tag: track.tag || "Ambient",
+      audioUrl: track.audioUrl || "",
+      lyrics: track.lyrics || "",
+    });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const handleCancelEdit = () => {
-    setEditingId(null);
-    setNewTrack({
-      title: "",
-      artist: "",
-      image: "",
-      description: "",
-      tag: "Ambient",
-      audioUrl: "",
-      lyrics: "",
-    });
-  };
-
-  const handleToggleVisibility = async (track) => {
-    if (!isAdmin || !db) return;
-    try {
-      await updateDoc(doc(db, "artifacts", appId, "public", "data", "tracks", track.id), {
-        isHidden: !track.isHidden,
-      });
-      setToastMessage?.(track.isHidden ? "공개됨 👁️" : "숨김 처리됨 🚫");
-    } catch {}
-  };
-
-  // -------------------------
-  // 플레이리스트
-  // -------------------------
-  const handleAddOrUpdatePlaylist = async (e) => {
-    e.preventDefault();
-    if (!isAdmin || !db) return;
+  const handleSavePlaylist = async () => {
+    if (!newPlaylist.title) {
+      setAuthError?.("플레이리스트 제목은 필수입니다.");
+      return;
+    }
 
     try {
+      const payload = {
+        ...newPlaylist,
+        items: (newPlaylist.trackIds || [])
+          .map((id) => tracks.find((t) => t.id === id))
+          .filter(Boolean),
+        createdAt: Timestamp.now(),
+      };
+
       if (editingPlaylistId) {
-        await updateDoc(doc(db, "artifacts", appId, "public", "data", "playlists", editingPlaylistId), {
-          ...newPlaylist,
-          updatedAt: Date.now(),
-        });
-        setToastMessage?.("수정 완료 ✨");
+        await updateDoc(doc(db, "artifacts", appId, "playlists", editingPlaylistId), payload);
+        setToastMessage?.("플레이리스트 수정 완료");
       } else {
-        await addDoc(collection(db, "artifacts", appId, "public", "data", "playlists"), {
-          ...newPlaylist,
-          createdAt: Date.now(),
-        });
-        setToastMessage?.("생성 완료 🚀");
+        await addDoc(collection(db, "artifacts", appId, "playlists"), payload);
+        setToastMessage?.("플레이리스트 생성 완료");
       }
 
-      setEditingPlaylistId(null);
       setNewPlaylist({ title: "", desc: "", image: "", trackIds: [] });
-    } catch {
-      setAuthError?.("저장 실패");
+      setEditingPlaylistId(null);
+    } catch (e) {
+      console.error(e);
+      setAuthError?.("플레이리스트 저장 실패");
     }
   };
 
-  const handlePLImageUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setIsUploadingPLImg(true);
-
+  const handleDeletePlaylist = async (id) => {
+    if (!window.confirm("이 플레이리스트를 삭제할까요?")) return;
     try {
-      const base64 = await new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => resolve(reader.result.split(",")[1]);
-      });
-
-      const formData = new FormData();
-      formData.append("image", base64);
-
-      const response = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
-        method: "POST",
-        body: formData,
-      });
-      const result = await response.json();
-
-      if (result?.success) setNewPlaylist((prev) => ({ ...prev, image: result.data.url }));
-    } catch {
-      // ignore
-    } finally {
-      setIsUploadingPLImg(false);
+      await deleteDoc(doc(db, "artifacts", appId, "playlists", id));
+      setToastMessage?.("플레이리스트 삭제 완료");
+    } catch (e) {
+      console.error(e);
+      setAuthError?.("플레이리스트 삭제 실패");
     }
   };
 
-  const toggleTrackInPL = (trackId) => {
-    setNewPlaylist((prev) => {
-      const exists = prev.trackIds.includes(trackId);
-      return { ...prev, trackIds: exists ? prev.trackIds.filter((id) => id !== trackId) : [...prev.trackIds, trackId] };
+  const handleEditPlaylist = (playlist) => {
+    setEditingPlaylistId(playlist.id);
+    setNewPlaylist({
+      title: playlist.title || "",
+      desc: playlist.desc || "",
+      image: playlist.image || "",
+      trackIds: Array.isArray(playlist.items) ? playlist.items.map((item) => item.id).filter(Boolean) : [],
     });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleSaveAllConfig = async () => {
-    if (!isAdmin || !db) return;
-
     try {
-      await setDoc(doc(db, "artifacts", appId, "public", "data", "featured", "directors_pick"), featuredData);
-      await setDoc(doc(db, "artifacts", appId, "public", "data", "site_config", "main_texts"), siteConfig);
-      setToastMessage?.("사이트 설정 저장 완료 ✨");
-    } catch {
+      await setDoc(
+        doc(db, "artifacts", appId, "public", "data", "featured", "directors_pick"),
+        featuredData
+      );
+      await setDoc(
+        doc(db, "artifacts", appId, "public", "data", "site_config", "main_texts"),
+        {
+          ...siteConfig,
+          heroSlides: normalizeHeroSlides(siteConfig.heroSlides),
+        }
+      );
+      setToastMessage?.("사이트 설정 저장 완료");
+    } catch (e) {
+      console.error(e);
       setAuthError?.("설정 저장 실패");
     }
   };
 
-  // -------------------------
-  // UI
-  // -------------------------
+  const saveSelectedUser = async (payload) => {
+    if (!selectedUserForSticker?.id) return;
+    try {
+      await setDoc(
+        doc(db, "artifacts", appId, "public_stats", selectedUserForSticker.id),
+        payload,
+        { merge: true }
+      );
+      setSelectedUserForSticker((prev) => ({ ...prev, ...payload }));
+      setToastMessage?.("유저 정보 저장 완료");
+    } catch (e) {
+      console.error(e);
+      setAuthError?.("유저 정보 저장 실패");
+    }
+  };
+
+  const handleSaveNicknameAndLevel = async () => {
+    if (!selectedUserForSticker) return;
+    await saveSelectedUser({
+      nickname: nicknameDraft,
+      levelOverrideName,
+      levelOverrideColor,
+    });
+  };
+
+  const toggleSticker = async (stickerId) => {
+    if (!selectedUserForSticker) return;
+    const currentRewards = asObjectRewards(selectedUserForSticker.rewards || []);
+    const exists = normalizeRewardIds(currentRewards).has(stickerId);
+
+    const nextRewards = exists
+      ? removeRewardById(currentRewards, stickerId)
+      : addRewardObject(currentRewards, stickerId, { adminGranted: true });
+
+    await saveSelectedUser({ rewards: nextRewards });
+  };
+
+  const runAnnualSettlement = async () => {
+    if (!settleYear || !db) return;
+    setIsSettling(true);
+    try {
+      setToastMessage?.(`${settleYear} 배치 정산은 현재 구조상 수동 기준으로 운영합니다.`);
+    } catch (e) {
+      console.error(e);
+      setAuthError?.("배치 정산 실패");
+    } finally {
+      setIsSettling(false);
+    }
+  };
+
+  const tabBtn = (id, icon, label) => {
+    const Icon = icon;
+    const active = activeTab === id;
+    return (
+      <button
+        onClick={() => setActiveTab(id)}
+        className={`px-5 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${
+          active ? "bg-[#004aad] text-white" : "bg-white/5 text-zinc-400 hover:text-white"
+        }`}
+      >
+        <Icon className="w-4 h-4" />
+        {label}
+      </button>
+    );
+  };
+
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="pt-32 lg:pt-40 px-6 lg:px-8 container mx-auto pb-32 lg:pb-40 relative z-20 min-h-screen">
-      <h2 className={h1Title + " text-6xl lg:text-[10rem] mb-12"}>Console</h2>
-
-      {!isAdmin ? (
-        <div className={glass + " p-16 lg:p-32 rounded-[3rem] text-center space-y-8"}>
-          <ShieldCheck className="w-16 h-16 lg:w-24 lg:h-24 mx-auto text-[#004aad]" />
-          <button
-            onClick={() => signInWithPopup?.()}
-            className="bg-white text-black px-12 lg:px-20 py-4 lg:py-6 rounded-full font-black uppercase text-xs lg:text-sm tracking-widest shadow-2xl"
-          >
-            Verify Admin
-          </button>
-          <p className="text-zinc-600 text-xs font-bold">App.jsx에서 isAdmin이 true면 자동으로 열립니다.</p>
+    <div className="min-h-screen bg-[#050505] text-white pb-24 px-6 lg:px-8">
+      <div className="container mx-auto pt-28 lg:pt-36">
+        <div className="mb-12 lg:mb-16">
+          <span className="text-[#004aad] text-[10px] font-black uppercase tracking-[0.35em] block mb-4">
+            Control Room
+          </span>
+          <h1 className={`${h1Title} text-5xl lg:text-8xl`}>
+            Admin<br />Panel
+          </h1>
+          <p className="text-zinc-500 mt-6 max-w-2xl">
+            트랙, 플레이리스트, 히어로 슬라이드, 사이트 설정과 유저 메타를 한곳에서 관리합니다.
+          </p>
         </div>
-      ) : (
-        <>
-          <div className="flex items-center gap-4 mb-8 overflow-x-auto pb-2 no-scrollbar">
-            <button
-              onClick={() => setActiveTab("tracks")}
-              className={`px-6 py-3 rounded-full font-black uppercase text-[10px] lg:text-xs tracking-widest transition-all flex items-center gap-2 shrink-0 ${
-                activeTab === "tracks" ? "bg-[#004aad] text-white" : "bg-white/5 text-zinc-500 hover:text-white"
-              }`}
-            >
-              <ListMusic className="w-4 h-4" /> Tracks
-            </button>
-            <button
-              onClick={() => setActiveTab("playlists")}
-              className={`px-6 py-3 rounded-full font-black uppercase text-[10px] lg:text-xs tracking-widest transition-all flex items-center gap-2 shrink-0 ${
-                activeTab === "playlists" ? "bg-[#004aad] text-white" : "bg-white/5 text-zinc-500 hover:text-white"
-              }`}
-            >
-              <Plus className="w-4 h-4" /> Playlists
-            </button>
-            <button
-              onClick={() => setActiveTab("users")}
-              className={`px-6 py-3 rounded-full font-black uppercase text-[10px] lg:text-xs tracking-widest transition-all flex items-center gap-2 shrink-0 ${
-                activeTab === "users" ? "bg-[#004aad] text-white" : "bg-white/5 text-zinc-500 hover:text-white"
-              }`}
-            >
-              <Users className="w-4 h-4" /> Users
-            </button>
-            <button
-              onClick={() => setActiveTab("config")}
-              className={`px-6 py-3 rounded-full font-black uppercase text-[10px] lg:text-xs tracking-widest transition-all flex items-center gap-2 shrink-0 ${
-                activeTab === "config" ? "bg-[#004aad] text-white" : "bg-white/5 text-zinc-500 hover:text-white"
-              }`}
-            >
-              <Settings2 className="w-4 h-4" /> Config
-            </button>
+
+        <div className="flex flex-wrap gap-3 mb-10">
+          {tabBtn("tracks", Music, "Tracks")}
+          {tabBtn("playlists", ListMusic, "Playlists")}
+          {tabBtn("config", Settings2, "Config")}
+          {tabBtn("users", Users, "Users")}
+        </div>
+
+        {activeTab === "tracks" && (
+          <div className="space-y-10">
+            <div className={`${glass} rounded-[3rem] p-8 lg:p-12 space-y-6`}>
+              <h2 className="text-2xl font-black uppercase">{editingId ? "Edit Track" : "Upload Track"}</h2>
+
+              <div className="grid lg:grid-cols-2 gap-5">
+                <input
+                  value={newTrack.title}
+                  onChange={(e) => setNewTrack((prev) => ({ ...prev, title: e.target.value }))}
+                  placeholder="Title"
+                  className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none"
+                />
+                <input
+                  value={newTrack.artist}
+                  onChange={(e) => setNewTrack((prev) => ({ ...prev, artist: e.target.value }))}
+                  placeholder="Artist"
+                  className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none"
+                />
+                <input
+                  value={newTrack.audioUrl}
+                  onChange={(e) => setNewTrack((prev) => ({ ...prev, audioUrl: e.target.value }))}
+                  placeholder="Audio URL"
+                  className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none lg:col-span-2"
+                />
+                <input
+                  value={newTrack.image}
+                  onChange={(e) => setNewTrack((prev) => ({ ...prev, image: e.target.value }))}
+                  placeholder="Image URL"
+                  className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none"
+                />
+                <label className="inline-flex items-center gap-2 px-4 py-4 rounded-2xl bg-white/5 border border-white/10 text-white text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/10">
+                  {isUploadingImg ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                  Upload Image
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) =>
+                      handleImageUpload(e.target.files?.[0], (url) => setNewTrack((prev) => ({ ...prev, image: url })), "track")
+                    }
+                  />
+                </label>
+                <input
+                  value={newTrack.tag}
+                  onChange={(e) => setNewTrack((prev) => ({ ...prev, tag: e.target.value }))}
+                  placeholder="Tag / Genre"
+                  className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none"
+                />
+              </div>
+
+              <textarea
+                value={newTrack.description}
+                onChange={(e) => setNewTrack((prev) => ({ ...prev, description: e.target.value }))}
+                placeholder="Description"
+                className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none h-28 resize-none"
+              />
+
+              <textarea
+                value={newTrack.lyrics}
+                onChange={(e) => setNewTrack((prev) => ({ ...prev, lyrics: e.target.value }))}
+                placeholder="Lyrics"
+                className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none h-44 resize-none"
+              />
+
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={handleSaveTrack}
+                  className="px-8 py-4 bg-[#004aad] rounded-full text-white font-black uppercase tracking-widest text-xs hover:bg-white hover:text-black transition-all"
+                >
+                  {editingId ? "Update Track" : "Save Track"}
+                </button>
+                {editingId && (
+                  <button
+                    onClick={() => {
+                      setEditingId(null);
+                      setNewTrack({
+                        title: "",
+                        artist: "",
+                        image: "",
+                        description: "",
+                        tag: "Ambient",
+                        audioUrl: "",
+                        lyrics: "",
+                      });
+                    }}
+                    className="px-8 py-4 bg-white/5 rounded-full text-white font-black uppercase tracking-widest text-xs hover:bg-white/10 transition-all"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className={`${glass} rounded-[3rem] p-8 lg:p-12`}>
+              <h2 className="text-2xl font-black uppercase mb-8">Track Library</h2>
+              <div className="space-y-3">
+                {tracks.map((track) => (
+                  <div key={track.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-xl overflow-hidden bg-white/5 shrink-0">
+                      {safeSrc(track.image) ? (
+                        <img src={safeSrc(track.image)} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Music className="w-5 h-5 text-white/20" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-black uppercase truncate">{track.title}</p>
+                      <p className="text-[10px] text-zinc-500 uppercase tracking-widest truncate">
+                        {track.artist} • {track.tag || "Ambient"}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => handleEditTrack(track)} className="p-3 rounded-full bg-white/5 hover:bg-white/10">
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => handleDeleteTrack(track.id)} className="p-3 rounded-full bg-white/5 hover:bg-red-500/20 text-red-400">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
+        )}
 
-          <AnimatePresence mode="wait">
-            {/* USERS */}
-            {activeTab === "users" && (
-              <motion.div key="users" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="grid lg:grid-cols-12 gap-8">
-                {/* LEFT */}
-                <div className="lg:col-span-5 space-y-6">
-                  <div className={`${glass} p-4 rounded-full flex items-center gap-4 px-6`}>
-                    <Search className="w-5 h-5 text-zinc-500" />
-                    <input
-                      placeholder="닉네임/이름/UID 검색..."
-                      className="bg-transparent border-none outline-none flex-1 font-bold text-white uppercase text-sm"
-                      value={userSearchTerm}
-                      onChange={(e) => setUserSearchTerm(e.target.value)}
-                    />
-                    {isLoadingUsers && <Loader2 className="w-4 h-4 animate-spin text-[#004aad]" />}
-                  </div>
+        {activeTab === "playlists" && (
+          <div className="space-y-10">
+            <div className={`${glass} rounded-[3rem] p-8 lg:p-12 space-y-6`}>
+              <h2 className="text-2xl font-black uppercase">{editingPlaylistId ? "Edit Playlist" : "Create Playlist"}</h2>
 
-                  {/* 배치 정산 */}
-                  <div className={`${glass} p-6 rounded-3xl space-y-4`}>
-                    <div className="flex items-center justify-between">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Batch Settlement</p>
-                      <div className="flex items-center gap-2">
-                        <input
-                          value={settleYear}
-                          onChange={(e) => setSettleYear(e.target.value)}
-                          className="w-24 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-[11px] font-black uppercase outline-none"
-                          placeholder="YYYY"
-                        />
-                        <button
-                          onClick={runYearlySettlement}
-                          disabled={isSettling}
-                          className="px-4 py-2 rounded-xl bg-[#004aad] text-white font-black uppercase text-[10px] tracking-widest disabled:opacity-50"
-                        >
-                          {isSettling ? "RUN..." : "RUN YEARLY"}
-                        </button>
-                      </div>
-                    </div>
-                    <p className="text-[10px] text-zinc-500 font-bold leading-relaxed">
-                      yearly[YYYY].unlocked 기준으로 Bronze(10)/Silver(25)/Gold(50) 지급
-                    </p>
-                  </div>
+              <div className="grid lg:grid-cols-2 gap-5">
+                <input
+                  value={newPlaylist.title}
+                  onChange={(e) => setNewPlaylist((prev) => ({ ...prev, title: e.target.value }))}
+                  placeholder="Playlist Title"
+                  className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none"
+                />
+                <input
+                  value={newPlaylist.image}
+                  onChange={(e) => setNewPlaylist((prev) => ({ ...prev, image: e.target.value }))}
+                  placeholder="Cover Image URL"
+                  className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none"
+                />
+                <label className="inline-flex items-center gap-2 px-4 py-4 rounded-2xl bg-white/5 border border-white/10 text-white text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/10">
+                  {isUploadingPLImg ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                  Upload Playlist Cover
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) =>
+                      handleImageUpload(e.target.files?.[0], (url) => setNewPlaylist((prev) => ({ ...prev, image: url })), "playlist")
+                    }
+                  />
+                </label>
+              </div>
 
-                  <div className="space-y-3 max-h-175 overflow-y-auto no-scrollbar pr-2">
-                    {filteredUsers.map((u) => {
-                      const name = u.nickname || u.displayName || "Guest";
-                      return (
-                        <div
-                          key={u.id}
-                          onClick={() => setSelectedUserForSticker(u)}
-                          className={`${glass} p-5 rounded-3xl flex justify-between items-center cursor-pointer transition-all border-white/5 hover:border-[#004aad]/50 ${
-                            selectedUserForSticker?.id === u.id ? "bg-[#004aad]/10 border-[#004aad]/40" : ""
-                          }`}
-                        >
-                          <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-full bg-zinc-800 overflow-hidden border border-white/10 flex items-center justify-center">
-                              {safeSrc(u.profileImg) ? <img src={u.profileImg} className="w-full h-full object-cover" alt="" /> : <User className="w-6 h-6 text-white/20" />}
-                            </div>
-                            <div className="min-w-0 pr-2">
-                              <p className="font-black uppercase text-lg truncate">{name}</p>
-                              <p className="text-[9px] text-zinc-500 font-bold">{u.id?.slice(0, 16)}...</p>
-                            </div>
-                          </div>
-                          <ArrowRight size={14} className="text-zinc-600" />
-                        </div>
-                      );
-                    })}
-                  </div>
+              <textarea
+                value={newPlaylist.desc}
+                onChange={(e) => setNewPlaylist((prev) => ({ ...prev, desc: e.target.value }))}
+                placeholder="Playlist Description"
+                className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none h-28 resize-none"
+              />
+
+              <div>
+                <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest mb-3">Select Tracks</p>
+                <div className="flex flex-wrap gap-2 max-h-52 overflow-y-auto no-scrollbar">
+                  {tracks.map((track) => {
+                    const active = newPlaylist.trackIds.includes(track.id);
+                    return (
+                      <button
+                        key={track.id}
+                        onClick={() => {
+                          setNewPlaylist((prev) => ({
+                            ...prev,
+                            trackIds: active
+                              ? prev.trackIds.filter((id) => id !== track.id)
+                              : [...prev.trackIds, track.id],
+                          }));
+                        }}
+                        className={`px-3 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
+                          active ? "bg-[#004aad] text-white" : "bg-white/5 text-zinc-500 hover:text-white"
+                        }`}
+                      >
+                        {track.title}
+                      </button>
+                    );
+                  })}
                 </div>
+              </div>
 
-                {/* RIGHT */}
-                <div className="lg:col-span-7">
-                  {selectedUserForSticker ? (
-                    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className={`${glass} p-8 lg:p-12 rounded-[4rem] border-white/10 space-y-12 shadow-2xl relative overflow-visible`}>
-                      <div className="flex items-center gap-6 pb-8 border-b border-white/10">
-                        <div className="w-20 h-20 rounded-full bg-zinc-900 border-2 border-[#004aad] p-1 flex items-center justify-center overflow-hidden">
-                          {safeSrc(selectedUserForSticker.profileImg) ? (
-                            <img src={selectedUserForSticker.profileImg} className="w-full h-full rounded-full object-cover" alt="" />
-                          ) : (
-                            <User className="w-8 h-8 text-white/20" />
-                          )}
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={handleSavePlaylist}
+                  className="px-8 py-4 bg-[#004aad] rounded-full text-white font-black uppercase tracking-widest text-xs hover:bg-white hover:text-black transition-all"
+                >
+                  {editingPlaylistId ? "Update Playlist" : "Save Playlist"}
+                </button>
+                {editingPlaylistId && (
+                  <button
+                    onClick={() => {
+                      setEditingPlaylistId(null);
+                      setNewPlaylist({ title: "", desc: "", image: "", trackIds: [] });
+                    }}
+                    className="px-8 py-4 bg-white/5 rounded-full text-white font-black uppercase tracking-widest text-xs hover:bg-white/10 transition-all"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className={`${glass} rounded-[3rem] p-8 lg:p-12`}>
+              <h2 className="text-2xl font-black uppercase mb-8">Playlist Library</h2>
+              <div className="space-y-3">
+                {playlists.map((playlist) => (
+                  <div key={playlist.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-xl overflow-hidden bg-white/5 shrink-0">
+                      {safeSrc(playlist.image) ? (
+                        <img src={safeSrc(playlist.image)} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <ListMusic className="w-5 h-5 text-white/20" />
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="text-3xl font-black uppercase italic tracking-tighter text-white truncate">
-                            {selectedUserForSticker.nickname || selectedUserForSticker.displayName || "Collector"}
-                          </h3>
-                          <p className="text-[10px] text-zinc-500 font-bold">{selectedUserForSticker.id}</p>
-                          <div className="mt-2 flex items-center gap-2">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Level:</span>
-                            <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: selectedUserForSticker.levelColor || "#71717a" }}>
-                              {selectedUserForSticker.levelName || "User"}
-                            </span>
-                            {selectedUserForSticker.xp !== undefined && (
-                              <span className="text-[10px] font-black uppercase tracking-widest text-zinc-600">• XP {selectedUserForSticker.xp}</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* ✅ User Profile Controls */}
-                      <div className="space-y-5">
-                        <div className="flex items-center gap-3">
-                          <Settings2 className="w-4 h-4 text-[#004aad]" />
-                          <h4 className="text-xs font-black uppercase tracking-widest text-[#004aad]">Profile Controls</h4>
-                        </div>
-
-                        {/* Nickname */}
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-                          <div className="lg:col-span-2">
-                            <p className="text-[10px] text-zinc-500 font-black uppercase mb-1 ml-1">Nickname</p>
-                            <input
-                              value={nicknameDraft}
-                              onChange={(e) => setNicknameDraft(e.target.value)}
-                              className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest outline-none focus:border-[#004aad]"
-                              placeholder="Nickname"
-                            />
-                            <p className="text-[9px] text-zinc-600 font-bold mt-2 ml-1">
-                              nicknameChanged: <span className="text-white/70">{String(!!selectedUserForSticker.nicknameChanged)}</span>
-                            </p>
-                          </div>
-                          <div className="flex flex-col gap-2 justify-end">
-                            <button onClick={adminSaveNickname} className="px-4 py-3 rounded-2xl bg-[#004aad] text-white font-black uppercase text-[10px] tracking-widest hover:brightness-110">
-                              SAVE
-                            </button>
-                            <button onClick={adminResetNicknameChance} className="px-4 py-3 rounded-2xl bg-white/5 text-white font-black uppercase text-[10px] tracking-widest hover:bg-white/10">
-                              RESET 1X
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Manual Level Override */}
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-                          <div className="lg:col-span-2">
-                            <p className="text-[10px] text-zinc-500 font-black uppercase mb-1 ml-1">Manual Level Override</p>
-                            <select
-                              value={levelOverrideName}
-                              onChange={(e) => {
-                                const name = e.target.value;
-                                setLevelOverrideName(name);
-                                const found = LEVELS.find((x) => x.name === name);
-                                setLevelOverrideColor(found?.color || "");
-                              }}
-                              className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest outline-none focus:border-[#004aad] cursor-pointer"
-                            >
-                              <option value="">-- AUTO (NONE) --</option>
-                              {LEVELS.map((l) => (
-                                <option key={l.key} value={l.name}>
-                                  {l.name}
-                                </option>
-                              ))}
-                            </select>
-
-                            <div className="mt-2 flex items-center gap-2">
-                              <span className="text-[9px] font-black uppercase tracking-widest text-zinc-600">Color</span>
-                              <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: levelOverrideColor || "#71717a" }}>
-                                {levelOverrideColor || "(auto)"}
-                              </span>
-                              <div className="w-5 h-5 rounded-full border border-white/10" style={{ background: (levelOverrideColor || "#71717a") + "33" }} />
-                            </div>
-                          </div>
-
-                          <div className="flex flex-col gap-2 justify-end">
-                            <button onClick={adminApplyManualLevel} className="px-4 py-3 rounded-2xl bg-[#004aad] text-white font-black uppercase text-[10px] tracking-widest hover:brightness-110">
-                              APPLY
-                            </button>
-                            <button onClick={adminClearManualLevel} className="px-4 py-3 rounded-2xl bg-white/5 text-white font-black uppercase text-[10px] tracking-widest hover:bg-white/10">
-                              CLEAR
-                            </button>
-                          </div>
-                        </div>
-
-                        <p className="text-[10px] text-zinc-600 font-bold leading-relaxed">
-                          * Manual override는 private에 저장되며, 즉시 public_stats에도 반영됩니다.
-                        </p>
-                      </div>
-
-                      {/* Achievements */}
-                      <div className="space-y-6">
-                        <div className="flex items-center gap-3">
-                          <Award className="w-4 h-4 text-[#a78bfa]" />
-                          <h4 className="text-xs font-black uppercase tracking-widest text-[#a78bfa]">Achievements</h4>
-                        </div>
-
-                        <div className="grid grid-cols-4 sm:grid-cols-8 gap-3">
-                          {Object.entries(ACHIEVEMENT_DATA).map(([id, data]) => {
-                            const hasIt = selectedUserRewardIds.has(id);
-                            return (
-                              <button
-                                key={id}
-                                onClick={() => handleStickerToggle(selectedUserForSticker.id, id, !hasIt)}
-                                className={`aspect-square rounded-2xl border flex items-center justify-center transition-all ${
-                                  hasIt
-                                    ? "bg-[#a78bfa]/20 border-[#a78bfa] text-white shadow-[0_0_15px_rgba(167,139,250,0.3)]"
-                                    : "bg-white/5 border-white/10 text-zinc-800 hover:border-white/30"
-                                }`}
-                                title={data.title}
-                              >
-                                <data.icon size={20} style={{ color: hasIt ? data.color : "inherit" }} />
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Collections */}
-                      <div className="space-y-6">
-                        <div className="flex items-center gap-3">
-                          <Sparkles className="w-4 h-4 text-[#fbbf24]" />
-                          <h4 className="text-xs font-black uppercase tracking-widest text-[#fbbf24]">Special Collections</h4>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3">
-                          {Object.entries(COLLECTIVE_DATA).map(([id, data]) => {
-                            const hasIt = selectedUserRewardIds.has(id);
-                            return (
-                              <button
-                                key={id}
-                                onClick={() => handleStickerToggle(selectedUserForSticker.id, id, !hasIt)}
-                                className={`p-5 rounded-3xl border flex items-center gap-4 transition-all text-left ${
-                                  hasIt
-                                    ? "bg-[#fbbf24]/20 border-[#fbbf24] text-white shadow-[0_0_15px_rgba(251,191,36,0.2)]"
-                                    : "bg-white/5 border-white/10 text-zinc-500"
-                                }`}
-                              >
-                                <data.icon size={20} style={{ color: hasIt ? data.color : "inherit" }} />
-                                <div className="min-w-0">
-                                  <p className="text-[11px] font-black uppercase truncate">{data.title}</p>
-                                  <p className="text-[8px] opacity-60 font-bold uppercase">{hasIt ? "Reward Granted" : "Pending"}</p>
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </motion.div>
-                  ) : (
-                    <div className={`${glass} p-20 rounded-[4rem] flex flex-col items-center justify-center text-center space-y-6 border-dashed border-white/10`}>
-                      <Users size={64} className="text-zinc-800" />
-                      <p className="text-xs text-zinc-600 font-black uppercase">Select a user to manage</p>
+                      )}
                     </div>
-                  )}
-                </div>
-              </motion.div>
-            )}
-
-            {/* CONFIG */}
-            {activeTab === "config" && (
-              <motion.div key="config" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-8">
-                <div className="bg-zinc-900 border border-white/10 p-8 lg:p-12 rounded-[4rem] shadow-2xl relative overflow-hidden">
-                  <div className="absolute top-0 right-0 p-8 opacity-5">
-                    <MousePointer2 className="w-40 h-40 text-[#004aad]" />
-                  </div>
-                  <div className="grid lg:grid-cols-2 gap-16">
-                    <div className="space-y-8">
-                      <h3 className="text-xl font-black uppercase text-white flex items-center gap-3">
-                        <Sparkles className="w-5 h-5 text-[#004aad]" /> Intro Page (Popup)
-                      </h3>
-                      <div className="space-y-5">
-                        <div>
-                          <p className="text-[10px] text-zinc-500 uppercase font-black mb-1.5 ml-1">Main Title</p>
-                          <input
-                            value={siteConfig.intro_title}
-                            onChange={(e) => setSiteConfig({ ...siteConfig, intro_title: e.target.value })}
-                            className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white font-bold outline-none focus:border-[#004aad]"
-                          />
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-zinc-500 uppercase font-black mb-1.5 ml-1">Sub Description</p>
-                          <textarea
-                            value={siteConfig.intro_desc}
-                            onChange={(e) => setSiteConfig({ ...siteConfig, intro_desc: e.target.value })}
-                            className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-[#004aad] h-24 resize-none"
-                          />
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-zinc-500 uppercase font-black mb-1.5 ml-1">Entry Button Text</p>
-                          <input
-                            value={siteConfig.intro_btn}
-                            onChange={(e) => setSiteConfig({ ...siteConfig, intro_btn: e.target.value })}
-                            className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-[#004aad] font-black outline-none focus:border-white"
-                          />
-                        </div>
-                      </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-black uppercase truncate">{playlist.title}</p>
+                      <p className="text-[10px] text-zinc-500 uppercase tracking-widest truncate">
+                        {playlist.items?.length || 0} tracks
+                      </p>
                     </div>
-
-                    <div className="space-y-8">
-                      <h3 className="text-xl font-black uppercase text-white flex items-center gap-3">
-                        <Type className="w-5 h-5 text-[#004aad]" /> Space Philosophy
-                      </h3>
-                      <div className="space-y-5">
-                        <div>
-                          <p className="text-[10px] text-zinc-500 uppercase font-black mb-1.5 ml-1">Headline</p>
-                          <input
-                            value={siteConfig.phil_title}
-                            onChange={(e) => setSiteConfig({ ...siteConfig, phil_title: e.target.value })}
-                            className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-[#004aad]"
-                          />
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-zinc-500 uppercase font-black mb-1.5 ml-1">Philosophy Description</p>
-                          <textarea
-                            value={siteConfig.phil_desc}
-                            onChange={(e) => setSiteConfig({ ...siteConfig, phil_desc: e.target.value })}
-                            className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-[#004aad] h-32 resize-none"
-                          />
-                        </div>
-                      </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => handleEditPlaylist(playlist)} className="p-3 rounded-full bg-white/5 hover:bg-white/10">
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => handleDeletePlaylist(playlist.id)} className="p-3 rounded-full bg-white/5 hover:bg-red-500/20 text-red-400">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
-                  <div className="mt-16 grid lg:grid-cols-4 gap-6">
-                    {["guide_1", "guide_2", "guide_3", "guide_4"].map((g, i) => (
-                      <div key={g}>
-                        <p className="text-[9px] text-zinc-500 uppercase font-black mb-1.5 ml-1">Nav Guide {i + 1}</p>
-                        <input
-                          value={siteConfig[g]}
-                          onChange={(e) => setSiteConfig({ ...siteConfig, [g]: e.target.value })}
-                          className="w-full bg-white/5 border border-white/10 p-3 rounded-xl text-xs text-white"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
+        {activeTab === "config" && (
+          <div className="space-y-10">
+            <div className={`${glass} p-8 lg:p-12 rounded-[4rem] space-y-10`}>
+              <h3 className="text-xl font-black uppercase text-white flex items-center gap-3">
+                <Star className="w-5 h-5 text-[#004aad]" /> Featured Artifact (Directors Pick)
+              </h3>
 
-                <div className={`${glass} p-8 lg:p-12 rounded-[4rem] space-y-10`}>
-                  <h3 className="text-xl font-black uppercase text-white flex items-center gap-3">
-                    <Sparkles className="w-5 h-5 text-[#004aad]" /> Featured Artifact (Directors Pick)
-                  </h3>
-                  <div className="grid lg:grid-cols-2 gap-10">
-                    <div className="space-y-5">
-                      <div>
-                        <p className="text-[10px] text-zinc-500 uppercase font-black mb-1.5 ml-1">Headline</p>
-                        <input
-                          value={featuredData.headline}
-                          onChange={(e) => setFeaturedData({ ...featuredData, headline: e.target.value })}
-                          className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-[#004aad]"
-                        />
+              <div className="grid lg:grid-cols-2 gap-5">
+                <input
+                  value={featuredData.headline || ""}
+                  onChange={(e) => setFeaturedData((prev) => ({ ...prev, headline: e.target.value }))}
+                  placeholder="Headline"
+                  className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none"
+                />
+                <input
+                  value={featuredData.subHeadline || ""}
+                  onChange={(e) => setFeaturedData((prev) => ({ ...prev, subHeadline: e.target.value }))}
+                  placeholder="Sub Headline"
+                  className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none"
+                />
+                <input
+                  value={featuredData.quote || ""}
+                  onChange={(e) => setFeaturedData((prev) => ({ ...prev, quote: e.target.value }))}
+                  placeholder="Quote"
+                  className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none lg:col-span-2"
+                />
+                <textarea
+                  value={featuredData.description || ""}
+                  onChange={(e) => setFeaturedData((prev) => ({ ...prev, description: e.target.value }))}
+                  placeholder="Description"
+                  className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none h-32 resize-none lg:col-span-2"
+                />
+                <select
+                  value={featuredData.linkedTrackId || ""}
+                  onChange={(e) => setFeaturedData((prev) => ({ ...prev, linkedTrackId: e.target.value }))}
+                  className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white font-black outline-none lg:col-span-2"
+                >
+                  <option value="">-- SELECT TRACK --</option>
+                  {tracks.map((track) => (
+                    <option key={track.id} value={track.id}>
+                      {track.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className={`${glass} p-8 lg:p-12 rounded-[4rem] space-y-8`}>
+              <h3 className="text-xl font-black uppercase text-white flex items-center gap-3">
+                <Sparkles className="w-5 h-5 text-[#004aad]" /> Hero Slides
+              </h3>
+              <div className="space-y-6">
+                {normalizeHeroSlides(siteConfig.heroSlides).map((slide, idx) => {
+                  const linkedPlaylist = playlists.find((pl) => pl.id === slide.linkedPlaylistId);
+                  return (
+                    <div key={slide.id} className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-6 space-y-5">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest mb-2">Slide {idx + 1}</p>
+                          <h4 className="text-2xl font-black uppercase tracking-tight text-white">
+                            {slide.title || slide.eyebrow || `Hero Slide ${idx + 1}`}
+                          </h4>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <button onClick={() => moveHeroSlide(slide.id, "up")} className="px-4 py-2 rounded-full bg-white/5 text-white text-[10px] font-black uppercase tracking-widest">Move Up</button>
+                          <button onClick={() => moveHeroSlide(slide.id, "down")} className="px-4 py-2 rounded-full bg-white/5 text-white text-[10px] font-black uppercase tracking-widest">Move Down</button>
+                          <button
+                            onClick={() => updateHeroSlide(slide.id, { isActive: !slide.isActive })}
+                            className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest ${slide.isActive ? "bg-[#004aad] text-white" : "bg-white/5 text-zinc-500"}`}
+                          >
+                            {slide.isActive ? "Active" : "Inactive"}
+                          </button>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-[10px] text-zinc-500 uppercase font-black mb-1.5 ml-1">Sub Headline</p>
-                        <input
-                          value={featuredData.subHeadline}
-                          onChange={(e) => setFeaturedData({ ...featuredData, subHeadline: e.target.value })}
-                          className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-[#004aad]"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-5">
-                      <div>
-                        <p className="text-[10px] text-zinc-500 uppercase font-black mb-1.5 ml-1">Quote</p>
-                        <input
-                          value={featuredData.quote}
-                          onChange={(e) => setFeaturedData({ ...featuredData, quote: e.target.value })}
-                          className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white italic outline-none focus:border-[#004aad]"
-                        />
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-zinc-500 uppercase font-black mb-1.5 ml-1">Linked Track</p>
+
+                      <div className="grid lg:grid-cols-2 gap-4">
                         <select
-                          value={featuredData.linkedTrackId}
-                          onChange={(e) => setFeaturedData({ ...featuredData, linkedTrackId: e.target.value })}
-                          className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-[#004aad] font-black outline-none cursor-pointer"
+                          value={slide.type}
+                          onChange={(e) => updateHeroSlide(slide.id, { type: e.target.value })}
+                          className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white font-black outline-none"
                         >
-                          <option value="">-- SELECT TRACK --</option>
-                          {tracks.map((t) => (
-                            <option key={t.id} value={t.id}>
-                              {t.title}
+                          {HERO_SLIDE_TYPES.map((type) => (
+                            <option key={type.value} value={type.value}>
+                              {type.label}
+                            </option>
+                          ))}
+                        </select>
+
+                        <input value={slide.eyebrow || ""} onChange={(e) => updateHeroSlide(slide.id, { eyebrow: e.target.value })} placeholder="Eyebrow" className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none" />
+                        <input value={slide.title || ""} onChange={(e) => updateHeroSlide(slide.id, { title: e.target.value })} placeholder="Title" className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none" />
+                        <input value={slide.subtitle || ""} onChange={(e) => updateHeroSlide(slide.id, { subtitle: e.target.value })} placeholder="Subtitle" className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none" />
+                        <input value={slide.buttonLabel || ""} onChange={(e) => updateHeroSlide(slide.id, { buttonLabel: e.target.value })} placeholder="Button Label" className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none" />
+
+                        <select
+                          value={slide.linkedPlaylistId || ""}
+                          onChange={(e) => updateHeroSlide(slide.id, { linkedPlaylistId: e.target.value })}
+                          className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white font-black outline-none"
+                        >
+                          <option value="">-- NO PLAYLIST --</option>
+                          {playlists.map((pl) => (
+                            <option key={pl.id} value={pl.id}>
+                              {pl.title}
                             </option>
                           ))}
                         </select>
                       </div>
-                    </div>
-                  </div>
-                </div>
 
-                <button
-                  onClick={handleSaveAllConfig}
-                  className="w-full bg-[#004aad] text-white py-6 rounded-3xl font-black uppercase tracking-widest hover:bg-white hover:text-black transition-all flex items-center justify-center gap-3 shadow-2xl"
-                >
-                  <Save className="w-6 h-6" /> Deploy Site Changes
-                </button>
-              </motion.div>
-            )}
-
-            {/* TRACKS */}
-            {activeTab === "tracks" && (
-              <motion.div key="tracks" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="grid lg:grid-cols-12 gap-8">
-                <div className="lg:col-span-7 space-y-4">
-                  {tracks.map((t) => (
-                    <div
-                      key={t.id}
-                      className={`${glass} p-6 rounded-4xl flex justify-between items-center group shadow-lg ${t.isHidden ? "opacity-50 border-dashed" : "border-white/5"}`}
-                    >
-                      <div className="flex-1 min-w-0 pr-4">
-                        <div className="flex items-center gap-2 mb-1">
-                          {t.isHidden && <span className="px-2 py-0.5 bg-red-500/20 text-red-500 text-[10px] rounded font-bold uppercase">Hidden</span>}
-                          <p className="font-black uppercase text-xl truncate">{t.title}</p>
-                        </div>
-                        <p className="text-xs text-zinc-500 font-bold uppercase tracking-widest truncate">{t.artist}</p>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          onClick={() => handleToggleVisibility(t)}
-                          className={`p-3 rounded-full ${t.isHidden ? "text-red-500 bg-red-500/10" : "text-zinc-400 bg-white/5 hover:bg-white/10"}`}
-                        >
-                          <Eye className="w-5 h-5" />
-                        </button>
-                        <button onClick={() => handleEditClick(t)} className="p-3 text-zinc-400 bg-white/5 hover:bg-white/10 rounded-full">
-                          <Edit2 className="w-5 h-5" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (window.confirm("삭제?")) deleteDoc(doc(db, "artifacts", appId, "public", "data", "tracks", t.id));
-                          }}
-                          className="p-3 text-red-500 bg-red-500/5 hover:bg-red-500/10 rounded-full"
-                        >
-                          <Trash2 className="w-5 h-5" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="lg:col-span-5">
-                  <div className={`p-8 lg:p-12 rounded-[3rem] text-black shadow-2xl sticky top-32 ${editingId ? "bg-emerald-400" : "bg-white"}`}>
-                    <div className="mb-8 flex items-center justify-between">
-                      <h3 className="font-black uppercase tracking-tighter text-2xl lg:text-3xl">{editingId ? "Edit Artifact" : "New Artifact"}</h3>
-                      {editingId && (
-                        <button onClick={handleCancelEdit} className="text-xs font-black uppercase bg-black/10 px-4 py-2 rounded-full">
-                          Cancel
-                        </button>
+                      {linkedPlaylist && (
+                        <p className="text-[10px] text-[#004aad] font-black uppercase tracking-widest">
+                          {linkedPlaylist.title} linked
+                        </p>
                       )}
-                    </div>
 
-                    <form onSubmit={handleAddOrUpdateTrack} className="space-y-6">
-                      <input
-                        required
-                        placeholder="TITLE"
-                        value={newTrack.title}
-                        onChange={(e) => setNewTrack({ ...newTrack, title: e.target.value })}
-                        className="w-full bg-black/5 border-b-2 border-black/10 p-4 font-black uppercase outline-none focus:border-black text-xl rounded-xl"
-                      />
-                      <input
-                        required
-                        placeholder="ARTIST"
-                        value={newTrack.artist}
-                        onChange={(e) => setNewTrack({ ...newTrack, artist: e.target.value })}
-                        className="w-full bg-black/5 border-b-2 border-black/10 p-4 font-black uppercase outline-none focus:border-black text-xl rounded-xl"
-                      />
-
-                      <div className="space-y-4">
-                        <div className="relative group cursor-pointer">
-                          <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
-                          <div className="p-8 rounded-[2.5rem] border-2 border-dashed border-black/20 flex flex-col items-center justify-center gap-4">
-                            {isUploadingImg ? <Loader2 className="w-10 h-10 animate-spin" /> : <Upload className="w-10 h-10 text-black/60" />}
-                            <span className="text-xs font-black uppercase tracking-widest text-black/60">Upload Cover Art</span>
-                          </div>
-                        </div>
-                        {newTrack.image && (
-                          <div className="w-full aspect-square rounded-[2.5rem] overflow-hidden border-2 border-black shadow-2xl">
-                            <img src={newTrack.image} className="w-full h-full object-cover" alt="" />
-                          </div>
-                        )}
-                      </div>
-
-                      <input
-                        required
-                        placeholder="AUDIO SOURCE (URL)"
-                        value={newTrack.audioUrl}
-                        onChange={(e) => setNewTrack({ ...newTrack, audioUrl: e.target.value })}
-                        className="w-full bg-black/5 border-b-2 border-black/10 p-4 font-black outline-none focus:border-black rounded-xl"
-                      />
                       <textarea
-                        placeholder="DESCRIPTION"
-                        value={newTrack.description}
-                        onChange={(e) => setNewTrack({ ...newTrack, description: e.target.value })}
-                        className="w-full bg-black/5 border-b-2 border-black/10 p-4 font-medium text-sm outline-none focus:border-black h-24 resize-none rounded-xl"
+                        value={slide.description || ""}
+                        onChange={(e) => updateHeroSlide(slide.id, { description: e.target.value })}
+                        placeholder="Description"
+                        className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none h-28 resize-none"
                       />
 
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-end px-2">
-                          <span className="text-[10px] font-black uppercase tracking-widest text-black/60">Lyrics</span>
-                          <label className="cursor-pointer flex items-center gap-1 bg-black/10 px-3 py-1.5 rounded-full hover:bg-black/20 transition-colors">
-                            <FileText className="w-3 h-3 text-black/70" />
-                            <span className="text-[9px] font-black uppercase tracking-widest text-black/70">.LRC File</span>
-                            <input type="file" accept=".lrc,.txt" onChange={handleLrcUpload} className="hidden" />
+                      <div className="grid lg:grid-cols-2 gap-4">
+                        <div className="space-y-3">
+                          <input
+                            value={slide.backgroundImage || ""}
+                            onChange={(e) => updateHeroSlide(slide.id, { backgroundImage: e.target.value })}
+                            placeholder="Background Image URL"
+                            className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none"
+                          />
+                          <label className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-white/5 border border-white/10 text-white text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/10">
+                            <Upload className="w-4 h-4" /> Upload Background
+                            <input type="file" accept="image/*" className="hidden" onChange={(e) => uploadHeroSlideImage(slide.id, "backgroundImage", e.target.files?.[0])} />
                           </label>
                         </div>
-                        <textarea
-                          placeholder="Paste lyrics here..."
-                          value={newTrack.lyrics}
-                          onChange={(e) => setNewTrack({ ...newTrack, lyrics: e.target.value })}
-                          className="w-full bg-black/5 border-b-2 border-black/10 p-4 font-medium text-xs outline-none focus:border-black h-32 resize-none font-mono rounded-xl"
-                          wrap="off"
-                        />
-                      </div>
 
-                      <button type="submit" disabled={isUploadingImg} className="w-full bg-black text-white py-6 mt-6 rounded-4xl font-black uppercase tracking-widest text-sm shadow-2xl disabled:opacity-50">
-                        {editingId ? "Update" : "Sync"}
-                      </button>
-                    </form>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {/* PLAYLISTS */}
-            {activeTab === "playlists" && (
-              <motion.div key="playlists" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="grid lg:grid-cols-12 gap-8">
-                <div className="lg:col-span-7 space-y-4">
-                  {playlists.map((pl) => (
-                    <div key={pl.id} className={`${glass} p-6 rounded-4xl flex justify-between items-center group shadow-lg border-white/5`}>
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-zinc-800 overflow-hidden flex items-center justify-center">
-                          {safeSrc(pl.image) ? <img src={pl.image} className="w-full h-full object-cover" alt="" /> : <ListMusic className="w-5 h-5 text-white/20" />}
-                        </div>
-                        <div className="min-w-0 pr-4">
-                          <p className="font-black uppercase text-xl truncate">{pl.title}</p>
-                          <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">{pl.trackIds?.length || 0} Tracks</p>
+                        <div className="space-y-3">
+                          <input
+                            value={slide.coverImage || ""}
+                            onChange={(e) => updateHeroSlide(slide.id, { coverImage: e.target.value })}
+                            placeholder="Cover Image URL"
+                            className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none"
+                          />
+                          <label className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-white/5 border border-white/10 text-white text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/10">
+                            <Upload className="w-4 h-4" /> Upload Cover
+                            <input type="file" accept="image/*" className="hidden" onChange={(e) => uploadHeroSlideImage(slide.id, "coverImage", e.target.files?.[0])} />
+                          </label>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          onClick={() => {
-                            setEditingPlaylistId(pl.id);
-                            setNewPlaylist(pl);
-                            window.scrollTo({ top: 0, behavior: "smooth" });
-                          }}
-                          className="p-3 text-zinc-400 bg-white/5 hover:bg-white/10 rounded-full"
-                        >
-                          <Edit2 className="w-5 h-5" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (window.confirm("삭제?")) deleteDoc(doc(db, "artifacts", appId, "public", "data", "playlists", pl.id));
-                          }}
-                          className="p-3 text-red-500 bg-red-500/5 hover:bg-red-500/10 rounded-full"
-                        >
-                          <Trash2 className="w-5 h-5" />
-                        </button>
+
+                      <div className="grid lg:grid-cols-2 gap-4">
+                        <div className="rounded-2xl overflow-hidden border border-white/10 bg-white/[0.03] aspect-[16/9] flex items-center justify-center">
+                          {safeSrc(slide.backgroundImage) ? (
+                            <img src={safeSrc(slide.backgroundImage)} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">No Background</p>
+                          )}
+                        </div>
+
+                        <div className="rounded-2xl overflow-hidden border border-white/10 bg-white/[0.03] aspect-square max-w-[280px] flex items-center justify-center">
+                          {safeSrc(slide.coverImage) ? (
+                            <img src={safeSrc(slide.coverImage)} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">No Cover</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className="text-[10px] text-zinc-500 uppercase font-black mb-3 ml-1">Linked Tracks</p>
+                        <div className="flex flex-wrap gap-2 max-h-52 overflow-y-auto no-scrollbar">
+                          {tracks.map((track) => {
+                            const active = slide.trackIds.includes(track.id);
+                            return (
+                              <button
+                                key={track.id}
+                                type="button"
+                                onClick={() => toggleHeroTrack(slide.id, track.id)}
+                                className={`px-3 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${active ? "bg-[#004aad] text-white" : "bg-white/5 text-zinc-500 hover:text-white"}`}
+                              >
+                                {track.title}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <p className="text-[10px] text-zinc-600 font-bold mt-3">
+                          Exhibition OST / New Album은 track 연결을 권장, Featured Playlist는 playlist 연결을 권장합니다.
+                        </p>
                       </div>
                     </div>
-                  ))}
-                </div>
+                  );
+                })}
+              </div>
+            </div>
 
-                <div className="lg:col-span-5">
-                  <div className="p-8 lg:p-12 rounded-[3rem] bg-zinc-900 border border-white/10 text-white shadow-2xl sticky top-32">
-                    <h3 className="font-black uppercase tracking-tighter text-2xl mb-8">{editingPlaylistId ? "Edit Playlist" : "Create Playlist"}</h3>
+            <button
+              onClick={handleSaveAllConfig}
+              className="w-full bg-[#004aad] text-white py-6 rounded-3xl font-black uppercase tracking-widest hover:bg-white hover:text-black transition-all flex items-center justify-center gap-3 shadow-2xl"
+            >
+              <Save className="w-6 h-6" /> Deploy Site Changes
+            </button>
+          </div>
+        )}
 
-                    <form onSubmit={handleAddOrUpdatePlaylist} className="space-y-6">
-                      <input
-                        required
-                        placeholder="TITLE"
-                        value={newPlaylist.title}
-                        onChange={(e) => setNewPlaylist({ ...newPlaylist, title: e.target.value })}
-                        className="w-full bg-white/5 border border-white/10 p-4 rounded-xl font-bold uppercase outline-none focus:border-[#004aad]"
-                      />
-                      <input
-                        placeholder="DESC"
-                        value={newPlaylist.desc}
-                        onChange={(e) => setNewPlaylist({ ...newPlaylist, desc: e.target.value })}
-                        className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-sm outline-none focus:border-[#004aad]"
-                      />
+        {activeTab === "users" && (
+          <div className="grid lg:grid-cols-[0.48fr_0.52fr] gap-10">
+            <div className={`${glass} rounded-[3rem] p-8 lg:p-10 space-y-6`}>
+              <div className="flex items-center justify-between gap-4">
+                <h2 className="text-2xl font-black uppercase">Users</h2>
+                <button onClick={fetchUsers} className="px-4 py-2 rounded-full bg-white/5 text-white text-[10px] font-black uppercase tracking-widest">
+                  Reload
+                </button>
+              </div>
 
-                      <div className="relative group cursor-pointer">
-                        <input type="file" accept="image/*" onChange={handlePLImageUpload} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
-                        <div className="p-6 rounded-xl border-2 border-dashed border-white/10 flex flex-col items-center justify-center gap-3">
-                          {isUploadingPLImg ? <Loader2 className="w-6 h-6 animate-spin" /> : <Upload className="w-6 h-6" />}
-                          <span className="text-[10px] font-black uppercase tracking-widest">Playlist Cover</span>
-                        </div>
-                      </div>
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                <input
+                  value={userSearchTerm}
+                  onChange={(e) => setUserSearchTerm(e.target.value)}
+                  placeholder="Search nickname, displayName, uid"
+                  className="w-full bg-white/5 border border-white/10 rounded-full py-4 pl-12 pr-5 outline-none"
+                />
+              </div>
 
-                      <div className="space-y-2">
-                        <p className="text-[10px] font-black uppercase text-[#004aad]">Select Tracks</p>
-                        <div className="h-60 overflow-y-auto no-scrollbar bg-black/40 rounded-2xl border border-white/5 p-4 space-y-2">
-                          {tracks.map((t) => (
-                            <div
-                              key={t.id}
-                              onClick={() => toggleTrackInPL(t.id)}
-                              className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer ${
-                                newPlaylist.trackIds.includes(t.id) ? "bg-[#004aad]/20 border border-[#004aad]/50" : "hover:bg-white/5"
-                              }`}
-                            >
-                              <div className="w-8 h-8 rounded bg-zinc-800 shrink-0 overflow-hidden flex items-center justify-center">
-                                {safeSrc(t.image) ? <img src={t.image} className="w-full h-full object-cover" alt="" /> : <Music className="w-4 h-4 text-white/20" />}
-                              </div>
-                              <p className="text-xs font-bold truncate flex-1">{t.title}</p>
-                              {newPlaylist.trackIds.includes(t.id) && <CheckCircle2 className="w-4 h-4 text-[#004aad]" />}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <button type="submit" className="w-full bg-white text-black py-4 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-[#004aad] hover:text-white shadow-xl">
-                        {editingPlaylistId ? "Update" : "Create"}
-                      </button>
-                    </form>
+              <div className="space-y-3 max-h-[70vh] overflow-y-auto no-scrollbar">
+                {isLoadingUsers ? (
+                  <div className="flex items-center gap-3 text-zinc-500">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Loading users...
                   </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </>
-      )}
-    </motion.div>
+                ) : filteredUsers.length === 0 ? (
+                  <p className="text-zinc-500">No users found.</p>
+                ) : (
+                  filteredUsers.map((u) => (
+                    <button
+                      key={u.id}
+                      onClick={() => setSelectedUserForSticker(u)}
+                      className={`w-full text-left rounded-2xl border p-4 transition-all ${
+                        selectedUserForSticker?.id === u.id
+                          ? "border-[#004aad] bg-[#004aad]/10"
+                          : "border-white/10 bg-white/[0.03] hover:bg-white/[0.05]"
+                      }`}
+                    >
+                      <p className="font-black uppercase truncate">{u.nickname || u.displayName || "Unnamed User"}</p>
+                      <p className="text-[10px] text-zinc-500 uppercase tracking-widest truncate">{u.id}</p>
+                      <p className="text-[10px] text-zinc-600 uppercase tracking-widest mt-2">
+                        {u.listenCount || 0} listens • {u.xp || 0} xp
+                      </p>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className={`${glass} rounded-[3rem] p-8 lg:p-10 space-y-8`}>
+              {!selectedUserForSticker ? (
+                <div className="text-zinc-500">Select a user to edit profile and rewards.</div>
+              ) : (
+                <>
+                  <div>
+                    <h2 className="text-3xl font-black uppercase">{selectedUserForSticker.nickname || selectedUserForSticker.displayName || "User"}</h2>
+                    <p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-2">{selectedUserForSticker.id}</p>
+                  </div>
+
+                  <div className="grid lg:grid-cols-2 gap-4">
+                    <input
+                      value={nicknameDraft}
+                      onChange={(e) => setNicknameDraft(e.target.value)}
+                      placeholder="Nickname"
+                      className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none"
+                    />
+                    <input
+                      value={levelOverrideName}
+                      onChange={(e) => setLevelOverrideName(e.target.value)}
+                      placeholder="Level Override Name"
+                      className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none"
+                    />
+                    <input
+                      value={levelOverrideColor}
+                      onChange={(e) => setLevelOverrideColor(e.target.value)}
+                      placeholder="Level Override Color (#hex)"
+                      className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none lg:col-span-2"
+                    />
+                  </div>
+
+                  <button
+                    onClick={handleSaveNicknameAndLevel}
+                    className="px-8 py-4 bg-[#004aad] rounded-full text-white font-black uppercase tracking-widest text-xs hover:bg-white hover:text-black transition-all"
+                  >
+                    Save User Profile
+                  </button>
+
+                  <div className="space-y-4">
+                    <h3 className="text-xl font-black uppercase">Achievements & Stickers</h3>
+                    <div className="grid md:grid-cols-2 gap-3">
+                      {Object.entries({ ...ACHIEVEMENT_DATA, ...COLLECTIVE_DATA }).map(([id, meta]) => {
+                        const Icon = meta.icon || Star;
+                        const active = selectedUserRewardIds.has(id);
+                        return (
+                          <button
+                            key={id}
+                            onClick={() => toggleSticker(id)}
+                            className={`rounded-2xl border p-4 text-left transition-all ${
+                              active ? "border-[#004aad] bg-[#004aad]/10" : "border-white/10 bg-white/[0.03] hover:bg-white/[0.05]"
+                            }`}
+                          >
+                            <div className="flex items-center gap-3 mb-3">
+                              <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: `${meta.color}22`, color: meta.color }}>
+                                <Icon className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <p className="font-black uppercase tracking-tight">{meta.title}</p>
+                                <p className="text-[10px] text-zinc-500 uppercase tracking-widest">{id}</p>
+                              </div>
+                            </div>
+                            <p className={`text-[10px] font-black uppercase tracking-widest ${active ? "text-[#8db4ff]" : "text-zinc-600"}`}>
+                              {active ? "Granted" : "Not Granted"}
+                            </p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="border-t border-white/10 pt-8 space-y-4">
+                    <h3 className="text-xl font-black uppercase">Annual Settlement</h3>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <input
+                        value={settleYear}
+                        onChange={(e) => setSettleYear(e.target.value)}
+                        placeholder="2026"
+                        className="bg-white/5 border border-white/10 p-4 rounded-2xl outline-none"
+                      />
+                      <button
+                        onClick={runAnnualSettlement}
+                        disabled={isSettling}
+                        className="px-8 py-4 bg-white/5 rounded-full text-white font-black uppercase tracking-widest text-xs hover:bg-white/10 transition-all disabled:opacity-50"
+                      >
+                        {isSettling ? "Settling..." : "Run Settlement"}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
