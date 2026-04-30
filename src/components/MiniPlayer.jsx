@@ -1,5 +1,5 @@
 // src/components/MiniPlayer.jsx
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   Play,
@@ -33,8 +33,11 @@ const MiniPlayer = ({
   isBuffering,
   setIsPlayerExpanded
 }) => {
+  const [isVolumeOpen, setIsVolumeOpen] = useState(false);
 
   if (!currentTrack) return null;
+
+  const isLiked = userLikes.includes(currentTrack.id);
 
   return (
     <motion.div
@@ -46,21 +49,17 @@ const MiniPlayer = ({
       className="fixed bottom-4 lg:bottom-10 left-0 w-full z-50 px-4 lg:px-8 flex justify-center"
     >
       <div
-        className={`${glass} w-full max-w-5xl p-3 lg:p-4 rounded-4xl lg:rounded-full flex items-center justify-between relative cursor-pointer`}
+        className={`${glass} w-full max-w-5xl p-3 lg:p-4 rounded-4xl lg:rounded-full flex items-center justify-between relative cursor-pointer gap-3`}
         onClick={() => setIsPlayerExpanded(true)}
       >
-
-        {/* 🔵 리빌 네온 시스템 */}
+        {/* Progress Reveal */}
         <div className="absolute inset-0 pointer-events-none z-0">
           <div className="absolute inset-0 overflow-hidden rounded-4xl lg:rounded-full">
-
-            {/* 리빌 */}
             <div
               className="absolute top-0 left-0 bottom-0 bg-linear-to-r from-[#004aad]/5 via-[#004aad]/30 to-[#004aad]/70 transition-[width] duration-150 ease-linear"
               style={{ width: `${progressPct}%` }}
             />
 
-            {/* 네온 라인 */}
             <div
               className="absolute top-0 bottom-0 w-0.5"
               style={{
@@ -73,9 +72,9 @@ const MiniPlayer = ({
           </div>
         </div>
 
-        {/* 좌측 영역 */}
+        {/* Track Info */}
         <div className="flex items-center gap-4 flex-1 relative z-10 min-w-0">
-          <div className="w-12 h-12 lg:w-16 lg:h-16 rounded-full overflow-hidden relative shadow-lg">
+          <div className="w-12 h-12 lg:w-16 lg:h-16 rounded-full overflow-hidden relative shadow-lg shrink-0">
             <img
               src={currentTrack.image}
               className={`w-full h-full object-cover ${
@@ -85,7 +84,7 @@ const MiniPlayer = ({
             />
           </div>
 
-          <div className="truncate">
+          <div className="truncate min-w-0">
             <p className="text-sm lg:text-lg font-black text-white truncate">
               {currentTrack.title}
             </p>
@@ -95,97 +94,105 @@ const MiniPlayer = ({
           </div>
         </div>
 
-        {/* 우측 컨트롤 */}
+        {/* Right Controls */}
         <div
-          className="flex items-center gap-3 relative z-20"
+          className="flex items-center gap-2 lg:gap-3 relative z-20"
           onClick={(e) => e.stopPropagation()}
         >
-
-          {/* 🔊 볼륨 + hover 슬라이더 복구 */}
-          <div className="relative group hidden md:flex">
+          {/* Action Group: Like / Share */}
+          <div className="flex items-center gap-1 lg:gap-2 pr-1 lg:pr-3 border-r border-white/10">
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsMuted(!isMuted);
-              }}
-              className="p-2 text-zinc-400 hover:text-white transition-colors"
+              onClick={(e) => handleToggleLike(e, currentTrack.id)}
+              className={`p-2 rounded-full transition-colors ${
+                isLiked ? 'text-red-500' : 'text-zinc-400 hover:text-white'
+              }`}
+              aria-label="Like track"
             >
-              {isMuted || volume === 0 ? (
-                <VolumeX className="w-5 h-5" />
+              <Heart
+                className={`w-5 h-5 lg:w-6 lg:h-6 ${isLiked ? "fill-current" : ""}`}
+              />
+            </button>
+
+            <button
+              onClick={(e) => handleShare(e, currentTrack, 'track')}
+              className="p-2 rounded-full text-zinc-400 hover:text-white transition-colors"
+              aria-label="Share track"
+            >
+              <Share2 className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Control Group: Volume / Play / Next */}
+          <div className="flex items-center gap-1 lg:gap-2">
+            <div className="relative hidden md:flex">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsVolumeOpen((prev) => !prev);
+                }}
+                className="p-2 text-zinc-400 hover:text-white transition-colors"
+                aria-label="Volume"
+              >
+                {isMuted || volume === 0 ? (
+                  <VolumeX className="w-5 h-5" />
+                ) : (
+                  <Volume2 className="w-5 h-5" />
+                )}
+              </button>
+
+              {isVolumeOpen && (
+                <div className="absolute bottom-[120%] left-1/2 -translate-x-1/2 w-11 h-36 bg-zinc-900 border border-white/10 rounded-3xl flex items-center justify-center shadow-2xl z-50">
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={isMuted ? 0 : volume}
+                    onChange={(e) => {
+                      const nextVolume = Number(e.target.value);
+                      setVolume(nextVolume);
+                      setIsMuted(nextVolume === 0);
+                    }}
+                    className="w-1.5 h-24 appearance-none bg-white/20 rounded-full outline-none
+                      [&::-webkit-slider-thumb]:appearance-none
+                      [&::-webkit-slider-thumb]:w-4
+                      [&::-webkit-slider-thumb]:h-4
+                      [&::-webkit-slider-thumb]:bg-white
+                      [&::-webkit-slider-thumb]:rounded-full cursor-pointer"
+                    style={{ writingMode: 'vertical-lr', direction: 'rtl' }}
+                  />
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={togglePlay}
+              className="w-12 h-12 bg-white text-black rounded-full flex items-center justify-center shadow-xl"
+              aria-label={isPlaying ? "Pause" : "Play"}
+            >
+              {isPlaying ? (
+                isBuffering ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Pause className="w-5 h-5 fill-current" />
+                )
+              ) : isBuffering ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
-                <Volume2 className="w-5 h-5" />
+                <Play className="w-5 h-5 fill-current ml-1" />
               )}
             </button>
 
-            <div className="absolute bottom-[120%] left-1/2 -translate-x-1/2 w-10 h-32 bg-zinc-900 border border-white/10 rounded-3xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all flex items-center justify-center shadow-2xl z-50">
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                value={isMuted ? 0 : volume}
-                onChange={(e) => {
-                  setVolume(Number(e.target.value));
-                  setIsMuted(false);
-                }}
-                className="w-1.5 h-24 appearance-none bg-white/20 rounded-full outline-none
-                  [&::-webkit-slider-thumb]:appearance-none
-                  [&::-webkit-slider-thumb]:w-4
-                  [&::-webkit-slider-thumb]:h-4
-                  [&::-webkit-slider-thumb]:bg-white
-                  [&::-webkit-slider-thumb]:rounded-full cursor-pointer"
-                style={{ writingMode: 'vertical-lr', direction: 'rtl' }}
-              />
-            </div>
+            <button
+              onClick={() =>
+                playTrack((currentTrackIdx + 1) % publicTracks.length)
+              }
+              className="p-2 text-white hover:text-[#8db4ff] transition-colors"
+              aria-label="Next track"
+            >
+              <SkipForward className="w-6 h-6" />
+            </button>
           </div>
-
-          {/* 🔗 공유 버튼 복구 */}
-          <button
-            onClick={(e) => handleShare(e, currentTrack, 'track')}
-            className="p-2 text-zinc-400 hover:text-white transition-colors hidden md:block"
-          >
-            <Share2 className="w-5 h-5" />
-          </button>
-
-          {/* ❤️ 좋아요 */}
-          <button
-            onClick={(e) => handleToggleLike(e, currentTrack.id)}
-            className="p-2"
-          >
-            <Heart
-              className={`w-6 h-6 ${
-                userLikes.includes(currentTrack.id)
-                  ? "text-red-500 fill-current"
-                  : "text-white"
-              }`}
-            />
-          </button>
-
-          {/* ▶ 재생 */}
-          <button
-            onClick={togglePlay}
-            className="w-12 h-12 bg-white text-black rounded-full flex items-center justify-center shadow-xl"
-          >
-            {isPlaying ? (
-              isBuffering ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <Pause className="w-5 h-5 fill-current" />
-              )
-            ) : (
-              <Play className="w-5 h-5 fill-current ml-1" />
-            )}
-          </button>
-
-          {/* ⏭ 다음곡 */}
-          <button
-            onClick={() =>
-              playTrack((currentTrackIdx + 1) % publicTracks.length)
-            }
-            className="p-2 text-white"
-          >
-            <SkipForward className="w-6 h-6" />
-          </button>
         </div>
       </div>
     </motion.div>

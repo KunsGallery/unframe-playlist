@@ -466,8 +466,12 @@ export default function Admin({
         items: (newPlaylist.trackIds || [])
           .map((id) => tracks.find((t) => t.id === id))
           .filter(Boolean),
-        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
       };
+
+      if (!editingPlaylistId) {
+        payload.createdAt = Timestamp.now();
+      }
 
       if (editingPlaylistId) {
         await updateDoc(playlistDocRef(db, appId, editingPlaylistId), payload);
@@ -502,9 +506,12 @@ export default function Admin({
       title: playlist.title || "",
       desc: playlist.desc || "",
       image: playlist.image || "",
-      trackIds: Array.isArray(playlist.items) ? playlist.items.map((item) => item.id).filter(Boolean) : [],
+      trackIds: Array.isArray(playlist.trackIds)
+        ? playlist.trackIds.filter(Boolean)
+        : Array.isArray(playlist.items)
+          ? playlist.items.map((item) => item.id).filter(Boolean)
+          : [],
     });
-    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleSaveAllConfig = async () => {
