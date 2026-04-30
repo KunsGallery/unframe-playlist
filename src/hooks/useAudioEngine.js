@@ -11,6 +11,7 @@ export default function useAudioEngine() {
   const [isMuted, setIsMuted] = useState(false)
 
   const [isPlaying, setIsPlaying] = useState(false)
+  const [isBuffering, setIsBuffering] = useState(false)
 
   useEffect(() => {
 
@@ -43,14 +44,19 @@ export default function useAudioEngine() {
     if (audio.paused) {
 
       try {
+        setIsBuffering(true)
         await audio.play()
         setIsPlaying(true)
-      } catch {}
+        setIsBuffering(false)
+      } catch {
+        setIsBuffering(false)
+      }
 
     } else {
 
       audio.pause()
       setIsPlaying(false)
+      setIsBuffering(false)
 
     }
 
@@ -74,6 +80,9 @@ export default function useAudioEngine() {
 
     isPlaying,
     setIsPlaying,
+
+    isBuffering,
+    setIsBuffering,
 
     togglePlay,
 

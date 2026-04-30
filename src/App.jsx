@@ -195,6 +195,8 @@ export default function App() {
     setIsMuted,
     isPlaying,
     setIsPlaying,
+    isBuffering,
+    setIsBuffering,
   } = useAudioEngine();
 
   const [currentTrackIdx, setCurrentTrackIdx] = useState(0);
@@ -214,6 +216,8 @@ export default function App() {
 
   const [isPlayerExpanded, setIsPlayerExpanded] = useState(false);
   const [playerView, setPlayerView] = useState('cover');
+  const [loopMode, setLoopMode] = useState(0);
+  const [isShuffle, setIsShuffle] = useState(false);
 
   const [parsedLyrics, setParsedLyrics] = useState([]);
   const [selectedTrack, setSelectedTrack] = useState(null);
@@ -427,6 +431,33 @@ export default function App() {
     appId,
   });
 
+  const toggleLoop = useCallback(() => {
+    setLoopMode((prev) => (prev + 1) % 3);
+  }, []);
+
+  const toggleShuffle = useCallback(() => {
+    setIsShuffle((prev) => !prev);
+  }, []);
+
+  const getNextTrackIndex = useCallback((queue, currentIdx) => {
+    if (!Array.isArray(queue) || queue.length === 0) return 0;
+    if (queue.length === 1) return 0;
+
+    if (!isShuffle) {
+      return (currentIdx + 1) % queue.length;
+    }
+
+    let nextIdx = currentIdx;
+    let safety = 0;
+
+    while (nextIdx === currentIdx && safety < 20) {
+      nextIdx = Math.floor(Math.random() * queue.length);
+      safety += 1;
+    }
+
+    return nextIdx;
+  }, [isShuffle]);
+
   const togglePlay = useCallback(async () => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -434,21 +465,31 @@ export default function App() {
     if (isPlaying) {
       audio.pause();
       setIsPlaying(false);
+      setIsBuffering(false);
       return;
     }
 
     try {
+      setIsBuffering(true);
+
       const playPromise = audio.play();
       if (playPromise !== undefined) {
         await playPromise;
       }
+
       setIsPlaying(true);
+      setIsBuffering(false);
     } catch (err) {
-      if (err?.name === "AbortError") return;
+      if (err?.name === "AbortError") {
+        setIsBuffering(false);
+        return;
+      }
+
       console.error("togglePlay error:", err);
       setIsPlaying(false);
+      setIsBuffering(false);
     }
-  }, [audioRef, isPlaying, setIsPlaying]);
+  }, [audioRef, isPlaying, setIsPlaying, setIsBuffering]);
 
   const handleNaturalTrackEnd = useCallback(() => {
     const audio = audioRef.current;
@@ -457,7 +498,25 @@ export default function App() {
     const q = currentQueue || [];
     if (!q.length) return;
 
-    const nextIdx = (currentTrackIdx + 1) % q.length;
+    const isLastTrack = currentTrackIdx >= q.length - 1;
+
+    if (loopMode === 0 && isLastTrack) {
+      setIsPlaying(false);
+      setIsBuffering(false);
+
+      try {
+        if ("mediaSession" in navigator) {
+          navigator.mediaSession.playbackState = "none";
+        }
+      } catch {}
+
+      return;
+    }
+
+    const nextIdx = loopMode === 2
+      ? currentTrackIdx
+      : getNextTrackIndex(q, currentTrackIdx);
+
     const nextTrack = q[nextIdx];
     if (!nextTrack) return;
 
@@ -467,6 +526,7 @@ export default function App() {
     setCurrentTrackIdx(nextIdx);
     setCurrentTime(0);
     setDuration(0);
+    setIsBuffering(true);
 
     playSessionRef.current = {
       startedAt: Date.now(),
@@ -513,10 +573,16 @@ export default function App() {
           await playPromise;
         }
         setIsPlaying(true);
+        setIsBuffering(false);
       } catch (err) {
-        if (err?.name === "AbortError") return;
+        if (err?.name === "AbortError") {
+          setIsBuffering(false);
+          return;
+        }
+
         console.error("handleNaturalTrackEnd play error:", err);
         setIsPlaying(false);
+        setIsBuffering(false);
       }
     }, 120);
   }, [
@@ -527,6 +593,9 @@ export default function App() {
     setCurrentTime,
     setDuration,
     setIsPlaying,
+    setIsBuffering,
+    loopMode,
+    getNextTrackIndex,
   ]);
 
   if (loading) {
@@ -586,6 +655,7 @@ export default function App() {
         <AudioPlayer
           currentTrack={currentTrack}
           isPlaying={isPlaying}
+          isBuffering={isBuffering}
           currentTime={currentTime}
           duration={duration}
           audioRef={audioRef}
@@ -610,6 +680,10 @@ export default function App() {
           setIsPlayerExpanded={setIsPlayerExpanded}
           playerView={playerView}
           setPlayerView={setPlayerView}
+          loopMode={loopMode}
+          toggleLoop={toggleLoop}
+          isShuffle={isShuffle}
+          toggleShuffle={toggleShuffle}
         />
 
         <NicknameModal
@@ -664,6 +738,21 @@ export default function App() {
 
         <audio
           ref={audioRef}
+          onLoadStart={() => {
+            setIsBuffering(true);
+          }}
+          onWaiting={() => {
+            setIsBuffering(true);
+          }}
+          onStalled={() => {
+            setIsBuffering(true);
+          }}
+          onCanPlay={() => {
+            setIsBuffering(false);
+          }}
+          onPlaying={() => {
+            setIsBuffering(false);
+          }}
           onLoadedMetadata={(e) => {
             const a = e.currentTarget;
             setDuration(a.duration || 0);
@@ -682,6 +771,7 @@ export default function App() {
           onLoadedData={(e) => {
             const a = e.currentTarget;
             setDuration(a.duration || 0);
+            setIsBuffering(false);
           }}
           onTimeUpdate={(e) => {
             const a = e.currentTarget;

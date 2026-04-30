@@ -146,6 +146,7 @@ export default function Admin({
     image: "",
     description: "",
     tag: "Ambient",
+    genre: "Ambient",
     audioUrl: "",
     lyrics: "",
   });
@@ -388,10 +389,18 @@ export default function Admin({
     }
 
     try {
+      const selectedGenre = newTrack.genre || newTrack.tag || "Ambient";
+
       const payload = {
         ...newTrack,
-        createdAt: Timestamp.now(),
+        genre: selectedGenre,
+        tag: selectedGenre,
+        updatedAt: Timestamp.now(),
       };
+
+      if (!editingId) {
+        payload.createdAt = Timestamp.now();
+      }
 
       if (editingId) {
         await updateDoc(trackDocRef(db, appId, editingId), payload);
@@ -407,6 +416,7 @@ export default function Admin({
         image: "",
         description: "",
         tag: "Ambient",
+        genre: "Ambient",
         audioUrl: "",
         lyrics: "",
       });
@@ -429,17 +439,19 @@ export default function Admin({
   };
 
   const handleEditTrack = (track) => {
+    const selectedGenre = track.genre || track.tag || "Ambient";
+
     setEditingId(track.id);
     setNewTrack({
       title: track.title || "",
       artist: track.artist || "",
       image: track.image || "",
       description: track.description || "",
-      tag: track.tag || "Ambient",
+      tag: selectedGenre,
+      genre: selectedGenre,
       audioUrl: track.audioUrl || "",
       lyrics: track.lyrics || "",
     });
-    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleSavePlaylist = async () => {
