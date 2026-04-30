@@ -1,1 +1,2 @@
-/*    /index.html   200
+/share/track/:id /.netlify/functions/track-share?id=:id 200
+/* /index.html 200

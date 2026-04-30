@@ -307,73 +307,74 @@ export default function SiteConfigManager({
   };
 
   return (
-    <div className="grid xl:grid-cols-[0.32fr_0.68fr] gap-8 items-start">
-      <div className={`${glass} rounded-[3rem] p-6 lg:p-8 space-y-5 xl:sticky xl:top-28`}>
-        <div>
-          <p className="text-[10px] text-[#004aad] font-black uppercase tracking-[0.35em] mb-3">
-            Site Config
-          </p>
-          <h2 className="text-2xl lg:text-3xl font-black uppercase tracking-tight">
-            Main Settings
-          </h2>
+    <div className="space-y-8">
+      <div className={`${glass} rounded-[3rem] p-5 lg:p-6`}>
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-5">
+          <div>
+            <p className="text-[10px] text-[#004aad] font-black uppercase tracking-[0.35em] mb-3">
+              Site Config
+            </p>
+            <h2 className="text-2xl lg:text-3xl font-black uppercase tracking-tight">
+              Main Settings
+            </h2>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-3 w-full xl:max-w-3xl">
+            {CONFIG_PANELS.map((panel) => {
+              const Icon = panel.icon;
+              const active = activePanel === panel.id;
+
+              return (
+                <button
+                  key={panel.id}
+                  onClick={() => setActivePanel(panel.id)}
+                  className={`text-left rounded-2xl border p-4 transition-all flex items-center gap-4 ${
+                    active
+                      ? "border-[#004aad] bg-[#004aad]/10 shadow-[0_0_24px_rgba(0,74,173,0.18)]"
+                      : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]"
+                  }`}
+                >
+                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
+                    active ? "bg-[#004aad] text-white" : "bg-white/5 text-zinc-400"
+                  }`}>
+                    <Icon className="w-5 h-5" />
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="font-black uppercase tracking-tight truncate">
+                      {panel.label}
+                    </p>
+                    <p className="text-[10px] text-zinc-500 uppercase tracking-widest truncate">
+                      {panel.desc}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        <div className="space-y-3">
-          {CONFIG_PANELS.map((panel) => {
-            const Icon = panel.icon;
-            const active = activePanel === panel.id;
-
-            return (
-              <button
-                key={panel.id}
-                onClick={() => setActivePanel(panel.id)}
-                className={`w-full text-left rounded-2xl border p-4 transition-all flex items-center gap-4 ${
-                  active
-                    ? "border-[#004aad] bg-[#004aad]/10 shadow-[0_0_24px_rgba(0,74,173,0.18)]"
-                    : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]"
-                }`}
-              >
-                <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
-                  active ? "bg-[#004aad] text-white" : "bg-white/5 text-zinc-400"
-                }`}>
-                  <Icon className="w-5 h-5" />
-                </div>
-
-                <div className="min-w-0">
-                  <p className="font-black uppercase tracking-tight truncate">
-                    {panel.label}
-                  </p>
-                  <p className="text-[10px] text-zinc-500 uppercase tracking-widest truncate">
-                    {panel.desc}
-                  </p>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        <button
-          onClick={handleSaveAllConfig}
-          className="w-full bg-[#004aad] text-white py-5 rounded-3xl font-black uppercase tracking-widest hover:bg-white hover:text-black transition-all flex items-center justify-center gap-3 shadow-2xl"
-        >
-          <Save className="w-5 h-5" />
-          Deploy Changes
-        </button>
-
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-          <div className="flex items-center gap-3 mb-3">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mt-5 pt-5 border-t border-white/10">
+          <div className="flex items-center gap-3 text-zinc-500">
             <Settings2 className="w-4 h-4 text-[#004aad]" />
-            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
-              Save Notice
+            <p className="text-xs leading-relaxed">
+              우측 설정을 수정한 뒤, Deploy Changes를 눌러야 사이트에 반영됩니다.
             </p>
           </div>
-          <p className="text-xs text-zinc-500 leading-relaxed">
-            각 설정은 우측에서 수정한 뒤, 마지막에 Deploy Changes를 눌러야 실제 사이트에 반영됩니다.
-          </p>
+
+          <button
+            onClick={handleSaveAllConfig}
+            className="bg-[#004aad] text-white px-8 py-4 rounded-full font-black uppercase tracking-widest hover:bg-white hover:text-black transition-all flex items-center justify-center gap-3 shadow-2xl text-xs"
+          >
+            <Save className="w-5 h-5" />
+            Deploy Changes
+          </button>
         </div>
       </div>
 
-      <div>{renderPanel()}</div>
+      <div className="w-full">
+        {renderPanel()}
+      </div>
     </div>
   );
 }

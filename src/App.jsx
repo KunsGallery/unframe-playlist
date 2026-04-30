@@ -328,7 +328,59 @@ export default function App() {
 
   const handleShare = useCallback(async (e, item, type = 'track') => {
     if (e) e.stopPropagation();
+    if (!item) return;
 
+    // Track sharing: no card generation, share as a clean music link.
+    if (type === "track") {
+      const shareUrl =
+        typeof window !== "undefined"
+          ? `${window.location.origin}/share/track/${encodeURIComponent(item.id)}`
+          : "";
+
+      const shareTitle = `${item.title || "UNFRAME"} - ${item.artist || "UNFRAME PLAYLIST"}`;
+
+      const shareText = [
+        "UNFRAME PLAYLIST",
+        "",
+        `〈${item.title || "Untitled"}〉`,
+        item.artist || "",
+        "",
+        "전시와 사운드가 이어지는 음악 아카이브",
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+      try {
+        if (navigator.share) {
+          await navigator.share({
+            title: shareTitle,
+            text: shareText,
+            url: shareUrl,
+          });
+
+          setToastMessage("곡 링크를 공유했습니다 🔗");
+        } else if (navigator.clipboard) {
+          await navigator.clipboard.writeText(`${shareText}\n\n${shareUrl}`);
+          setToastMessage("곡 링크를 클립보드에 복사했습니다 🔗");
+        } else {
+          setToastMessage("공유를 지원하지 않는 환경입니다.");
+        }
+
+        await emit({ type: "share_card", trackId: item?.id || null });
+      } catch (err) {
+        if (err?.name === "AbortError") {
+          setToastMessage("공유가 취소되었습니다.");
+          return;
+        }
+
+        console.error("track share error:", err);
+        setToastMessage("공유 중 오류가 발생했습니다.");
+      }
+
+      return;
+    }
+
+    // Non-track sharing: keep the original card generation flow.
     let safeImage = item?.image ?? "";
     if (typeof safeImage === "string" && safeImage.trim() !== "") {
       const direct = getDirectLink(safeImage);
@@ -348,7 +400,7 @@ export default function App() {
     });
 
     await emit({ type: "share_card", trackId: item?.id || null });
-  }, [emit]);
+  }, [emit, setToastMessage]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -430,6 +482,51 @@ export default function App() {
     db,
     appId,
   });
+
+    useEffect(() => {
+      if (!publicTracks.length) return;
+
+      const params = new URLSearchParams(window.location.search);
+      const sharedTrackId = params.get("track");
+
+      if (!sharedTrackId) return;
+
+      const idx = publicTracks.findIndex((track) => track.id === sharedTrackId);
+      if (idx < 0) return;
+
+      const track = publicTracks[idx];
+
+      setCurrentQueue(publicTracks);
+      setCurrentTrackIdx(idx);
+      setCurrentTime(0);
+      setDuration(0);
+      setIsPlaying(false);
+      setIsBuffering(false);
+
+      try {
+        const url = getDirectLink(track.audioUrl);
+        if (audioRef.current && url) {
+          audioRef.current.pause();
+          audioRef.current.src = url;
+          audioRef.current.load();
+        }
+      } catch {}
+
+      setToastMessage(`공유된 곡을 불러왔습니다: ${track.title}`);
+
+      const cleanUrl = `${window.location.origin}${window.location.pathname}`;
+      window.history.replaceState({}, "", cleanUrl);
+    }, [
+      publicTracks,
+      audioRef,
+      setCurrentQueue,
+      setCurrentTrackIdx,
+      setCurrentTime,
+      setDuration,
+      setIsPlaying,
+      setIsBuffering,
+      setToastMessage,
+    ]);
 
   const toggleLoop = useCallback(() => {
     setLoopMode((prev) => (prev + 1) % 3);

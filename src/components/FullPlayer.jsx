@@ -22,27 +22,28 @@ import {
 
 const MarqueeTitle = ({ title }) => {
   const text = title || "Untitled";
+  const shouldMarquee = text.length > 18;
+
+  if (!shouldMarquee) {
+    return (
+      <h2 className="text-3xl lg:text-4xl font-black uppercase tracking-tighter text-white truncate">
+        {text}
+      </h2>
+    );
+  }
 
   return (
-    <div className="relative max-w-full overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_8%,black_92%,transparent)]">
-      <div
-        className={`whitespace-nowrap text-3xl lg:text-4xl font-black uppercase tracking-tighter text-white ${
-          text.length > 18 ? "animate-[title-marquee_14s_linear_infinite]" : ""
-        }`}
-      >
-        {text.length > 18 ? (
-          <>
-            <span className="inline-block pr-12">{text}</span>
-            <span className="inline-block pr-12">{text}</span>
-          </>
-        ) : (
-          text
-        )}
+    <div className="relative max-w-full overflow-hidden [mask-image:linear-gradient(to_right,black_0%,black_86%,transparent_100%)]">
+      <div className="whitespace-nowrap text-3xl lg:text-4xl font-black uppercase tracking-tighter text-white animate-[title-marquee_16s_linear_infinite]">
+        <span className="inline-block pr-16">{text}</span>
+        <span className="inline-block pr-16">{text}</span>
       </div>
 
       <style>{`
         @keyframes title-marquee {
           0% { transform: translateX(0); }
+          14% { transform: translateX(0); }
+          88% { transform: translateX(-50%); }
           100% { transform: translateX(-50%); }
         }
       `}</style>
