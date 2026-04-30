@@ -191,7 +191,8 @@ export default function Archive({
   const [nickSaving, setNickSaving] = useState(false);
   const [nickError, setNickError] = useState("");
 
-  const nicknameChanged = !!userProfile?.nicknameChanged;
+  const nicknameUpdatedCount = Number(userProfile?.nicknameUpdatedCount || 0);
+  const nicknameLocked = nicknameUpdatedCount >= 1 || (!("nicknameUpdatedCount" in (userProfile || {})) && !!userProfile?.nicknameChanged);
 
   // ✅ 표시 이름: nickname 우선
   const displayName = useMemo(() => {
@@ -317,7 +318,7 @@ export default function Archive({
 
     setNickError("");
 
-    if (nicknameChanged) {
+    if (nicknameLocked) {
       setNickError("이미 닉네임을 변경했습니다. 추가 변경은 관리자에게 요청해주세요.");
       return;
     }
@@ -345,7 +346,7 @@ export default function Archive({
     try {
       // private stats
       const privateRef = doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'stats');
-      await updateDoc(privateRef, { nickname: next, nicknameChanged: true });
+      await updateDoc(privateRef, { nickname: next, nicknameUpdatedCount: 1 });
 
       // public_stats도 가능하면 동기화 (규칙이 막으면 실패할 수 있음 → 무시)
       try {
@@ -362,7 +363,7 @@ export default function Archive({
     } finally {
       setNickSaving(false);
     }
-  }, [user, db, appId, nickDraft, nicknameChanged]);
+  }, [user, db, appId, nickDraft, nicknameLocked]);
 
   // ✅ reward 공유 핸들러: unlockedAt 포함해서 App 카드로 전달
   const onShareReward = useCallback((e, id) => {
@@ -425,7 +426,7 @@ export default function Archive({
                   닉네임을 설정하세요
                 </h3>
                 <p className="text-[11px] text-zinc-500 font-bold leading-relaxed">
-                  {nicknameChanged
+                  {nicknameLocked
                     ? "이미 1회 변경을 사용했습니다. 추가 변경은 관리자에게 요청해주세요."
                     : "닉네임은 딱 1번만 변경할 수 있어요. (이후 변경 불가)"}
                 </p>
@@ -435,7 +436,7 @@ export default function Archive({
                 <input
                   value={nickDraft}
                   onChange={(e) => setNickDraft(e.target.value)}
-                  disabled={nicknameChanged || nickSaving}
+                  disabled={nicknameLocked || nickSaving}
                   className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-4 text-sm font-black uppercase tracking-widest outline-none focus:border-[#004aad] disabled:opacity-50"
                   placeholder="2~16 chars"
                 />
@@ -457,7 +458,7 @@ export default function Archive({
                 </button>
                 <button
                   onClick={saveNicknameOnce}
-                  disabled={nicknameChanged || nickSaving}
+                  disabled={nicknameLocked || nickSaving}
                   className="py-4 bg-[#004aad] rounded-2xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-50"
                 >
                   {nickSaving ? "Saving..." : "Save (1x)"}
@@ -646,7 +647,7 @@ export default function Archive({
                     type="button"
                     onClick={openNickModal}
                     className="block mx-auto hover:opacity-90 transition-opacity"
-                    title={nicknameChanged ? "닉네임 변경 완료 (관리자만 수정 가능)" : "닉네임 1회 변경 가능"}
+                    title={nicknameLocked ? "닉네임 변경 완료 (관리자만 수정 가능)" : "닉네임 1회 변경 가능"}
                   >
                     <h2 className="text-2xl lg:text-3xl font-black uppercase italic tracking-tighter leading-none">
                       {displayName || "Collector"}
@@ -657,12 +658,12 @@ export default function Archive({
                     No. {user?.uid?.slice(0, 8)}
                   </p>
 
-                  {!nicknameChanged && (
+                  {!nicknameLocked && (
                     <p className="text-[9px] text-zinc-600 font-bold uppercase tracking-widest">
                       Tap name to set nickname (1x)
                     </p>
                   )}
-                  {nicknameChanged && (
+                  {nicknameLocked && (
                     <p className="text-[9px] text-zinc-600 font-bold uppercase tracking-widest">
                       Nickname locked
                     </p>

@@ -34,7 +34,9 @@ export function useNicknameSetup({
     }
 
     const count = Number(userProfile?.nicknameUpdatedCount || 0);
-    if (count >= 1) {
+    const lockedByLegacyFlag =
+      !("nicknameUpdatedCount" in (userProfile || {})) && !!userProfile?.nicknameChanged;
+    if (count >= 1 || lockedByLegacyFlag) {
       setNickError("닉네임은 1회만 변경할 수 있어요.");
       return;
     }
@@ -60,6 +62,7 @@ export function useNicknameSetup({
   }, [
     user,
     userProfile?.nicknameUpdatedCount,
+    userProfile?.nicknameChanged,
     nickInput,
     setNickError,
     setToastMessage,

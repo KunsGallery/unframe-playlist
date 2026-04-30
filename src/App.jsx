@@ -84,11 +84,13 @@ const AppRoutes = memo(function AppRoutes({
   allUsers,
   rankingTheme,
   user,
+  userProfile,
   membership,
   tracks,
   handleShare,
   isAdmin,
   setToastMessage,
+  appId,
 }) {
   return (
     <Routes>
@@ -105,6 +107,7 @@ const AppRoutes = memo(function AppRoutes({
             handleToggleLike={handleToggleLike}
             setSelectedTrack={setSelectedTrack}
             db={db}
+            appId={appId}
             siteConfig={siteConfig}
             allUsers={allUsers}
             rankingTheme={rankingTheme}
@@ -116,6 +119,7 @@ const AppRoutes = memo(function AppRoutes({
         element={
           <Archive
             user={user}
+            userProfile={userProfile}
             membership={membership}
             userLikes={userLikes}
             tracks={tracks}
@@ -570,11 +574,13 @@ export default function App() {
           allUsers={allUsers}
           rankingTheme={rankingTheme}
           user={user}
+          userProfile={userProfile}
           membership={membership}
           tracks={tracks}
           handleShare={handleShare}
           isAdmin={isAdmin}
           setToastMessage={setToastMessage}
+          appId={appId}
         />
 
         <AudioPlayer
