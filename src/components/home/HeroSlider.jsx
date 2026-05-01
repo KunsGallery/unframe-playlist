@@ -93,23 +93,36 @@ export default function HeroSlider({
                     </div>
 
                     <div className="flex flex-wrap items-center gap-3 pt-8">
-                      <button
-                        onClick={() => openHeroSlide(currentHero)}
-                        className="px-7 py-3.5 rounded-full bg-white text-black hover:bg-[#004aad] hover:text-white transition-all font-black uppercase tracking-widest text-xs flex items-center gap-2"
-                      >
-                        <Play className="w-4 h-4 fill-current" />
-                        {currentHero.buttonLabel}
-                      </button>
+                      {(() => {
+                        const hasPlayableContent =
+                          currentHero.items?.length > 0 || currentHero.sourcePlaylist?.items?.length > 0;
 
-                      {currentHero.type === "featured_playlist" && (
-                        <button
-                          onClick={() => openHeroSlide(currentHero)}
-                          className="px-7 py-3.5 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 transition-all font-black uppercase tracking-widest text-xs flex items-center gap-2"
-                        >
-                          <ListMusic className="w-4 h-4" />
-                          View Playlist
-                        </button>
-                      )}
+                        return (
+                          <button
+                            onClick={() => openHeroSlide(currentHero)}
+                            disabled={!hasPlayableContent}
+                            className={`px-7 py-3.5 rounded-full transition-all font-black uppercase tracking-widest text-xs flex items-center gap-2 ${
+                              hasPlayableContent
+                                ? "bg-white text-black hover:bg-[#004aad] hover:text-white"
+                                : "bg-white/10 text-zinc-500 cursor-not-allowed"
+                            }`}
+                          >
+                            <Play className="w-4 h-4 fill-current" />
+                            {hasPlayableContent ? currentHero.buttonLabel : "Coming Soon"}
+                          </button>
+                        );
+                      })()}
+
+                      {currentHero.type === "featured_playlist" &&
+                        currentHero.sourcePlaylist?.items?.length > 0 && (
+                          <button
+                            onClick={() => openHeroSlide(currentHero)}
+                            className="px-7 py-3.5 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 transition-all font-black uppercase tracking-widest text-xs flex items-center gap-2"
+                          >
+                            <ListMusic className="w-4 h-4" />
+                            View Playlist
+                          </button>
+                        )}
                     </div>
                   </div>
 

@@ -433,7 +433,7 @@ export default function Home({
             sourcePlaylist: linkedPlaylist || null,
           };
         })
-        .filter((slide) => slide.items?.length > 0 || slide.sourcePlaylist);
+        .filter((slide) => slide.title || slide.subtitle || slide.description || slide.coverImage || slide.backgroundImage);
     }
 
     const slides = [];
@@ -519,7 +519,10 @@ export default function Home({
 
     if (slide.items?.length) {
       safePlay(0, slide.items, { playlistKey: slide.id });
+      return;
     }
+
+    setSelectedPlaylist(null);
   };
 
   const normalizedSelectedPlaylist = useMemo(() => {
