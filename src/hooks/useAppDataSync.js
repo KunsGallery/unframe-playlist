@@ -4,6 +4,25 @@ import { doc, setDoc, collection, onSnapshot, query, getDoc } from "firebase/fir
 import { createAchievementEngine } from "../store";
 import { getLevelInfo } from "../levels";
 
+const EMPTY_USER_PROFILE = {
+  listenCount: 0,
+  shareCount: 0,
+  firstJoin: Date.now(),
+  rewards: [],
+  yearly: {},
+  monthly: {},
+  counters: {},
+  streak: {},
+  timeFlags: {},
+  profileImg: "",
+  xp: 0,
+  levelKey: "user",
+  level: 1,
+  nickname: "",
+  nicknameUpdatedCount: 0,
+  nicknamePrompted: false,
+};
+
 export function useAppDataSync({
   user,
   isAuthReady,
@@ -29,43 +48,57 @@ export function useAppDataSync({
   useEffect(() => {
     if (!isAuthReady || !user) return;
 
-    engineRef.current = createAchievementEngine({ db, appId, uid: user.uid });
-    engineRef.current.migrateRewardsToObjects().catch(() => {});
+    const isAnonymous = !!user.isAnonymous;
+    engineRef.current = createAchievementEngine({
+      db,
+      appId,
+      uid: user.uid,
+      disabled: isAnonymous,
+    });
+
+    if (isAnonymous) {
+      setUserProfile(EMPTY_USER_PROFILE);
+      setNickInput("");
+      setNickError("");
+      setIsNickModalOpen(false);
+    } else {
+      engineRef.current.migrateRewardsToObjects().catch(() => {});
+    }
 
     const profileRef = doc(db, "artifacts", appId, "users", user.uid, "profile", "stats");
 
-    const unsubProfile = onSnapshot(profileRef, async (snap) => {
-      if (!snap.exists()) return;
+    const unsubProfile = isAnonymous
+      ? () => {}
+      : onSnapshot(profileRef, async (snap) => {
+          if (!snap.exists()) return;
 
-      const data = snap.data();
-      setUserProfile(data);
+          const data = snap.data();
+          setUserProfile(data);
 
-      if (!user.isAnonymous) {
-        const hasNickname = typeof data?.nickname === "string" && data.nickname.trim();
-        const prompted = !!data?.nicknamePrompted;
-        const updatedCount = Number(data?.nicknameUpdatedCount || 0);
+          const hasNickname = typeof data?.nickname === "string" && data.nickname.trim();
+          const prompted = !!data?.nicknamePrompted;
+          const updatedCount = Number(data?.nicknameUpdatedCount || 0);
 
-        if (!hasNickname) {
-          const base = (user.displayName || "Collector").trim();
-          await setDoc(
-            profileRef,
-            {
-              nickname: base,
-              nicknameUpdatedCount: Number.isFinite(updatedCount) ? updatedCount : 0,
-              nicknamePrompted: prompted,
-            },
-            { merge: true }
-          ).catch(() => {});
-        }
+          if (!hasNickname) {
+            const base = (user.displayName || "Collector").trim();
+            await setDoc(
+              profileRef,
+              {
+                nickname: base,
+                nicknameUpdatedCount: Number.isFinite(updatedCount) ? updatedCount : 0,
+                nicknamePrompted: prompted,
+              },
+              { merge: true }
+            ).catch(() => {});
+          }
 
-        if (!prompted) {
-          setNickInput((data?.nickname || user.displayName || "").trim());
-          setNickError("");
-          setIsNickModalOpen(true);
-          await setDoc(profileRef, { nicknamePrompted: true }, { merge: true }).catch(() => {});
-        }
-      }
-    });
+          if (!prompted) {
+            setNickInput((data?.nickname || user.displayName || "").trim());
+            setNickError("");
+            setIsNickModalOpen(true);
+            await setDoc(profileRef, { nicknamePrompted: true }, { merge: true }).catch(() => {});
+          }
+        });
 
     const unsubPublicUsers = onSnapshot(
       collection(db, "artifacts", appId, "public_stats"),
@@ -126,16 +159,17 @@ export function useAppDataSync({
   useEffect(() => {
     if (!isAuthReady || !user) return;
 
-    const xp = Number(userProfile?.xp || 0) || 0;
+    const isAnonymous = !!user.isAnonymous;
+    const xp = isAnonymous ? 0 : Number(userProfile?.xp || 0) || 0;
     const lv = getLevelInfo(xp);
 
     const nameForPublic =
-      (userProfile?.nickname || "").trim() ||
+      (!isAnonymous && (userProfile?.nickname || "").trim()) ||
       user?.displayName ||
       (user?.isAnonymous ? "Guest" : "Collector");
 
-    const manualName = (userProfile?.manualLevelName || "").trim();
-    const manualColor = (userProfile?.manualLevelColor || "").trim();
+    const manualName = isAnonymous ? "" : (userProfile?.manualLevelName || "").trim();
+    const manualColor = isAnonymous ? "" : (userProfile?.manualLevelColor || "").trim();
     const finalLevelName = manualName || lv.name;
     const finalLevelColor = manualName ? (manualColor || lv.color) : lv.color;
 
@@ -143,10 +177,10 @@ export function useAppDataSync({
       doc(db, "artifacts", appId, "public_stats", user.uid),
       {
         displayName: nameForPublic,
-        nickname: (userProfile?.nickname || "").trim(),
-        profileImg: userProfile?.profileImg || "",
-        listenCount: userProfile?.listenCount || 0,
-        shareCount: userProfile?.shareCount || 0,
+        nickname: isAnonymous ? "" : (userProfile?.nickname || "").trim(),
+        profileImg: isAnonymous ? "" : userProfile?.profileImg || "",
+        listenCount: Number(userProfile?.listenCount || 0) || 0,
+        shareCount: Number(userProfile?.shareCount || 0) || 0,
         xp,
         levelKey: lv.key,
         level: lv.level,

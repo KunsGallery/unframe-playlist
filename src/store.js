@@ -417,7 +417,15 @@ export async function migrateRewardsToObjects({ db, appId, uid }) {
  * 엔진 생성
  * =========================================================
  */
-export function createAchievementEngine({ db, appId, uid }) {
+export function createAchievementEngine({ db, appId, uid, disabled = false }) {
+  if (disabled) {
+    return {
+      ensureProfileDoc: async () => null,
+      migrateRewardsToObjects: async () => null,
+      processEvent: async () => ({ profile: null, unlockedRewards: [] }),
+    };
+  }
+
   const profileRef = doc(db, "artifacts", appId, "users", uid, "profile", "stats");
 
   const ensureProfileDoc = async () => {

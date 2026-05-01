@@ -1,6 +1,6 @@
-import React from "react"
-import { motion } from "framer-motion"
-import { Share, X } from "lucide-react"
+import React from "react";
+import { motion } from "framer-motion";
+import { Share, X } from "lucide-react";
 
 export default function AchievementPopup({
   newAchievement,
@@ -8,174 +8,97 @@ export default function AchievementPopup({
   displayName,
   formatDateTime,
   setNewAchievement,
-  setShareItem
+  setShareItem,
 }) {
+  if (!newAchievement || !popupMeta) return null;
 
-  if (!newAchievement || !popupMeta) return null
+  const Icon = popupMeta.icon;
 
   return (
-    <div className="fixed inset-0 z-10000 flex items-center justify-center p-6 bg-black/90 backdrop-blur-xl">
-
+    <div className="fixed inset-0 z-10000 flex items-center justify-center px-4 py-6 bg-black/90 backdrop-blur-xl">
       <motion.div
         initial={{ y: 40, opacity: 0, scale: 0.95 }}
         animate={{ y: 0, opacity: 1, scale: 1 }}
         exit={{ y: 20, opacity: 0, scale: 0.98 }}
-        className="w-full max-w-140 relative"
+        className="relative w-full max-w-sm sm:max-w-md lg:max-w-xl"
       >
-
-        <div className="rounded-4xl overflow-hidden shadow-2xl border border-white/10">
-
-          <div
-            className="scale-[0.92] origin-top-left"
-            style={{ width: 600, height: 850 }}
+        <div className="relative w-full max-h-[85vh] overflow-y-auto scrollbar-hide rounded-[2rem] sm:rounded-[2.5rem] border border-white/10 bg-zinc-950/95 shadow-2xl">
+          <button
+            onClick={() => setNewAchievement(null)}
+            className="absolute top-4 right-4 z-20 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white/80 transition hover:text-white"
+            aria-label="Close achievement popup"
           >
+            <X className="w-5 h-5" />
+          </button>
 
-            <div
-              style={{
-                width: "600px",
-                height: "850px",
-                background:
-                  "linear-gradient(135deg, #1a1a1a 0%, #242424 60%, #004aad 100%)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontFamily: "'Inter', 'Pretendard', sans-serif",
-              }}
-            >
+          <div className="relative overflow-hidden">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(0,74,173,0.28),transparent_36%),linear-gradient(135deg,#161616_0%,#222222_58%,#004aad_100%)]" />
 
-              <div
-                style={{
-                  width: "560px",
-                  height: "810px",
-                  border: "1.5px solid #7dd3fc",
-                  position: "relative",
-                  overflow: "hidden",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "60px 40px",
-                  boxSizing: "border-box",
-                }}
-              >
+            <div className="relative px-5 pb-5 pt-14 sm:px-8 sm:pb-8 sm:pt-16">
+              <div className="rounded-[1.7rem] sm:rounded-[2.2rem] border border-[#7dd3fc]/40 bg-black/15 px-5 py-7 sm:px-8 sm:py-10 text-center">
+                <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.32em] text-[#8db4ff]">
+                  Achievement Unlocked
+                </p>
 
-                {/* TITLE */}
-                <div style={{ textAlign: "center", width: "100%" }}>
-                  <h1
-                    style={{
-                      fontSize: "56px",
-                      fontWeight: 300,
-                      color: "#ffffff",
-                      letterSpacing: "0.1em",
-                      margin: 0,
-                    }}
-                  >
-                    {popupMeta.title}
-                  </h1>
+                <h1 className="mt-4 text-3xl sm:text-4xl lg:text-5xl font-light tracking-[0.08em] text-white break-words">
+                  {popupMeta.title}
+                </h1>
+
+                <div className="mt-7 sm:mt-9 flex items-center justify-center">
+                  <div className="flex h-32 w-32 sm:h-40 sm:w-40 lg:h-52 lg:w-52 items-center justify-center rounded-full border border-white/10 bg-white/5">
+                    {Icon ? <Icon size={88} color="#ffffff" className="sm:scale-110" /> : null}
+                  </div>
                 </div>
 
-                {/* ICON */}
-                <div
-                  style={{
-                    width: "320px",
-                    height: "320px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  {React.createElement(popupMeta.icon, {
-                    size: 180,
-                    color: "#ffffff",
-                  })}
-                </div>
-
-                {/* USER */}
-                <div style={{ textAlign: "center", width: "80%" }}>
-                  <p style={{ fontSize: "26px", color: "#ffffff" }}>
-                    <span style={{ fontWeight: 800, color: "#7dd3fc" }}>
-                      {displayName}
-                    </span>{" "}
-                    님
+                <div className="mt-7 sm:mt-9 mx-auto max-w-md">
+                  <p className="text-lg sm:text-2xl text-white leading-snug">
+                    <span className="font-black text-[#7dd3fc]">{displayName}</span>{" "}
+                    <span className="font-medium">님</span>
                   </p>
 
-                  <p
-                    style={{
-                      fontSize: "20px",
-                      color: "#ffffff",
-                      marginTop: "12px",
-                    }}
-                  >
+                  <p className="mt-3 text-sm sm:text-base lg:text-lg leading-relaxed text-zinc-100 break-words">
                     {popupMeta.desc}
                   </p>
                 </div>
 
-                {/* FOOTER */}
-                <div
-                  style={{
-                    textAlign: "center",
-                    width: "100%",
-                    borderTop: "0.5px solid #7dd3fc55",
-                    paddingTop: "25px",
-                  }}
-                >
-                  <p
-                    style={{
-                      fontSize: "18px",
-                      color: "#ffffff",
-                    }}
-                  >
+                <div className="mt-8 sm:mt-10 border-t border-[#7dd3fc]/25 pt-5 sm:pt-6">
+                  <p className="text-xs sm:text-sm lg:text-base text-zinc-100">
                     {formatDateTime(newAchievement.unlockedAt)}
                   </p>
                 </div>
-
               </div>
 
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  onClick={() => setNewAchievement(null)}
+                  className="min-h-12 rounded-2xl bg-white/5 px-4 py-4 text-[10px] font-black uppercase tracking-[0.22em] text-white transition hover:bg-white/10"
+                >
+                  Close
+                </button>
+
+                <button
+                  onClick={() => {
+                    setShareItem({
+                      title: popupMeta.title,
+                      desc: popupMeta.desc,
+                      type: "reward",
+                      color: popupMeta.color,
+                      icon: popupMeta.icon,
+                      unlockedAt: newAchievement.unlockedAt,
+                    });
+
+                    setNewAchievement(null);
+                  }}
+                  className="min-h-12 rounded-2xl bg-[#004aad] px-4 py-4 text-[10px] font-black uppercase tracking-[0.22em] text-white transition hover:bg-[#1e6bff] flex items-center justify-center gap-2"
+                >
+                  <Share size={12} />
+                  Share Card
+                </button>
+              </div>
             </div>
-
           </div>
-
         </div>
-
-        {/* buttons */}
-
-        <div className="mt-4 grid grid-cols-2 gap-3">
-
-          <button
-            onClick={() => setNewAchievement(null)}
-            className="py-4 bg-white/5 rounded-2xl text-[10px] font-black uppercase"
-          >
-            Close
-          </button>
-
-          <button
-            onClick={() => {
-              setShareItem({
-                title: popupMeta.title,
-                desc: popupMeta.desc,
-                type: "reward",
-                color: popupMeta.color,
-                icon: popupMeta.icon,
-                unlockedAt: newAchievement.unlockedAt,
-              })
-
-              setNewAchievement(null)
-            }}
-            className="py-4 bg-[#004aad] rounded-2xl text-[10px] font-black uppercase flex items-center justify-center gap-2"
-          >
-            <Share size={12} /> Share Card
-          </button>
-
-        </div>
-
-        <button
-          onClick={() => setNewAchievement(null)}
-          className="absolute -top-3 -right-3 w-10 h-10 rounded-full bg-black/60 border border-white/10 flex items-center justify-center"
-        >
-          <X className="w-5 h-5 text-white/80" />
-        </button>
-
       </motion.div>
     </div>
-  )
+  );
 }

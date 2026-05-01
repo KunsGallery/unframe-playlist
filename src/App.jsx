@@ -68,6 +68,25 @@ const formatDateTime = (input) => {
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}.(${week[d.getDay()]}) ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
 
+const INITIAL_USER_PROFILE = {
+  listenCount: 0,
+  shareCount: 0,
+  firstJoin: Date.now(),
+  rewards: [],
+  yearly: {},
+  monthly: {},
+  counters: {},
+  streak: {},
+  timeFlags: {},
+  profileImg: '',
+  xp: 0,
+  levelKey: 'user',
+  level: 1,
+  nickname: '',
+  nicknameUpdatedCount: 0,
+  nicknamePrompted: false,
+};
+
 // ---------------------
 // 라우트 렌더 격리
 // ---------------------
@@ -179,24 +198,7 @@ export default function App() {
   const [playlists, setPlaylists] = useState([]);
   const [userLikes, setUserLikes] = useState([]);
 
-  const [userProfile, setUserProfile] = useState({
-    listenCount: 0,
-    shareCount: 0,
-    firstJoin: Date.now(),
-    rewards: [],
-    yearly: {},
-    monthly: {},
-    counters: {},
-    streak: {},
-    timeFlags: {},
-    profileImg: '',
-    xp: 0,
-    levelKey: 'user',
-    level: 1,
-    nickname: '',
-    nicknameUpdatedCount: 0,
-    nicknamePrompted: false,
-  });
+  const [userProfile, setUserProfile] = useState(INITIAL_USER_PROFILE);
 
   const {
     audioRef,
@@ -293,7 +295,7 @@ export default function App() {
 
   const emit = useCallback(async (event) => {
     const engine = engineRef.current;
-    if (!engine || !user) return;
+    if (!engine || !user || user.isAnonymous) return null;
 
     const res = await engine.processEvent({ ...event, at: event.at || new Date() });
 
@@ -302,6 +304,15 @@ export default function App() {
       setNewAchievement(last);
       confetti({ particleCount: 180, spread: 80, origin: { y: 0.6 } });
     }
+    return res;
+  }, [user]);
+
+  useEffect(() => {
+    if (!user?.isAnonymous) return;
+
+    setUserProfile(INITIAL_USER_PROFILE);
+    setNewAchievement(null);
+    setIsNickModalOpen(false);
   }, [user]);
 
   const { playTrack, playNext, playPrev } = usePlayerEngine({
@@ -834,14 +845,16 @@ export default function App() {
           saveNicknameOnce={saveNicknameOnce}
         />
 
-        <AchievementPopup
-          newAchievement={newAchievement}
-          popupMeta={popupMeta}
-          displayName={displayName}
-          formatDateTime={formatDateTime}
-          setNewAchievement={setNewAchievement}
-          setShareItem={setShareItem}
-        />
+        {!user?.isAnonymous && (
+          <AchievementPopup
+            newAchievement={newAchievement}
+            popupMeta={popupMeta}
+            displayName={displayName}
+            formatDateTime={formatDateTime}
+            setNewAchievement={setNewAchievement}
+            setShareItem={setShareItem}
+          />
+        )}
 
         <ShareCard
           shareItem={shareItem}
