@@ -309,22 +309,49 @@ export default function App() {
     if (!user || !trackId) return;
 
     const likeDoc = doc(db, 'artifacts', appId, 'users', user.uid, 'likes', trackId);
+    const publicStatsDoc = doc(db, 'artifacts', appId, 'public_stats', user.uid);
 
-    if (userLikes.includes(trackId)) {
+    const isAlreadyLiked = userLikes.includes(trackId);
+    const nextLikedCount = isAlreadyLiked
+      ? Math.max((userLikes?.length || 0) - 1, 0)
+      : (userLikes?.length || 0) + 1;
+
+    if (isAlreadyLiked) {
       await deleteDoc(likeDoc);
+
+      await setDoc(
+        publicStatsDoc,
+        {
+          likedCount: nextLikedCount,
+          updatedAt: Date.now(),
+        },
+        { merge: true }
+      );
+
+      setToastMessage("아카이브에서 제거되었습니다");
       return;
     }
 
     await setDoc(likeDoc, { likedAt: Date.now() });
+
+    await setDoc(
+      publicStatsDoc,
+      {
+        likedCount: nextLikedCount,
+        updatedAt: Date.now(),
+      },
+      { merge: true }
+    );
+
     setToastMessage("아카이브에 기록되었습니다 💗");
 
     await emit({
       type: "like_added",
       trackId,
       totalTracks: (publicTracks?.length || 0),
-      likedCount: (userLikes?.length || 0) + 1,
+      likedCount: nextLikedCount,
     });
-  }, [user, userLikes, publicTracks, emit]);
+  }, [user, userLikes, publicTracks, emit, db, appId, setToastMessage]);
 
   const handleShare = useCallback(async (e, item, type = 'track') => {
     if (e) e.stopPropagation();

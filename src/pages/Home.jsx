@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Sparkles } from "lucide-react";
+import { Share2, Sparkles, Trophy } from "lucide-react";
 import { doc, getDoc } from "firebase/firestore";
 import PlaylistModal from "../components/home/PlaylistModal";
 import HeroSlider from "../components/home/HeroSlider";
@@ -32,6 +32,107 @@ const GENRE_OPTIONS = [
 
 const getTrackGenre = (track) => track?.genre || track?.tag || "Ambient";
 
+const DEFAULT_RANKING_THEME = {
+  id: "night_owl",
+  scoreKey: "listenCount",
+  title: "심야의 감상자",
+  desc: "가장 많이 음악을 감상한 리스너",
+  unit: "listens",
+  basisLabel: "Based on total listens",
+  icon: Sparkles,
+};
+
+const HIDDEN_RANKING_NAMES = new Set([
+  "guest",
+  "collector",
+  "anonymous",
+  "unnamed user",
+  "",
+]);
+
+const getRankingDisplayName = (user) => {
+  return (
+    (typeof user?.nickname === "string" ? user.nickname : "").trim() ||
+    (typeof user?.displayName === "string" ? user.displayName : "").trim() ||
+    (typeof user?.id === "string" ? user.id : "").trim()
+  );
+};
+
+const getRankingIdentityKey = (user) => {
+  const name = getRankingDisplayName(user);
+
+  return name.toLowerCase().replace(/\s+/g, "");
+};
+
+const shouldExcludeRankingUser = (user) => {
+  if (user?.isRankingHidden === true) return true;
+
+  const nickname = (typeof user?.nickname === "string" ? user.nickname : "").trim();
+  const displayName = (typeof user?.displayName === "string" ? user.displayName : "").trim();
+  const fallbackId = (typeof user?.id === "string" ? user.id : "").trim();
+  const primaryName = (nickname || displayName).trim().toLowerCase();
+
+  if (nickname || displayName) {
+    if (HIDDEN_RANKING_NAMES.has(primaryName)) return true;
+    return false;
+  }
+
+  if (!fallbackId) return true;
+
+  return false;
+};
+
+const getRankingScore = (user, scoreKey = DEFAULT_RANKING_THEME.scoreKey) => {
+  return Number(user?.[scoreKey] || 0);
+};
+
+const getRankingTieBreaker = (user) => {
+  return Number(user?.xp || 0);
+};
+
+const dedupeRankingUsers = (users = [], scoreKey = DEFAULT_RANKING_THEME.scoreKey) => {
+  const map = new Map();
+
+  users.forEach((user, index) => {
+    const key = getRankingIdentityKey(user);
+    if (!key) return;
+
+    const current = map.get(key);
+    const nextEntry = {
+      user,
+      index,
+      score: getRankingScore(user, scoreKey),
+      xp: getRankingTieBreaker(user),
+      name: getRankingDisplayName(user).toLowerCase(),
+    };
+
+    if (!current) {
+      map.set(key, nextEntry);
+      return;
+    }
+
+    if (nextEntry.score > current.score) {
+      map.set(key, nextEntry);
+      return;
+    }
+
+    if (nextEntry.score === current.score && nextEntry.xp > current.xp) {
+      map.set(key, nextEntry);
+      return;
+    }
+
+    if (
+      nextEntry.score === current.score &&
+      nextEntry.xp === current.xp &&
+      nextEntry.index < current.index
+    ) {
+      map.set(key, nextEntry);
+    }
+  });
+
+  return Array.from(map.values());
+};
+
 export default function Home({
   tracks = [],
   playlists = [],
@@ -55,13 +156,73 @@ export default function Home({
   const [displayTracks, setDisplayTracks] = useState([]);
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
   const [heroIndex, setHeroIndex] = useState(0);
+  const [rankingIndex, setRankingIndex] = useState(0);
 
   const scrollContainerRef = useRef(null);
 
-  const safeRankingTheme = useMemo(
-    () => rankingTheme ?? { title: "심야의 감상자", desc: "", icon: Sparkles },
-    [rankingTheme]
+  const rankingCandidates = useMemo(
+    () => (Array.isArray(allUsers) ? allUsers : []).filter((user) => !shouldExcludeRankingUser(user)),
+    [allUsers]
   );
+
+  const rankingThemes = useMemo(() => {
+    const themes = [
+      {
+        ...DEFAULT_RANKING_THEME,
+        ...(rankingTheme ?? {}),
+        title: DEFAULT_RANKING_THEME.title,
+        desc: DEFAULT_RANKING_THEME.desc,
+        scoreKey: DEFAULT_RANKING_THEME.scoreKey,
+        unit: DEFAULT_RANKING_THEME.unit,
+        basisLabel: DEFAULT_RANKING_THEME.basisLabel,
+        icon: rankingTheme?.icon || DEFAULT_RANKING_THEME.icon,
+      },
+      {
+        id: "share_leader",
+        scoreKey: "shareCount",
+        title: "소리를 나눈 사람",
+        desc: "가장 많이 음악을 공유한 리스너",
+        unit: "shares",
+        basisLabel: "Based on total shares",
+        icon: Share2,
+      },
+      {
+        id: "archive_collector",
+        scoreKey: "xp",
+        title: "아카이브 컬렉터",
+        desc: "가장 많은 경험치를 쌓은 리스너",
+        unit: "xp",
+        basisLabel: "Based on XP",
+        icon: Trophy,
+      },
+    ];
+
+    const hasLikedRanking = rankingCandidates.some((user) => Number(user?.likedCount || 0) > 0);
+
+    if (hasLikedRanking) {
+      themes.push({
+        id: "likes_leader",
+        scoreKey: "likedCount",
+        title: "마음을 남긴 사람",
+        desc: "가장 많이 좋아요를 남긴 리스너",
+        unit: "likes",
+        basisLabel: "Based on likes",
+        icon: Sparkles,
+      });
+    }
+
+    return themes;
+  }, [rankingTheme, rankingCandidates]);
+
+  const safeRankingTheme = rankingThemes[rankingIndex] ?? rankingThemes[0] ?? DEFAULT_RANKING_THEME;
+  const rankingTotal = rankingThemes.length;
+
+  useEffect(() => {
+    if (!rankingThemes.length) return;
+    if (rankingIndex >= rankingThemes.length) {
+      setRankingIndex(0);
+    }
+  }, [rankingIndex, rankingThemes]);
 
   const trackMap = useMemo(() => {
     const m = new Map();
@@ -72,10 +233,34 @@ export default function Home({
   }, [tracks]);
 
   const topThree = useMemo(() => {
-    const arr = Array.isArray(allUsers) ? [...allUsers] : [];
-    arr.sort((a, b) => (b?.listenCount || 0) - (a?.listenCount || 0));
-    return arr.slice(0, 3);
-  }, [allUsers]);
+    const uniqueUsers = dedupeRankingUsers(
+      rankingCandidates,
+      safeRankingTheme.scoreKey
+    );
+
+    uniqueUsers.sort((a, b) => {
+      const scoreDiff = b.score - a.score;
+      if (scoreDiff !== 0) return scoreDiff;
+
+      const tieDiff = b.xp - a.xp;
+      if (tieDiff !== 0) return tieDiff;
+
+      const nameDiff = a.name.localeCompare(b.name);
+      if (nameDiff !== 0) return nameDiff;
+
+      return a.index - b.index;
+    });
+
+    return uniqueUsers.slice(0, 3).map((entry) => entry.user);
+  }, [rankingCandidates, safeRankingTheme.scoreKey]);
+
+  const goPrevRanking = useCallback(() => {
+    setRankingIndex((prev) => (prev - 1 + rankingTotal) % rankingTotal);
+  }, [rankingTotal]);
+
+  const goNextRanking = useCallback(() => {
+    setRankingIndex((prev) => (prev + 1) % rankingTotal);
+  }, [rankingTotal]);
 
   const myLikedTracks = useMemo(() => {
     const likeSet = new Set(userLikes || []);
@@ -382,6 +567,10 @@ export default function Home({
 
       <ListenerArchiveSummary
         safeRankingTheme={safeRankingTheme}
+        rankingIndex={rankingIndex}
+        rankingTotal={rankingTotal}
+        goPrevRanking={goPrevRanking}
+        goNextRanking={goNextRanking}
         topThree={topThree}
         myLikedTracks={myLikedTracks}
         safePlay={safePlay}

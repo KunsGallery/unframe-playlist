@@ -68,6 +68,7 @@ export default function UserRewardManager({
   levelOverrideColor,
   setLevelOverrideColor,
   handleSaveNicknameAndLevel,
+  handleToggleRankingHidden,
   selectedUserRewardIds,
   toggleSticker,
   settleYear,
@@ -163,6 +164,25 @@ export default function UserRewardManager({
             >
               Save User Profile
             </button>
+
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <p className="text-sm font-black uppercase tracking-tight">Hide from Ranking</p>
+                <p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-2">
+                  Exclude this user from Home rankings
+                </p>
+              </div>
+              <button
+                onClick={handleToggleRankingHidden}
+                className={`px-5 py-3 rounded-full font-black uppercase tracking-widest text-[10px] transition-all ${
+                  selectedUserForSticker?.isRankingHidden
+                    ? "bg-[#004aad] text-white hover:bg-white hover:text-black"
+                    : "bg-white/5 text-white hover:bg-white/10"
+                }`}
+              >
+                {selectedUserForSticker?.isRankingHidden ? "Hidden" : "Visible"}
+              </button>
+            </div>
 
             <div className="space-y-4">
               <h3 className="text-xl font-black uppercase">Achievements & Stickers</h3>

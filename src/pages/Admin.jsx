@@ -559,6 +559,13 @@ export default function Admin({
     });
   };
 
+  const handleToggleRankingHidden = async () => {
+    if (!selectedUserForSticker) return;
+    await saveSelectedUser({
+      isRankingHidden: !selectedUserForSticker?.isRankingHidden,
+    });
+  };
+
   const toggleSticker = async (stickerId) => {
     if (!selectedUserForSticker) return;
     const currentRewards = asObjectRewards(selectedUserForSticker.rewards || []);
@@ -667,6 +674,7 @@ export default function Admin({
             levelOverrideColor={levelOverrideColor}
             setLevelOverrideColor={setLevelOverrideColor}
             handleSaveNicknameAndLevel={handleSaveNicknameAndLevel}
+            handleToggleRankingHidden={handleToggleRankingHidden}
             selectedUserRewardIds={selectedUserRewardIds}
             toggleSticker={toggleSticker}
             settleYear={settleYear}
