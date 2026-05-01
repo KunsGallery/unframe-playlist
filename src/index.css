@@ -16,3 +16,22 @@ body {
   height: 0;
   display: none;
 }
+
+select {
+  color-scheme: dark;
+}
+
+select option {
+  background-color: #18181b;
+  color: #ffffff;
+}
+
+select option:checked {
+  background-color: #004aad;
+  color: #ffffff;
+}
+
+select option:hover {
+  background-color: #004aad;
+  color: #ffffff;
+}

@@ -248,7 +248,7 @@ export default function HeroSlideManager({
                 <select
                   value={selectedSlide.type}
                   onChange={(e) => updateHeroSlide(selectedSlide.id, { type: e.target.value })}
-                  className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white font-black outline-none"
+                  className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white font-black outline-none [&>option]:bg-zinc-900 [&>option]:text-white"
                 >
                   {HERO_SLIDE_TYPES.map((type) => (
                     <option key={type.value} value={type.value}>
@@ -313,7 +313,7 @@ export default function HeroSlideManager({
                 <select
                   value={selectedSlide.linkedPlaylistId || ""}
                   onChange={(e) => handlePlaylistChange(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white font-black outline-none"
+                  className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white font-black outline-none [&>option]:bg-zinc-900 [&>option]:text-white"
                 >
                   <option value="">-- NO PLAYLIST --</option>
                   {playlists.map((playlist) => (

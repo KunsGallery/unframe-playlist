@@ -167,7 +167,7 @@ export default function TrackManager({
           <select
             value={sortMode}
             onChange={(e) => setSortMode(e.target.value)}
-            className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white font-black uppercase text-[10px] tracking-widest outline-none"
+            className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white font-black uppercase text-[10px] tracking-widest outline-none [&>option]:bg-zinc-900 [&>option]:text-white"
           >
             <option value="newest">Newest First</option>
             <option value="oldest">Oldest First</option>
@@ -310,7 +310,7 @@ export default function TrackManager({
             <select
               value={newTrack.genre || newTrack.tag || "Ambient"}
               onChange={(e) => updateGenre(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white font-black uppercase text-xs tracking-widest outline-none"
+              className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white font-black uppercase text-xs tracking-widest outline-none [&>option]:bg-zinc-900 [&>option]:text-white"
             >
               {GENRE_OPTIONS.map((genre) => (
                 <option key={genre} value={genre}>

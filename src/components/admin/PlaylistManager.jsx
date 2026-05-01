@@ -174,7 +174,7 @@ export default function PlaylistManager({
           <select
             value={sortMode}
             onChange={(e) => setSortMode(e.target.value)}
-            className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white font-black uppercase text-[10px] tracking-widest outline-none"
+            className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white font-black uppercase text-[10px] tracking-widest outline-none [&>option]:bg-zinc-900 [&>option]:text-white"
           >
             <option value="newest">Newest First</option>
             <option value="oldest">Oldest First</option>

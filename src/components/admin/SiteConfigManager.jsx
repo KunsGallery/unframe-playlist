@@ -270,7 +270,7 @@ export default function SiteConfigManager({
               <select
                 value={featuredData.linkedTrackId || ""}
                 onChange={(e) => setFeaturedData((prev) => ({ ...prev, linkedTrackId: e.target.value }))}
-                className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white font-black outline-none"
+                className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white font-black outline-none [&>option]:bg-zinc-900 [&>option]:text-white"
               >
                 <option value="">-- SELECT TRACK --</option>
                 {tracks.map((track) => (
