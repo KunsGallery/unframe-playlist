@@ -34,6 +34,7 @@ import Home from './pages/Home';
 import Archive from './pages/Archive';
 import Admin from './pages/Admin';
 import About from './pages/About';
+import TrackShareLanding from './pages/TrackShareLanding';
 import ScrollToTop from './components/ScrollToTop';
 import ShareCard from "./components/ShareCard";
 import AchievementPopup from "./components/AchievementPopup";
@@ -90,6 +91,7 @@ const AppRoutes = memo(function AppRoutes({
   handleShare,
   isAdmin,
   setToastMessage,
+  setIsPlayerExpanded,
   appId,
 }) {
   return (
@@ -135,6 +137,19 @@ const AppRoutes = memo(function AppRoutes({
         }
       />
       <Route path="/about" element={<About siteConfig={siteConfig} />} />
+      <Route
+        path="/share/track/:trackId"
+        element={
+          <TrackShareLanding
+            tracks={tracks}
+            publicTracks={publicTracks}
+            playTrack={playTrack}
+            setIsPlayerExpanded={setIsPlayerExpanded}
+            setSelectedTrack={setSelectedTrack}
+            setToastMessage={setToastMessage}
+          />
+        }
+      />
       <Route
         path="/admin"
         element={
@@ -361,17 +376,14 @@ export default function App() {
     if (type === "track") {
       const shareUrl =
         typeof window !== "undefined"
-          ? `${window.location.origin}/share/track/${encodeURIComponent(item.id)}`
+          ? `${window.location.origin}/og/track/${encodeURIComponent(item.id)}`
           : "";
 
       const shareTitle = `${item.title || "UNFRAME"} - ${item.artist || "UNFRAME PLAYLIST"}`;
 
       const shareText = [
+        `${item.title || "Untitled"} - ${item.artist || "UNFRAME"}`,
         "UNFRAME PLAYLIST",
-        "",
-        `〈${item.title || "Untitled"}〉`,
-        item.artist || "",
-        "",
         "전시와 사운드가 이어지는 음악 아카이브",
       ]
         .filter(Boolean)
@@ -773,6 +785,7 @@ export default function App() {
           handleShare={handleShare}
           isAdmin={isAdmin}
           setToastMessage={setToastMessage}
+          setIsPlayerExpanded={setIsPlayerExpanded}
           appId={appId}
         />
 
