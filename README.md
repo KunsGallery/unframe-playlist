@@ -76,6 +76,14 @@ Firebase 설정은 현재 `src/firebase.js`에 포함되어 있습니다.
 - `artifacts/{appId}/users/{uid}/likes/{trackId}`
   사용자 좋아요 컬렉션
 
+**Pring Desktop Pet Curation Fields**
+UP tracks 문서는 Pring Desktop Pet의 UP Mini Player / Pring Pick에서도 함께 사용됩니다.
+
+- Admin Track Editor에서 `moods`, `timeSlots`, `useCases`, `energy`, `language`, `tags`, `priority`, `isActive`, `curatorNote`를 관리합니다.
+- `isActive === false`인 곡은 Pring 쪽 추천에서 제외될 수 있습니다.
+- `priority`가 높을수록 Pring Pick에서 우선 추천될 수 있습니다.
+- 큐레이션 필드는 기존 트랙 저장 구조를 유지한 채 선택적으로 보강됩니다.
+
 **Admin 기능 요약**
 - 트랙 생성, 수정, 삭제
 - 플레이리스트 생성, 수정, 삭제

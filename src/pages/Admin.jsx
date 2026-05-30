@@ -17,6 +17,12 @@ import TrackManager from "../components/admin/TrackManager";
 import PlaylistManager from "../components/admin/PlaylistManager";
 import SiteConfigManager from "../components/admin/SiteConfigManager";
 import UserRewardManager from "../components/admin/UserRewardManager";
+import {
+  createEmptyTrack,
+  getMissingTrackCurationPatch,
+  normalizeTrackCuration,
+  normalizeTrackForEditor,
+} from "../constants/trackCuration";
 
 const glass =
   "bg-white/[0.03] backdrop-blur-[40px] border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]";
@@ -140,16 +146,7 @@ export default function Admin({
 }) {
   const [activeTab, setActiveTab] = useState("tracks");
 
-  const [newTrack, setNewTrack] = useState({
-    title: "",
-    artist: "",
-    image: "",
-    description: "",
-    tag: "Ambient",
-    genre: "Ambient",
-    audioUrl: "",
-    lyrics: "",
-  });
+  const [newTrack, setNewTrack] = useState(createEmptyTrack());
   const [editingId, setEditingId] = useState(null);
   const [isUploadingImg, setIsUploadingImg] = useState(false);
 
@@ -390,12 +387,14 @@ export default function Admin({
 
     try {
       const selectedGenre = newTrack.genre || newTrack.tag || "Ambient";
+      const curationPayload = normalizeTrackCuration(newTrack);
 
       const payload = {
         ...newTrack,
         genre: selectedGenre,
         tag: selectedGenre,
-        updatedAt: Timestamp.now(),
+        ...curationPayload,
+        updatedAt: new Date().toISOString(),
       };
 
       if (!editingId) {
@@ -410,16 +409,7 @@ export default function Admin({
         setToastMessage?.("트랙 업로드 완료");
       }
 
-      setNewTrack({
-        title: "",
-        artist: "",
-        image: "",
-        description: "",
-        tag: "Ambient",
-        genre: "Ambient",
-        audioUrl: "",
-        lyrics: "",
-      });
+      setNewTrack(createEmptyTrack());
       setEditingId(null);
     } catch (e) {
       console.error(e);
@@ -439,19 +429,48 @@ export default function Admin({
   };
 
   const handleEditTrack = (track) => {
-    const selectedGenre = track.genre || track.tag || "Ambient";
-
     setEditingId(track.id);
     setNewTrack({
+      ...normalizeTrackForEditor(track),
       title: track.title || "",
       artist: track.artist || "",
       image: track.image || "",
       description: track.description || "",
-      tag: selectedGenre,
-      genre: selectedGenre,
       audioUrl: track.audioUrl || "",
       lyrics: track.lyrics || "",
     });
+  };
+
+  const handleFillMissingCurationFields = async () => {
+    if (!db) {
+      setAuthError?.("Firestore 연결이 필요합니다.");
+      return;
+    }
+
+    if (!window.confirm("Fill missing curation fields for existing tracks?")) return;
+
+    try {
+      const updates = (tracks || []).map((track) => {
+        if (!track?.id) return null;
+        const patch = getMissingTrackCurationPatch(track);
+        const patchKeys = Object.keys(patch);
+        if (patchKeys.length === 0) return null;
+
+        return updateDoc(trackDocRef(db, appId, track.id), patch);
+      });
+
+      const actionableUpdates = updates.filter(Boolean);
+      if (actionableUpdates.length === 0) {
+        setToastMessage?.("No missing curation fields found");
+        return;
+      }
+
+      await Promise.all(actionableUpdates);
+      setToastMessage?.("Missing curation fields filled");
+    } catch (e) {
+      console.error(e);
+      setAuthError?.("큐레이션 필드 보정 실패");
+    }
   };
 
   const handleSavePlaylist = async () => {
@@ -609,19 +628,20 @@ export default function Admin({
         <AdminTabs activeTab={activeTab} setActiveTab={setActiveTab} />
 
         {activeTab === "tracks" && (
-          <TrackManager
-            tracks={tracks}
-            newTrack={newTrack}
-            setNewTrack={setNewTrack}
+            <TrackManager
+              tracks={tracks}
+              newTrack={newTrack}
+              setNewTrack={setNewTrack}
             editingId={editingId}
             setEditingId={setEditingId}
             isUploadingImg={isUploadingImg}
-            handleImageUpload={handleImageUpload}
-            handleSaveTrack={handleSaveTrack}
-            handleDeleteTrack={handleDeleteTrack}
-            handleEditTrack={handleEditTrack}
-          />
-        )}
+              handleImageUpload={handleImageUpload}
+              handleSaveTrack={handleSaveTrack}
+              handleDeleteTrack={handleDeleteTrack}
+              handleEditTrack={handleEditTrack}
+              onFillMissingCurationFields={handleFillMissingCurationFields}
+            />
+          )}
 
         {activeTab === "playlists" && (
           <PlaylistManager
