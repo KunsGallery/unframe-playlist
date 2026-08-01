@@ -10,7 +10,7 @@ const subTitle = "font-bold uppercase tracking-[0.4em] text-[#004aad]";
 
 const About = ({ siteConfig }) => {
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="pt-32 lg:pt-40 relative min-h-screen overflow-hidden bg-[#050505]">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="up-themed-page up-about-page pt-32 lg:pt-40 relative min-h-screen overflow-hidden bg-[#050505]">
       <AboutCanvas />
       
       <div className="container mx-auto px-6 lg:px-8 relative z-10 pb-40">

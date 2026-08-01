@@ -1,17 +1,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { motion } from "framer-motion";
-import { Share2, Sparkles, Trophy } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  ArrowUpRight,
+  Disc3,
+  Heart,
+  Pause,
+  Play,
+  Search,
+  Share2,
+  Sparkles,
+  Trophy,
+} from "lucide-react";
 import { doc, getDoc } from "firebase/firestore";
 import PlaylistModal from "../components/home/PlaylistModal";
-import HeroSlider from "../components/home/HeroSlider";
-import DirectorsPick from "../components/home/DirectorsPick";
-import ListenerArchiveSummary from "../components/home/ListenerArchiveSummary";
-import PlaylistRail from "../components/home/PlaylistRail";
-import SearchDiscovery from "../components/home/SearchDiscovery";
-import InstagramSignal from "../components/home/InstagramSignal";
-import ArtistLinks from "../components/home/ArtistLinks";
 
 const safeSrc = (v) => (typeof v === "string" && v.trim() ? v : null);
+const hideBrokenImage = (event) => {
+  event.currentTarget.hidden = true;
+  event.currentTarget.parentElement?.classList.add("is-fallback");
+};
 
 const GENRE_OPTIONS = [
   "All",
@@ -141,7 +149,6 @@ export default function Home({
   playTrack,
   userLikes = [],
   handleToggleLike,
-  setSelectedTrack,
   db,
   appId,
   siteConfig,
@@ -153,10 +160,10 @@ export default function Home({
 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedGenre, setSelectedGenre] = useState("All");
-  const [displayTracks, setDisplayTracks] = useState([]);
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
   const [heroIndex, setHeroIndex] = useState(0);
   const [rankingIndex, setRankingIndex] = useState(0);
+  const [activeMood, setActiveMood] = useState(null);
 
   const scrollContainerRef = useRef(null);
 
@@ -214,15 +221,9 @@ export default function Home({
     return themes;
   }, [rankingTheme, rankingCandidates]);
 
-  const safeRankingTheme = rankingThemes[rankingIndex] ?? rankingThemes[0] ?? DEFAULT_RANKING_THEME;
+  const safeRankingIndex = rankingThemes.length ? rankingIndex % rankingThemes.length : 0;
+  const safeRankingTheme = rankingThemes[safeRankingIndex] ?? rankingThemes[0] ?? DEFAULT_RANKING_THEME;
   const rankingTotal = rankingThemes.length;
-
-  useEffect(() => {
-    if (!rankingThemes.length) return;
-    if (rankingIndex >= rankingThemes.length) {
-      setRankingIndex(0);
-    }
-  }, [rankingIndex, rankingThemes]);
 
   const trackMap = useMemo(() => {
     const m = new Map();
@@ -320,16 +321,6 @@ export default function Home({
   }, [playTrack]);
 
   useEffect(() => {
-    const script = document.createElement("script");
-    script.src = "https://cdn.lightwidget.com/widgets/lightwidget.js";
-    script.async = true;
-    document.body.appendChild(script);
-    return () => {
-      if (document.body.contains(script)) document.body.removeChild(script);
-    };
-  }, []);
-
-  useEffect(() => {
     if (!db || !appId) return;
 
     const fetchFeatured = async () => {
@@ -345,13 +336,15 @@ export default function Home({
           const found = tracks.find((t) => t?.id === data.linkedTrackId);
           if (found) setFeaturedTrack(found);
         }
-      } catch {}
+      } catch {
+        // Featured content is optional; the home fallback remains available.
+      }
     };
 
     fetchFeatured();
   }, [db, appId, tracks]);
 
-  useEffect(() => {
+  const displayTracks = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
 
     let filtered = [...(tracks || [])].filter(Boolean);
@@ -367,12 +360,10 @@ export default function Home({
         const genre = getTrackGenre(track).toLowerCase();
         return title.includes(term) || artist.includes(term) || genre.includes(term);
       });
-      setDisplayTracks(filtered);
-      return;
+      return filtered;
     }
 
-    const shuffled = [...filtered].sort(() => 0.5 - Math.random());
-    setDisplayTracks(shuffled.slice(0, 9));
+    return filtered.slice(0, 9);
   }, [tracks, searchTerm, selectedGenre]);
 
   useEffect(() => {
@@ -483,15 +474,10 @@ export default function Home({
     }
 
     return slides;
-  }, [siteConfig?.heroSlides, playlists, trackMap, exhibitionOstTracks, newAlbumTracks, featuredPlaylist]);
+  }, [siteConfig, playlists, trackMap, exhibitionOstTracks, newAlbumTracks, featuredPlaylist]);
 
-  useEffect(() => {
-    if (heroIndex > heroSlides.length - 1) {
-      setHeroIndex(0);
-    }
-  }, [heroIndex, heroSlides.length]);
-
-  const currentHero = heroSlides[heroIndex] || null;
+  const safeHeroIndex = heroSlides.length ? heroIndex % heroSlides.length : 0;
+  const currentHero = heroSlides[safeHeroIndex] || null;
 
   const goPrevHero = () => {
     if (!heroSlides.length) return;
@@ -540,68 +526,200 @@ export default function Home({
     };
   }, [selectedPlaylist]);
 
+  const moodCards = useMemo(() => {
+    const definitions = [
+      { id: "head-empty", label: "Head Empty", copy: "생각을 잠시 전시장 밖에", terms: ["ambient", "classical", "instrumental"], tone: "lime" },
+      { id: "main-character", label: "Main Character", copy: "오늘의 동선은 영화처럼", terms: ["soundtrack", "pop", "vocal"], tone: "blue" },
+      { id: "soft-focus", label: "Soft Focus", copy: "모서리가 부드러워지는 시간", terms: ["lo-fi", "jazz", "r&b"], tone: "paper" },
+      { id: "after-hours", label: "After Hours", copy: "문 닫은 뒤 더 선명한 소리", terms: ["electronic", "experimental", "night"], tone: "orange" },
+    ];
+
+    const searchable = (track) => [
+      track?.genre,
+      track?.tag,
+      track?.moods,
+      track?.timeSlots,
+      track?.useCases,
+      track?.energy,
+      track?.tags,
+    ].flat().filter(Boolean).join(" ").toLowerCase();
+
+    return definitions.map((definition, definitionIndex) => {
+      const matched = (tracks || []).filter((track) =>
+        definition.terms.some((term) => searchable(track).includes(term))
+      );
+      const fallback = latestTracks.filter((_, idx) => idx % definitions.length === definitionIndex).slice(0, 8);
+      return { ...definition, items: matched.length ? matched.slice(0, 8) : fallback };
+    });
+  }, [tracks, latestTracks]);
+
+  const activeMoodCard = moodCards.find((mood) => mood.id === activeMood) || null;
+  const discoveryTracks = activeMoodCard?.items?.length ? activeMoodCard.items : displayTracks;
+
+  const collectionCards = useMemo(() => {
+    return [...(playlists || []), ...genrePlaylists]
+      .filter((playlist) => Array.isArray(playlist?.items) && playlist.items.length)
+      .slice(0, 10);
+  }, [playlists, genrePlaylists]);
+
+  const heroImage = currentHero?.coverImage || currentHero?.backgroundImage || currentHero?.items?.[0]?.image || "";
+
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="pb-20 lg:pb-0">
+    <div className="up-home">
       <PlaylistModal
         normalizedSelectedPlaylist={normalizedSelectedPlaylist}
         setSelectedPlaylist={setSelectedPlaylist}
         safePlay={safePlay}
       />
 
-      <HeroSlider
-        currentHero={currentHero}
-        heroSlides={heroSlides}
-        heroIndex={heroIndex}
-        setHeroIndex={setHeroIndex}
-        goPrevHero={goPrevHero}
-        goNextHero={goNextHero}
-        openHeroSlide={openHeroSlide}
-        isPlaying={isPlaying}
-        safePlay={safePlay}
-      />
+      <section className="up-hero" aria-labelledby="up-hero-title">
+        <div className="up-hero__copy">
+          <p className="up-kicker">{currentHero?.eyebrow || "Currently on view"} · 00{safeHeroIndex + 1}</p>
+          <h1 id="up-hero-title">{currentHero?.title || "Sound belongs in the room."}</h1>
+          <p>{currentHero?.description || "언프레임이 발행한 음악을 전시처럼 걷고, 발견하고, 소장하세요."}</p>
+          <div className="up-hero__actions">
+            <button type="button" className="up-button up-button--ink" onClick={() => openHeroSlide(currentHero)}>
+              <Play aria-hidden="true" /> {currentHero?.buttonLabel || "Start listening"}
+            </button>
+            <span>{currentHero?.subtitle || "Curated by UNFRAME"}</span>
+          </div>
+        </div>
 
-      <DirectorsPick
-        featuredData={featuredData}
-        featuredTrack={featuredTrack}
-        tracks={tracks}
-        safePlay={safePlay}
-        setSelectedTrack={setSelectedTrack}
-      />
+        <div className="up-hero__art" style={heroImage ? { backgroundImage: `url(${heroImage})` } : undefined}>
+          <div className="up-hero__stamp">NEW<br />ISSUE</div>
+          <div className="up-hero__label"><Disc3 aria-hidden="true" /><span>UNFRAME<br />PLAYLIST</span></div>
+        </div>
 
-      <ListenerArchiveSummary
-        safeRankingTheme={safeRankingTheme}
-        rankingIndex={rankingIndex}
-        rankingTotal={rankingTotal}
-        goPrevRanking={goPrevRanking}
-        goNextRanking={goNextRanking}
-        topThree={topThree}
-        myLikedTracks={myLikedTracks}
-        safePlay={safePlay}
-      />
+        {heroSlides.length > 1 && (
+          <div className="up-hero__pager">
+            <button type="button" onClick={goPrevHero} aria-label="Previous feature"><ArrowLeft /></button>
+            <span>{String(safeHeroIndex + 1).padStart(2, "0")} / {String(heroSlides.length).padStart(2, "0")}</span>
+            <button type="button" onClick={goNextHero} aria-label="Next feature"><ArrowRight /></button>
+          </div>
+        )}
+      </section>
 
-      <PlaylistRail
-        scrollContainerRef={scrollContainerRef}
-        playlists={playlists}
-        genrePlaylists={genrePlaylists}
-        setSelectedPlaylist={setSelectedPlaylist}
-      />
+      <section id="moods" className="up-section">
+        <div className="up-section__head">
+          <div><p className="up-kicker">Choose a state, not a genre</p><h2>How are we listening?</h2></div>
+          <p>기분을 설명하기 어려울 때를 위한, 조금 엉뚱하고 정확한 입구.</p>
+        </div>
+        <div className="up-moods">
+          {moodCards.map((mood, index) => (
+            <button
+              type="button"
+              key={mood.id}
+              className={`up-mood up-mood--${mood.tone} ${activeMood === mood.id ? "is-active" : ""}`}
+              onClick={() => setActiveMood((current) => current === mood.id ? null : mood.id)}
+            >
+              <span>0{index + 1}</span><strong>{mood.label}</strong><small>{mood.copy}</small><ArrowUpRight />
+            </button>
+          ))}
+        </div>
+      </section>
 
-      <SearchDiscovery
-        searchTerm={searchTerm}
-        setSearchTerm={setSearchTerm}
-        selectedGenre={selectedGenre}
-        setSelectedGenre={setSelectedGenre}
-        GENRE_OPTIONS={GENRE_OPTIONS}
-        displayTracks={displayTracks}
-        currentTrack={currentTrack}
-        isPlaying={isPlaying}
-        userLikes={userLikes}
-        handleToggleLike={handleToggleLike}
-        safePlay={safePlay}
-      />
+      <section id="curations" className="up-section up-section--collections">
+        <div className="up-section__head">
+          <div><p className="up-kicker">Published collections</p><h2>UP Volumes</h2></div>
+          <p>앨범이 아니라 전시의 챕터처럼 묶었습니다. 순서대로 들어도, 중간부터 걸어도 좋습니다.</p>
+        </div>
+        <div className="up-collections" ref={scrollContainerRef}>
+          {!collectionCards.length && (
+            <div className="up-empty up-empty--collection">
+              <span>UP</span>
+              <strong>첫 번째 볼륨을 준비하고 있습니다.</strong>
+              <small>새 플레이리스트가 발행되면 이곳에 전시됩니다.</small>
+            </div>
+          )}
+          {collectionCards.map((playlist, index) => {
+            const cover = playlist.image || playlist.items?.[0]?.image || "";
+            return (
+              <button type="button" className="up-collection" key={playlist.id || playlist.title} onClick={() => setSelectedPlaylist(playlist)}>
+                <span className="up-collection__number">VOL. {String(index + 1).padStart(2, "0")}</span>
+                <span className={`up-collection__image ${cover ? "" : "is-fallback"}`}>{cover && <img src={cover} alt="" loading="lazy" onError={hideBrokenImage} />}</span>
+                <strong>{playlist.title}</strong>
+                <small>{playlist.desc || `${playlist.items.length} tracks · UNFRAME selection`}</small>
+              </button>
+            );
+          })}
+        </div>
+      </section>
 
-      <InstagramSignal />
-      <ArtistLinks />
-    </motion.div>
+      <section className="up-section up-discovery">
+        <div className="up-catalog">
+          <div className="up-section__head up-section__head--stack">
+            <div><p className="up-kicker">Open catalog</p><h2>{activeMoodCard?.label || "Every track"}</h2></div>
+            <label className="up-search">
+              <Search aria-hidden="true" />
+              <input value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setActiveMood(null); }} placeholder="곡, 아티스트, 장르 검색" />
+            </label>
+          </div>
+
+          <div className="up-genres" aria-label="Genre filters">
+            {GENRE_OPTIONS.slice(0, 8).map((genre) => (
+              <button type="button" key={genre} className={selectedGenre === genre && !activeMood ? "is-active" : ""} onClick={() => { setSelectedGenre(genre); setActiveMood(null); }}>
+                {genre}
+              </button>
+            ))}
+          </div>
+
+          <div className="up-tracklist">
+            {!discoveryTracks.length && (
+              <div className="up-empty up-empty--tracks">
+                <Disc3 aria-hidden="true" />
+                <strong>{searchTerm ? "검색 결과가 없습니다." : "아직 전시된 곡이 없습니다."}</strong>
+                <small>{searchTerm ? "다른 제목이나 장르로 다시 찾아보세요." : "새로운 사운드가 곧 이곳에 도착합니다."}</small>
+              </div>
+            )}
+            {discoveryTracks.map((track, index) => {
+              const isCurrent = currentTrack?.id === track.id;
+              const liked = userLikes.includes(track.id);
+              return (
+                <article className={`up-track ${isCurrent ? "is-current" : ""}`} key={track.id}>
+                  <button type="button" className="up-track__play" onClick={() => safePlay(index, discoveryTracks)} aria-label={`Play ${track.title}`}>
+                    {isCurrent && isPlaying ? <Pause /> : <Play />}
+                  </button>
+                  <span className="up-track__index">{String(index + 1).padStart(2, "0")}</span>
+                  <span className={`up-track__cover ${track.image ? "" : "is-fallback"}`}>{track.image && <img src={track.image} alt="" loading="lazy" onError={hideBrokenImage} />}</span>
+                  <span className="up-track__title"><strong>{track.title}</strong><small>{track.artist}</small></span>
+                  <span className="up-track__genre">{getTrackGenre(track)}</span>
+                  <button type="button" className={`up-track__like ${liked ? "is-liked" : ""}`} onClick={(e) => handleToggleLike(e, track.id)} aria-label="Add to archive"><Heart /></button>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+
+        <aside id="notes" className="up-notes">
+          <article className="up-note up-note--blue">
+            <p className="up-kicker">Director’s note</p>
+            <h3>{featuredData?.title || "A room needs a pulse."}</h3>
+            <p>{featuredData?.desc || featuredData?.description || "이미지가 공간의 표정을 만든다면, 음악은 그곳의 호흡을 만듭니다. UP은 전시가 끝난 뒤에도 남는 리듬을 기록합니다."}</p>
+            {featuredTrack && <button type="button" onClick={() => safePlay(tracks.indexOf(featuredTrack), tracks)}><Play /> Listen to the note</button>}
+          </article>
+
+          <article className="up-note up-note--ranking">
+            <div className="up-note__nav">
+              <p className="up-kicker">Listener signal</p>
+              <span><button type="button" onClick={goPrevRanking}><ArrowLeft /></button><button type="button" onClick={goNextRanking}><ArrowRight /></button></span>
+            </div>
+            <h3>{safeRankingTheme.title}</h3>
+            <ol>
+              {topThree.length ? topThree.map((listener, index) => (
+                <li key={listener.id || listener.nickname || index}><span>0{index + 1}</span><strong>{getRankingDisplayName(listener)}</strong><small>{getRankingScore(listener, safeRankingTheme.scoreKey)} {safeRankingTheme.unit}</small></li>
+              )) : <li className="up-note__empty">첫 번째 기록을 기다리고 있어요.</li>}
+            </ol>
+          </article>
+
+          <button type="button" className="up-liked" onClick={() => myLikedTracks.length && safePlay(0, myLikedTracks)}>
+            <span><Heart /> YOUR ARCHIVE</span>
+            <strong>{String(myLikedTracks.length).padStart(2, "0")}</strong>
+            <small>saved tracks</small>
+          </button>
+        </aside>
+      </section>
+
+      <footer className="up-footer"><strong>UNFRAME PLAYLIST®</strong><span>Music for exhibitions, people and the spaces between.</span><small>SEOUL · {new Date().getFullYear()}</small></footer>
+    </div>
   );
 }

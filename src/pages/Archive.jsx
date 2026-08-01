@@ -382,7 +382,7 @@ export default function Archive({
   // 로그인 안 된 경우
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6 relative z-30">
+      <div className="up-themed-page up-archive-page min-h-screen flex items-center justify-center p-6 relative z-30">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center space-y-8 max-w-md">
           <h1 className={`${h1Title} text-6xl lg:text-8xl opacity-10`}>Private<br />Archive</h1>
           <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs leading-relaxed">
@@ -400,7 +400,7 @@ export default function Archive({
   }
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="pt-32 lg:pt-40 px-6 lg:px-8 container mx-auto pb-32 lg:pb-40 min-h-screen relative z-20 overflow-visible">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="up-themed-page up-archive-page pt-32 lg:pt-40 px-6 lg:px-8 container mx-auto pb-32 lg:pb-40 min-h-screen relative z-20 overflow-visible">
       {/* ✅ 닉네임 1회 변경 팝업 */}
       <AnimatePresence>
         {isNickModalOpen && (

@@ -1,6 +1,6 @@
 // src/App.jsx
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { auth, db, appId, ADMIN_EMAILS } from './firebase';
 import confetti from 'canvas-confetti';
 import {
@@ -39,6 +39,7 @@ import ScrollToTop from './components/ScrollToTop';
 import ShareCard from "./components/ShareCard";
 import AchievementPopup from "./components/AchievementPopup";
 import NicknameModal from "./components/NicknameModal";
+import AppShell from "./components/AppShell";
 
 import { useNicknameSetup } from "./hooks/useNicknameSetup";
 import useAudioEngine from "./hooks/useAudioEngine";
@@ -323,6 +324,7 @@ export default function App() {
     setCurrentTrackIdx,
     currentTrack,
     setIsPlaying,
+    setIsBuffering,
     emit,
     playSessionRef,
     queueRef,
@@ -639,9 +641,6 @@ export default function App() {
   }, [audioRef, isPlaying, setIsPlaying, setIsBuffering]);
 
   const handleNaturalTrackEnd = useCallback(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
     const q = currentQueue || [];
     if (!q.length) return;
 
@@ -666,89 +665,34 @@ export default function App() {
 
     const nextTrack = q[nextIdx];
     if (!nextTrack) return;
-
-    const nextUrl = getDirectLink(nextTrack.audioUrl);
-    if (!nextUrl) return;
-
-    setCurrentTrackIdx(nextIdx);
     setCurrentTime(0);
     setDuration(0);
-    setIsBuffering(true);
 
-    playSessionRef.current = {
-      startedAt: Date.now(),
-      trackId: nextTrack.id,
+    void playTrack(nextIdx, q, {
       playlistKey: playSessionRef.current?.playlistKey || null,
-    };
-
-    try {
-      if ("mediaSession" in navigator) {
-        const artworkUrl = nextTrack.image ? getDirectLink(nextTrack.image) : "";
-
-        try {
-          navigator.mediaSession.metadata = new MediaMetadata({
-            title: nextTrack.title ?? "UNFRAME",
-            artist: nextTrack.artist ?? "",
-            album: nextTrack.album ?? "UNFRAME PLAYLIST",
-            artwork: artworkUrl
-              ? [
-                  { src: artworkUrl, sizes: "96x96", type: "image/png" },
-                  { src: artworkUrl, sizes: "192x192", type: "image/png" },
-                  { src: artworkUrl, sizes: "512x512", type: "image/png" },
-                ]
-              : [],
-          });
-        } catch {}
-
-        try {
-          navigator.mediaSession.playbackState = "playing";
-        } catch {}
-      }
-    } catch {}
-
-    try {
-      audio.pause();
-    } catch {}
-
-    audio.src = nextUrl;
-    audio.load();
-
-    window.setTimeout(async () => {
-      try {
-        const playPromise = audio.play();
-        if (playPromise !== undefined) {
-          await playPromise;
-        }
-        setIsPlaying(true);
-        setIsBuffering(false);
-      } catch (err) {
-        if (err?.name === "AbortError") {
-          setIsBuffering(false);
-          return;
-        }
-
-        console.error("handleNaturalTrackEnd play error:", err);
-        setIsPlaying(false);
-        setIsBuffering(false);
-      }
-    }, 120);
+      restart: loopMode === 2,
+    });
   }, [
-    audioRef,
     currentQueue,
     currentTrackIdx,
-    setCurrentTrackIdx,
     setCurrentTime,
     setDuration,
     setIsPlaying,
     setIsBuffering,
     loopMode,
     getNextTrackIndex,
+    playTrack,
   ]);
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-[#004aad]" />
+      <div className="up-boot" role="status" aria-live="polite">
+        <span className="up-boot__mark">UP</span>
+        <div>
+          <strong>Preparing the exhibition floor</strong>
+          <small>UNFRAME PLAYLIST</small>
+        </div>
+        <Loader2 className="up-spin" aria-hidden="true" />
       </div>
     );
   }
@@ -761,21 +705,8 @@ export default function App() {
     <Router>
       <ScrollToTop />
 
-      <div className={`min-h-screen bg-[#050505] text-zinc-100 font-sans relative overflow-x-hidden ${isPlayerExpanded ? 'h-screen overflow-hidden' : ''} pb-40`}>
-        <header className={`fixed top-0 w-full z-100 transition-all ${scrolled ? 'py-4 bg-black/40 backdrop-blur-xl border-b border-white/5' : 'py-6 lg:py-10'}`}>
-          <div className="container mx-auto px-6 flex justify-between items-end">
-            <Link to="/">
-              <h1 className="text-2xl lg:text-3xl font-black italic uppercase text-white">
-                Unframe<span className="text-[#004aad]">.</span>
-              </h1>
-            </Link>
-            <nav className="flex gap-4 lg:gap-10">
-              <Link to="/about" className="text-[10px] lg:text-[11px] font-black uppercase tracking-widest hover:text-[#004aad]">About</Link>
-              <Link to="/archive" className="text-[10px] lg:text-[11px] font-black uppercase tracking-widest hover:text-[#004aad]">Archive</Link>
-            </nav>
-          </div>
-        </header>
-
+      <div className={`relative overflow-x-hidden ${isPlayerExpanded ? 'h-screen overflow-hidden' : ''}`}>
+        <AppShell user={user} userProfile={userProfile} membership={membership} isAdmin={isAdmin} playerOpen={isPlayerExpanded}>
         <AppRoutes
           publicTracks={publicTracks}
           playlists={playlists}
@@ -799,6 +730,7 @@ export default function App() {
           setIsPlayerExpanded={setIsPlayerExpanded}
           appId={appId}
         />
+        </AppShell>
 
         <AudioPlayer
           currentTrack={currentTrack}
@@ -902,6 +834,14 @@ export default function App() {
           }}
           onPlaying={() => {
             setIsBuffering(false);
+            setIsPlaying(true);
+          }}
+          onPause={() => {
+            setIsPlaying(false);
+          }}
+          onError={() => {
+            setIsBuffering(false);
+            setIsPlaying(false);
           }}
           onLoadedMetadata={(e) => {
             const a = e.currentTarget;
@@ -938,6 +878,7 @@ export default function App() {
             } catch {}
           }}
           onEnded={handleNaturalTrackEnd}
+          preload="metadata"
           playsInline
         />
       </div>

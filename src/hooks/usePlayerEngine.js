@@ -12,6 +12,7 @@ export function usePlayerEngine({
   currentTrack,
 
   setIsPlaying,
+  setIsBuffering,
 
   emit,
   playSessionRef,
@@ -40,11 +41,15 @@ export function usePlayerEngine({
             ]
           : [],
       });
-    } catch {}
+    } catch {
+      // Media Session metadata is optional across browsers.
+    }
 
     try {
       navigator.mediaSession.playbackState = state;
-    } catch {}
+    } catch {
+      // Playback state is not writable on every Media Session implementation.
+    }
   }, []);
 
   useEffect(() => {
@@ -80,12 +85,16 @@ export function usePlayerEngine({
         const currentSrc = audio.currentSrc || audio.src || "";
         const isSameSource = currentSrc === directUrl;
 
+        setIsBuffering?.(true);
+
         if (!isSameSource) {
           if (!audio.paused) {
             audio.pause();
           }
           audio.src = directUrl;
           audio.load();
+        } else if (audio.ended || context?.restart) {
+          audio.currentTime = 0;
         }
 
         if (idx !== undefined) {
@@ -98,22 +107,6 @@ export function usePlayerEngine({
           playlistKey: context?.playlistKey || context?.playlistId || null,
         };
 
-        if (emit) {
-          await emit({
-            type: "track_play_start",
-            trackId: targetTrack.id,
-          });
-
-          if (context?.playlistKey || context?.playlistId) {
-            await emit({
-              type: "playlist_play",
-              playlistKey: context?.playlistKey || null,
-              playlistId: context?.playlistId || null,
-              trackId: targetTrack.id,
-            });
-          }
-        }
-
         syncMediaSession(targetTrack, "playing");
 
         const playPromise = audio.play();
@@ -123,20 +116,40 @@ export function usePlayerEngine({
             .then(() => {
               if (playRequestRef.current !== playId) return;
               setIsPlaying(true);
+              setIsBuffering?.(false);
+
+              if (emit) {
+                void emit({
+                  type: "track_play_start",
+                  trackId: targetTrack.id,
+                });
+
+                if (context?.playlistKey || context?.playlistId) {
+                  void emit({
+                    type: "playlist_play",
+                    playlistKey: context?.playlistKey || null,
+                    playlistId: context?.playlistId || null,
+                    trackId: targetTrack.id,
+                  });
+                }
+              }
             })
             .catch((err) => {
               if (err?.name === "AbortError") return;
               console.error("playTrack play error:", err);
               if (playRequestRef.current !== playId) return;
               setIsPlaying(false);
+              setIsBuffering?.(false);
             });
         } else {
           setIsPlaying(true);
+          setIsBuffering?.(false);
         }
       } catch (err) {
         if (err?.name === "AbortError") return;
         console.error("playTrack error:", err);
         setIsPlaying(false);
+        setIsBuffering?.(false);
       }
     },
     [
@@ -146,10 +159,12 @@ export function usePlayerEngine({
       setCurrentQueue,
       setCurrentTrackIdx,
       setIsPlaying,
+      setIsBuffering,
       emit,
       playSessionRef,
       queueRef,
       idxRef,
+      syncMediaSession,
     ]
   );
 
@@ -186,29 +201,53 @@ export function usePlayerEngine({
     const safeSet = (action, handler) => {
       try {
         navigator.mediaSession.setActionHandler(action, handler);
-      } catch {}
+      } catch {
+        // Some browsers expose Media Session without every action.
+      }
     };
 
     safeSet("play", async () => {
       try {
+        setIsBuffering?.(true);
         await audio.play();
         setIsPlaying(true);
+        setIsBuffering?.(false);
         navigator.mediaSession.playbackState = "playing";
       } catch (err) {
         if (err?.name === "AbortError") return;
+        setIsBuffering?.(false);
       }
     });
 
     safeSet("pause", () => {
       audio.pause();
       setIsPlaying(false);
+      setIsBuffering?.(false);
       try {
         navigator.mediaSession.playbackState = "paused";
-      } catch {}
+      } catch {
+        // Playback state is optional.
+      }
     });
 
     safeSet("previoustrack", () => playPrev());
     safeSet("nexttrack", () => playNext());
+
+    safeSet("seekbackward", (details) => {
+      const amount = details?.seekOffset || 10;
+      audio.currentTime = Math.max(0, audio.currentTime - amount);
+    });
+
+    safeSet("seekforward", (details) => {
+      const amount = details?.seekOffset || 10;
+      const end = Number.isFinite(audio.duration) ? audio.duration : audio.currentTime + amount;
+      audio.currentTime = Math.min(end, audio.currentTime + amount);
+    });
+
+    safeSet("seekto", (details) => {
+      if (!Number.isFinite(details?.seekTime)) return;
+      audio.currentTime = details.seekTime;
+    });
 
     safeSet("stop", () => {
       audio.pause();
@@ -216,7 +255,9 @@ export function usePlayerEngine({
       setIsPlaying(false);
       try {
         navigator.mediaSession.playbackState = "none";
-      } catch {}
+      } catch {
+        // Playback state is optional.
+      }
     });
 
     if (currentTrack) {
@@ -234,7 +275,7 @@ export function usePlayerEngine({
       safeSet("seekbackward", null);
       safeSet("seekforward", null);
     };
-  }, [audioRef, currentTrack, playNext, playPrev, setIsPlaying, syncMediaSession]);
+  }, [audioRef, currentTrack, playNext, playPrev, setIsPlaying, setIsBuffering, syncMediaSession]);
 
   return {
     playTrack,

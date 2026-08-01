@@ -64,6 +64,8 @@ const FullPlayer = ({
   userLikes,
   togglePlay,
   playTrack,
+  playNext,
+  playPrev,
   currentTrackIdx,
   publicTracks,
   isBuffering,
@@ -112,7 +114,7 @@ const FullPlayer = ({
       animate={{ y: 0 }}
       exit={{ y: "100%" }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
-      className="fixed inset-0 z-400 bg-zinc-950 flex flex-col pt-safe-top"
+      className="up-full-player fixed inset-0 z-400 flex flex-col pt-safe-top"
     >
       <div className="flex items-center justify-between p-6 px-8 relative z-10 bg-linear-to-b from-zinc-950 to-transparent">
         <button
@@ -334,7 +336,7 @@ const FullPlayer = ({
           </button>
 
           <button
-            onClick={() => playTrack((currentTrackIdx - 1 + publicTracks.length) % publicTracks.length)}
+            onClick={playPrev}
             className="p-4 text-white hover:scale-110 transition-transform"
           >
             <SkipBack className="w-10 h-10 fill-current" />
@@ -358,7 +360,7 @@ const FullPlayer = ({
           </button>
 
           <button
-            onClick={() => playTrack((currentTrackIdx + 1) % publicTracks.length)}
+            onClick={playNext}
             className="p-4 text-white hover:scale-110 transition-transform"
           >
             <SkipForward className="w-10 h-10 fill-current" />

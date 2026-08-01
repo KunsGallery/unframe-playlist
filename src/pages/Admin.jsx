@@ -278,7 +278,7 @@ export default function Admin({
 
   if (!isAdmin) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#050505] px-6">
+      <div className="up-themed-page up-admin-page min-h-screen flex items-center justify-center bg-[#050505] px-6">
         <div className={`${glass} rounded-[3rem] p-10 lg:p-16 max-w-xl text-center space-y-8`}>
           <ShieldCheck className="w-16 h-16 mx-auto text-[#004aad]" />
           <div className="space-y-3">
@@ -611,7 +611,7 @@ export default function Admin({
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white pb-24 px-6 lg:px-8">
+    <div className="up-themed-page up-admin-page min-h-screen bg-[#050505] text-white pb-24 px-6 lg:px-8">
       <div className="container mx-auto pt-28 lg:pt-36">
         <div className="mb-12 lg:mb-16">
           <span className="text-[#004aad] text-[10px] font-black uppercase tracking-[0.35em] block mb-4">
