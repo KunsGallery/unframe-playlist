@@ -138,9 +138,9 @@ export default function PlaylistManager({
   };
 
   return (
-    <div className="grid xl:grid-cols-[0.42fr_0.58fr] gap-8 items-start">
+    <div className="grid xl:grid-cols-[minmax(300px,0.36fr)_minmax(0,0.64fr)] gap-6 items-start">
       {/* Left: Playlist List */}
-      <div className={`${glass} rounded-[3rem] p-6 lg:p-8 space-y-6 xl:sticky xl:top-28`}>
+      <div className={`${glass} rounded-[3rem] p-6 lg:p-8 space-y-6 xl:sticky xl:top-48`}>
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-[10px] text-[#004aad] font-black uppercase tracking-[0.35em] mb-3">
@@ -454,7 +454,7 @@ export default function PlaylistManager({
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-3 pt-2">
+        <div className="up-admin-savebar flex flex-wrap gap-3 pt-2">
           <button
             onClick={handleSavePlaylist}
             className="px-8 py-4 bg-[#004aad] rounded-full text-white font-black uppercase tracking-widest text-xs hover:bg-white hover:text-black transition-all flex items-center gap-2"

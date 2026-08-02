@@ -1,27 +1,30 @@
+import React from "react";
 import { ListMusic, Music, Settings2, Users } from "lucide-react";
 
 const TABS = [
-  { id: "tracks", label: "Tracks", icon: Music },
-  { id: "playlists", label: "Playlists", icon: ListMusic },
-  { id: "config", label: "Config", icon: Settings2 },
-  { id: "users", label: "Users", icon: Users },
+  { id: "tracks", label: "Tracks", desc: "음원·메타데이터", icon: Music },
+  { id: "playlists", label: "Playlists", desc: "선곡·재생 순서", icon: ListMusic },
+  { id: "config", label: "Page", desc: "홈·히어로·문구", icon: Settings2 },
+  { id: "users", label: "Listeners", desc: "회원·리워드", icon: Users },
 ];
 
-export default function AdminTabs({ activeTab, setActiveTab }) {
+export default function AdminTabs({ activeTab, setActiveTab, counts = {} }) {
   return (
-    <div className="flex flex-wrap gap-3 mb-10">
-      {TABS.map(({ id, label, icon: Icon }) => {
+    <div className="up-admin-tabs" role="tablist" aria-label="Admin sections">
+      {TABS.map(({ id, label, desc, icon }) => {
         const active = activeTab === id;
         return (
           <button
+            type="button"
             key={id}
             onClick={() => setActiveTab(id)}
-            className={`px-5 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${
-              active ? "bg-[#004aad] text-white" : "bg-white/5 text-zinc-400 hover:text-white"
-            }`}
+            className={`up-admin-tab ${active ? "is-active" : ""}`}
+            role="tab"
+            aria-selected={active}
           >
-            <Icon className="w-4 h-4" />
-            {label}
+            <span className="up-admin-tab__icon">{React.createElement(icon, { "aria-hidden": true })}</span>
+            <span className="up-admin-tab__copy"><strong>{label}</strong><small>{desc}</small></span>
+            {counts[id] !== undefined && <span className="up-admin-tab__count">{counts[id]}</span>}
           </button>
         );
       })}

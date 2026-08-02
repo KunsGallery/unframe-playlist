@@ -107,19 +107,53 @@ const FullPlayer = ({
     }
   }, [playerView, currentTrack.id]);
 
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setIsPlayerExpanded(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [setIsPlayerExpanded]);
+
   return (
     <motion.div
       key="full-player"
-      initial={{ y: "100%" }}
-      animate={{ y: 0 }}
-      exit={{ y: "100%" }}
-      transition={{ duration: 0.3, ease: "easeInOut" }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
       className="up-full-player fixed inset-0 z-400 flex flex-col pt-safe-top"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${currentTrack.title || '현재 곡'} 플레이어`}
     >
-      <div className="flex items-center justify-between p-6 px-8 relative z-10 bg-linear-to-b from-zinc-950 to-transparent">
+      <motion.button
+        type="button"
+        className="up-full-player__backdrop"
+        onClick={() => setIsPlayerExpanded(false)}
+        aria-label="플레이어 바깥 영역을 눌러 닫기"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.38 }}
+      />
+      <motion.div
+        layoutId="up-player-surface"
+        className="up-full-player__sheet"
+        transition={{ layout: { type: "spring", stiffness: 210, damping: 27, mass: 0.9 } }}
+      >
+      <motion.div
+        className="up-player-paint"
+        aria-hidden="true"
+        initial={{ opacity: 0.78, scaleX: 0.04, scaleY: 0.12, y: "42%" }}
+        animate={{ opacity: 0, scaleX: 1.45, scaleY: 1.25, y: "0%" }}
+        transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
+      />
+      <div className="up-full-player__header flex items-center justify-between p-6 px-8 relative z-10 bg-linear-to-b from-zinc-950 to-transparent">
         <button
           onClick={() => setIsPlayerExpanded(false)}
-          className="p-2 -ml-2 text-white/70 hover:text-white"
+          className="up-full-player__close"
+          aria-label="플레이어 화면 닫기"
         >
           <ChevronDown className="w-8 h-8" />
         </button>
@@ -136,7 +170,7 @@ const FullPlayer = ({
         <div className="w-8 h-8" />
       </div>
 
-      <div className="flex-1 overflow-hidden flex flex-col items-center justify-center relative w-full max-w-2xl mx-auto">
+      <div className="up-full-player__visual flex-1 overflow-hidden flex flex-col items-center justify-center relative w-full max-w-2xl mx-auto">
         <AnimatePresence mode="wait">
           {playerView === 'cover' && (
             <motion.div
@@ -273,7 +307,7 @@ const FullPlayer = ({
         </AnimatePresence>
       </div>
 
-      <div className="p-8 pb-12 lg:pb-16 w-full max-w-2xl mx-auto space-y-8 bg-linear-to-t from-black via-zinc-950/90 to-transparent relative z-10">
+      <div className="up-full-player__controls p-8 pb-12 lg:pb-16 w-full max-w-2xl mx-auto space-y-8 bg-linear-to-t from-black via-zinc-950/90 to-transparent relative z-10">
         <div className="flex items-end justify-between gap-4">
           <div className="min-w-0 flex-1">
             <MarqueeTitle title={currentTrack.title} />
@@ -460,6 +494,7 @@ const FullPlayer = ({
           </button>
         </div>
       </div>
+      </motion.div>
     </motion.div>
   );
 };

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { motion } from "framer-motion";
 import { Heart, Loader2, Pause, Play, Share2, SkipForward, Volume2, VolumeX } from "lucide-react";
 import { formatTime } from "../utils/PlayerUtils";
 
@@ -31,7 +32,18 @@ const MiniPlayer = ({
       key="mini-player"
       className="up-mini-player"
     >
-      <div className="up-mini-player__bar">
+      <motion.div
+        layoutId="up-player-surface"
+        className="up-mini-player__bar"
+        transition={{ layout: { type: "spring", stiffness: 210, damping: 27, mass: 0.9 } }}
+      >
+        <motion.div
+          className="up-mini-player__return-paint"
+          aria-hidden="true"
+          initial={{ opacity: 0.58, scaleX: 2.8, scaleY: 2.1 }}
+          animate={{ opacity: 0, scaleX: 0.35, scaleY: 0.45 }}
+          transition={{ duration: 0.72, ease: [0.22, 1, 0.36, 1] }}
+        />
         <div className="up-mini-player__progress" style={{ width: `${progressPct}%` }} />
 
         <button type="button" className="up-mini-player__track" onClick={() => setIsPlayerExpanded(true)}>
@@ -69,7 +81,7 @@ const MiniPlayer = ({
           </button>
           <button type="button" onClick={playNext} aria-label="Next track"><SkipForward /></button>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 };

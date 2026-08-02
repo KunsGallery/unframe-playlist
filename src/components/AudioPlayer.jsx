@@ -1,6 +1,6 @@
 // src/components/AudioPlayer.jsx
 import React, { useEffect, useMemo } from 'react';
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence, LayoutGroup } from 'framer-motion';
 import MiniPlayer from './MiniPlayer';
 import FullPlayer from './FullPlayer';
 
@@ -50,13 +50,15 @@ const AudioPlayer = (props) => {
   if (!currentTrack) return null;
 
   return (
-    <AnimatePresence mode="wait">
-      {!isPlayerExpanded ? (
-        <MiniPlayer {...props} /> 
-      ) : (
-        <FullPlayer {...props} activeLyricIdx={activeLyricIdx} />
-      )}
-    </AnimatePresence>
+    <LayoutGroup id="up-player-transition">
+      <AnimatePresence mode="sync" initial={false}>
+        {!isPlayerExpanded ? (
+          <MiniPlayer key="mini-player" {...props} />
+        ) : (
+          <FullPlayer key="full-player" {...props} activeLyricIdx={activeLyricIdx} />
+        )}
+      </AnimatePresence>
+    </LayoutGroup>
   );
 };
 

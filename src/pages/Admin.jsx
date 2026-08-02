@@ -26,8 +26,14 @@ import {
 
 const glass =
   "bg-white/[0.03] backdrop-blur-[40px] border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]";
-const h1Title = "font-black uppercase tracking-[-0.07em] leading-[0.8] italic";
 const IMGBB_API_KEY = "d1d66a67fff0404d782a4a001dfb40e2";
+
+const ADMIN_SECTIONS = {
+  tracks: { eyebrow: "Audio Library", title: "Tracks", desc: "음원 파일, 커버, 곡 정보와 큐레이션 태그를 관리합니다." },
+  playlists: { eyebrow: "Curation Desk", title: "Playlists", desc: "공개 컬렉션을 만들고 곡의 순서와 대표 이미지를 관리합니다." },
+  config: { eyebrow: "Exhibition Editor", title: "Page", desc: "홈 히어로, Director’s Pick과 주요 문구를 관리합니다." },
+  users: { eyebrow: "Listener Office", title: "Listeners", desc: "회원 정보, 등급과 수집 리워드를 관리합니다." },
+};
 
 const normalizeRewardIds = (rewards) => {
   if (!Array.isArray(rewards) || rewards.length === 0) return new Set();
@@ -188,6 +194,14 @@ export default function Admin({
 
   const [settleYear, setSettleYear] = useState(String(new Date().getFullYear()));
   const [isSettling, setIsSettling] = useState(false);
+  const activeSection = ADMIN_SECTIONS[activeTab] || ADMIN_SECTIONS.tracks;
+  const activeTrackCount = tracks.filter((track) => track?.isActive !== false).length;
+  const adminCounts = {
+    tracks: tracks.length,
+    playlists: playlists.length,
+    config: Array.isArray(siteConfig.heroSlides) ? siteConfig.heroSlides.length : 0,
+    users: allUsers.length,
+  };
 
   useEffect(() => {
     if (!db || !isAdmin) return;
@@ -611,22 +625,32 @@ export default function Admin({
   };
 
   return (
-    <div className="up-themed-page up-admin-page min-h-screen bg-[#050505] text-white pb-24 px-6 lg:px-8">
-      <div className="container mx-auto pt-28 lg:pt-36">
-        <div className="mb-12 lg:mb-16">
-          <span className="text-[#004aad] text-[10px] font-black uppercase tracking-[0.35em] block mb-4">
-            Control Room
-          </span>
-          <h1 className={`${h1Title} text-5xl lg:text-8xl`}>
-            Admin<br />Panel
-          </h1>
-          <p className="text-zinc-500 mt-6 max-w-2xl">
-            트랙, 플레이리스트, 히어로 슬라이드, 사이트 설정과 유저 메타를 한곳에서 관리합니다.
-          </p>
+    <div className="up-themed-page up-admin-page min-h-screen bg-[#050505] text-white pb-24 px-4 lg:px-7">
+      <div className="up-admin-container">
+        <header className="up-admin-header">
+          <div className="up-admin-header__title">
+            <span>UP CONTENT STUDIO</span>
+            <h1>Control Room</h1>
+            <p>페이지와 음악을 한 흐름 안에서 발행하고 관리합니다.</p>
+          </div>
+          <div className="up-admin-metrics" aria-label="Content summary">
+            <div><span>Tracks</span><strong>{tracks.length}</strong><small>{activeTrackCount} published</small></div>
+            <div><span>Playlists</span><strong>{playlists.length}</strong><small>public collections</small></div>
+            <div><span>Hero</span><strong>{adminCounts.config}</strong><small>page slides</small></div>
+          </div>
+        </header>
+
+        <AdminTabs activeTab={activeTab} setActiveTab={setActiveTab} counts={adminCounts} />
+
+        <div className="up-admin-stage__head">
+          <div>
+            <span>{activeSection.eyebrow}</span>
+            <h2>{activeSection.title}</h2>
+            <p>{activeSection.desc}</p>
+          </div>
+          <div className="up-admin-live"><i /> LIVE DATABASE</div>
         </div>
-
-        <AdminTabs activeTab={activeTab} setActiveTab={setActiveTab} />
-
+        <section className="up-admin-stage" aria-label={`${activeSection.title} workspace`}>
         {activeTab === "tracks" && (
             <TrackManager
               tracks={tracks}
@@ -703,6 +727,7 @@ export default function Admin({
             runAnnualSettlement={runAnnualSettlement}
           />
         )}
+        </section>
       </div>
     </div>
   );
