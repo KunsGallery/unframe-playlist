@@ -1,16 +1,18 @@
 // src/pages/Archive.jsx
 import React, { useState, useMemo, useId, memo, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion as Motion, AnimatePresence } from 'framer-motion';
 import {
   User, Camera, Music, Heart, Share2, Zap,
-  Trophy, Medal, Calendar,
-  Star, Moon, LogIn, Target,
-  Lock, Repeat, Navigation,
-  Sparkles, Sunrise, Crown, Layers, Flame,
+  Medal, LogIn, Lock, Sparkles, Layers,
   X
 } from 'lucide-react';
 import { doc, updateDoc, setDoc } from 'firebase/firestore';
 import { LEVELS, getLevelInfo } from '../levels';
+import {
+  ACHIEVEMENT_CATALOG,
+  COLLECTIVE_CATALOG,
+  STICKER_SLOT_COUNT,
+} from '../constants/rewardCatalog';
 
 const glass = "bg-white/[0.03] backdrop-blur-[40px] border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]";
 const h1Title = "font-black uppercase tracking-[-0.07em] leading-[0.8] italic";
@@ -18,43 +20,8 @@ const IMGBB_API_KEY = "d1d66a67fff0404d782a4a001dfb40e2";
 
 const safeSrc = (v) => (typeof v === "string" && v.trim() ? v : null);
 
-// ✅ (엔진/store.js 기준) Achievements
-const ACHIEVEMENT_LIBRARY = {
-  first_listen: { title: "첫 감상", desc: "처음으로 소리를 재생했습니다.", icon: Music, color: "#a78bfa", glow: "rgba(167, 139, 250, 0.5)" },
-  first_complete: { title: "첫 완주", desc: "처음으로 한 곡을 끝까지 감상했습니다.", icon: Trophy, color: "#fb7185", glow: "rgba(251, 113, 133, 0.5)" },
-  first_like: { title: "첫 좋아요", desc: "처음으로 좋아요를 남겼습니다.", icon: Heart, color: "#f87171", glow: "rgba(248, 113, 113, 0.5)" },
-  first_share: { title: "첫 공유", desc: "처음으로 아카이브 카드를 발급/공유했습니다.", icon: Share2, color: "#34d399", glow: "rgba(52, 211, 153, 0.5)" },
-
-  repeat_10: { title: "반복의 의식", desc: "같은 곡을 10번 이상 감상했습니다.", icon: Repeat, color: "#fb7185", glow: "rgba(251, 113, 133, 0.5)" },
-  complete_10: { title: "10번의 완주", desc: "완주(90%+)를 10회 달성했습니다.", icon: Zap, color: "#fbbf24", glow: "rgba(251, 191, 36, 0.5)" },
-  complete_50: { title: "50번의 완주", desc: "완주(90%+)를 50회 달성했습니다.", icon: Zap, color: "#f59e0b", glow: "rgba(245, 158, 11, 0.5)" },
-
-  daily_like_5: { title: "하루 5좋아요", desc: "하루에 5곡 이상 좋아요를 남겼습니다.", icon: Heart, color: "#f87171", glow: "rgba(248, 113, 113, 0.5)" },
-  share_10: { title: "10회 공유", desc: "카드를 10회 발급/공유했습니다.", icon: Navigation, color: "#22d3ee", glow: "rgba(34, 211, 238, 0.5)" },
-  all_tracks_liked: { title: "올 컬렉션", desc: "전체 곡을 좋아요 했습니다.", icon: Medal, color: "#a78bfa", glow: "rgba(167, 139, 250, 0.45)" },
-
-  streak_7: { title: "7일 연속 접속", desc: "7일 연속으로 공간에 머물렀습니다.", icon: Calendar, color: "#fb923c", glow: "rgba(251, 146, 60, 0.5)" },
-  streak_30: { title: "30일 연속 접속", desc: "30일 연속으로 공간에 머물렀습니다.", icon: Star, color: "#fef08a", glow: "rgba(254, 240, 138, 0.5)" },
-  streak_100: { title: "100일 동행", desc: "100일 연속으로 공간에 머물렀습니다.", icon: Star, color: "#ffd600", glow: "rgba(255, 214, 0, 0.45)" },
-
-  day_and_night: { title: "낮과 밤", desc: "낮과 밤 모두 감상했습니다.", icon: Moon, color: "#818cf8", glow: "rgba(129, 140, 248, 0.5)" },
-  weekend_listener: { title: "주말의 여유", desc: "주말에 감상했습니다.", icon: Sparkles, color: "#c084fc", glow: "rgba(192, 132, 252, 0.5)" },
-
-  playlist_trinity: { title: "큐레이션 완주", desc: "OST/CEO/Director’s pick 플레이리스트를 모두 감상했습니다.", icon: Target, color: "#2dd4bf", glow: "rgba(45, 212, 191, 0.5)" },
-};
-
-// ✅ Sticker Book (collective + batch)
-const COLLECTIVE_LIBRARY = {
-  eternal_origin: { title: "Eternal Signal: The Origin", desc: "UNFRAME의 시작을 함께한 개척자", icon: Flame, color: "#ef4444", shape: 'hex' },
-  unframe_genesis: { title: "The Genesis", desc: "갤러리 정식 오픈 멤버", icon: Crown, color: "#fbbf24", shape: 'hex' },
-  new_year_2026: { title: "2026 First Light", desc: "2026년 첫 해돋이 기록", icon: Sunrise, color: "#fb7185", shape: 'hex' },
-  pioneer_26: { title: "Pioneer 26", desc: "프로젝트 초기 개척자", icon: Target, color: "#2dd4bf", shape: 'hex' },
-  insadong_wave: { title: "Insadong First Wave", desc: "인사동 공간의 첫 번째 파동", icon: Sparkles, color: "#3b82f6", shape: 'hex' },
-
-  annual_bronze_2026: { title: "2026 Bronze", desc: "2026년 기록 정산 브론즈", icon: Medal, color: "#cd7f32", shape: 'hex' },
-  annual_silver_2026: { title: "2026 Silver", desc: "2026년 기록 정산 실버", icon: Medal, color: "#c0c0c0", shape: 'hex' },
-  annual_gold_2026: { title: "2026 Gold", desc: "2026년 기록 정산 골드", icon: Trophy, color: "#fbbf24", shape: 'hex' },
-};
+const ACHIEVEMENT_LIBRARY = ACHIEVEMENT_CATALOG;
+const COLLECTIVE_LIBRARY = COLLECTIVE_CATALOG;
 
 // ✅ 6각형 SVG clipPath 쉘
 const HexShell = ({ children, border = "rgba(255,255,255,0.18)", className = "" }) => {
@@ -141,7 +108,7 @@ const StickerItem = memo(function StickerItem({
 
       <AnimatePresence>
         {hoveredSticker === id && (
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0, y: 15, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10 }}
@@ -157,7 +124,7 @@ const StickerItem = memo(function StickerItem({
               </p>
               <div className="absolute top-full left-1/2 -translate-x-1/2 w-3 h-3 bg-[#0c0c0e] border-r border-b border-white/20 rotate-45 -translate-y-1.5" />
             </div>
-          </motion.div>
+          </Motion.div>
         )}
       </AnimatePresence>
     </div>
@@ -383,7 +350,7 @@ export default function Archive({
   if (!user) {
     return (
       <div className="up-themed-page up-archive-page min-h-screen flex items-center justify-center p-6 relative z-30">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center space-y-8 max-w-md">
+        <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center space-y-8 max-w-md">
           <h1 className={`${h1Title} text-6xl lg:text-8xl opacity-10`}>Private<br />Archive</h1>
           <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs leading-relaxed">
             당신의 감상 기록과 수집한 아티팩트를 보관하려면<br />공식 계정 연결이 필요합니다.
@@ -394,18 +361,18 @@ export default function Archive({
           >
             <LogIn size={16} /> Connect Google
           </button>
-        </motion.div>
+        </Motion.div>
       </div>
     );
   }
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="up-themed-page up-archive-page pt-32 lg:pt-40 px-6 lg:px-8 container mx-auto pb-32 lg:pb-40 min-h-screen relative z-20 overflow-visible">
+    <Motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="up-themed-page up-archive-page pt-32 lg:pt-40 px-6 lg:px-8 container mx-auto pb-32 lg:pb-40 min-h-screen relative z-20 overflow-visible">
       {/* ✅ 닉네임 1회 변경 팝업 */}
       <AnimatePresence>
         {isNickModalOpen && (
           <div className="fixed inset-0 z-13000 bg-black/80 backdrop-blur-xl flex items-center justify-center p-6" onClick={() => setIsNickModalOpen(false)}>
-            <motion.div
+            <Motion.div
               initial={{ y: 30, opacity: 0, scale: 0.98 }}
               animate={{ y: 0, opacity: 1, scale: 1 }}
               exit={{ y: 20, opacity: 0, scale: 0.98 }}
@@ -464,7 +431,7 @@ export default function Archive({
                   {nickSaving ? "Saving..." : "Save (1x)"}
                 </button>
               </div>
-            </motion.div>
+            </Motion.div>
           </div>
         )}
       </AnimatePresence>
@@ -473,7 +440,7 @@ export default function Archive({
       <AnimatePresence>
         {isLevelModalOpen && (
           <div className="fixed inset-0 z-12000 bg-black/80 backdrop-blur-xl flex items-center justify-center p-6" onClick={() => setIsLevelModalOpen(false)}>
-            <motion.div
+            <Motion.div
               initial={{ y: 30, opacity: 0, scale: 0.98 }}
               animate={{ y: 0, opacity: 1, scale: 1 }}
               exit={{ y: 20, opacity: 0, scale: 0.98 }}
@@ -561,7 +528,7 @@ export default function Archive({
                   })}
                 </div>
               </div>
-            </motion.div>
+            </Motion.div>
           </div>
         )}
       </AnimatePresence>
@@ -570,7 +537,7 @@ export default function Archive({
 
         {/* Left */}
         <div className="lg:col-span-4 space-y-6 lg:space-y-8 overflow-visible">
-          <motion.div className={`${glass} p-8 lg:p-12 rounded-[4rem] text-center space-y-8 relative border-white/20 shadow-2xl`}>
+          <Motion.div className={`${glass} p-8 lg:p-12 rounded-[4rem] text-center space-y-8 relative border-white/20 shadow-2xl`}>
             <div className="relative inline-block group/profile">
               <div className={`w-32 h-32 lg:w-40 lg:h-40 bg-zinc-900 rounded-full mx-auto flex items-center justify-center relative transition-all duration-700 overflow-visible ${profileBorderStyle}`}>
                 <div className="w-full h-full rounded-full overflow-hidden relative z-10 bg-black flex items-center justify-center">
@@ -678,7 +645,7 @@ export default function Archive({
               <div className="space-y-1"><Share2 className="w-3 h-3 mx-auto text-blue-400" /><p className="text-[7px] font-black text-zinc-600 uppercase">Shares</p><p className="text-lg font-black">{userProfile?.shareCount || 0}</p></div>
               <div className="space-y-1"><Zap className="w-3 h-3 mx-auto text-yellow-400" /><p className="text-[7px] font-black text-zinc-600 uppercase">Rank</p><p className="text-lg font-black">#{myRank}</p></div>
             </div>
-          </motion.div>
+          </Motion.div>
 
           {/* Achievements */}
           <div className={`${glass} p-8 lg:p-10 rounded-[3rem] space-y-6 border-white/10 overflow-visible shadow-2xl`}>
@@ -714,16 +681,16 @@ export default function Archive({
         <div className="lg:col-span-8 space-y-10 overflow-visible">
           <div className="flex gap-8 border-b border-white/10 pb-4 relative z-30">
             <button onClick={() => setActiveTab('hearts')} className={`px-2 py-2 text-[11px] font-black uppercase tracking-[0.4em] transition-all relative ${activeTab === 'hearts' ? 'text-[#004aad]' : 'text-zinc-500 hover:text-white'}`}>
-              01. Hearts {activeTab === 'hearts' && <motion.div layoutId="tab-underline" className="absolute -bottom-4.25 left-0 w-full h-0.75 bg-[#004aad]" />}
+              01. Hearts {activeTab === 'hearts' && <Motion.div layoutId="tab-underline" className="absolute -bottom-4.25 left-0 w-full h-0.75 bg-[#004aad]" />}
             </button>
             <button onClick={() => setActiveTab('stickers')} className={`px-2 py-2 text-[11px] font-black uppercase tracking-[0.4em] transition-all relative ${activeTab === 'stickers' ? 'text-[#004aad]' : 'text-zinc-500 hover:text-white'}`}>
-              02. Sticker Book {activeTab === 'stickers' && <motion.div layoutId="tab-underline" className="absolute -bottom-4.25 left-0 w-full h-0.75 bg-[#004aad]" />}
+              02. Sticker Book {activeTab === 'stickers' && <Motion.div layoutId="tab-underline" className="absolute -bottom-4.25 left-0 w-full h-0.75 bg-[#004aad]" />}
             </button>
           </div>
 
           <AnimatePresence mode="wait">
             {activeTab === 'hearts' ? (
-              <motion.section
+              <Motion.section
                 key="hearts"
                 initial={{ opacity: 0, x: -30, rotateY: 10 }}
                 animate={{ opacity: 1, x: 0, rotateY: 0 }}
@@ -756,9 +723,9 @@ export default function Archive({
                     );
                   })}
                 </div>
-              </motion.section>
+              </Motion.section>
             ) : (
-              <motion.section
+              <Motion.section
                 key="stickers"
                 initial={{ opacity: 0, x: 30, rotateY: -15 }}
                 animate={{ opacity: 1, x: 0, rotateY: 0 }}
@@ -775,15 +742,15 @@ export default function Archive({
                     <div className="text-right">
                       <p className="text-4xl font-black italic text-white">
                         {collectiveCount}
-                        <span className="text-xl text-zinc-600 ml-1">/ 30</span>
+                        <span className="text-xl text-zinc-600 ml-1">/ {STICKER_SLOT_COUNT}</span>
                       </p>
                     </div>
                   </div>
 
                   <div className="h-4 bg-black/40 rounded-full overflow-hidden p-1 border border-white/5 shadow-inner">
-                    <motion.div
+                    <Motion.div
                       initial={{ width: 0 }}
-                      animate={{ width: `${Math.min((collectiveCount / 30) * 100, 100)}%` }}
+                      animate={{ width: `${Math.min((collectiveCount / STICKER_SLOT_COUNT) * 100, 100)}%` }}
                       className="h-full bg-linear-to-r from-[#fb7185] via-[#fbbf24] to-[#34d399] rounded-full shadow-[0_0_20px_rgba(251,113,133,0.6)]"
                     />
                   </div>
@@ -803,7 +770,7 @@ export default function Archive({
                     />
                   ))}
 
-                  {[...Array(25)].map((_, i) => (
+                  {[...Array(Math.max(STICKER_SLOT_COUNT - Object.keys(COLLECTIVE_LIBRARY).length, 0))].map((_, i) => (
                     <HexShell key={i} border="rgba(255,255,255,0.06)">
                       <div className="w-full h-full flex items-center justify-center bg-white/2">
                         <Layers size={18} className="text-white/20" />
@@ -811,7 +778,7 @@ export default function Archive({
                     </HexShell>
                   ))}
                 </div>
-              </motion.section>
+              </Motion.section>
             )}
           </AnimatePresence>
         </div>
@@ -835,6 +802,6 @@ export default function Archive({
         @keyframes spin-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .animate-spin-slow { animation: spin-slow 12s linear infinite; }
       `}</style>
-    </motion.div>
+    </Motion.div>
   );
 }

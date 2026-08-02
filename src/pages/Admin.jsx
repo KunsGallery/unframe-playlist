@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ShieldCheck } from "lucide-react";
 import {
   addDoc,
@@ -22,6 +22,7 @@ import {
   createEmptyGatheringPlaylist,
   extractYouTubePlaylistId,
 } from "../utils/youtubePlaylist";
+import { ACHIEVEMENT_CATALOG } from "../constants/rewardCatalog";
 import {
   createEmptyTrack,
   getMissingTrackCurationPatch,
@@ -151,9 +152,14 @@ const gatheringPlaylistsCollectionRef = (db, appId) =>
 const gatheringPlaylistDocRef = (db, appId, id) =>
   doc(db, "artifacts", appId, "public", "data", "gathering_playlists", id);
 
+const userProfileDocRef = (db, appId, uid) =>
+  doc(db, "artifacts", appId, "users", uid, "profile", "stats");
+
+const publicUserDocRef = (db, appId, uid) =>
+  doc(db, "artifacts", appId, "public_stats", uid);
+
 export default function Admin({
   isAdmin,
-  user,
   signInWithPopup,
   tracks = [],
   playlists = [],
@@ -250,7 +256,7 @@ export default function Admin({
     fetchData();
   }, [db, isAdmin, appId]);
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     if (!isAdmin || !db) return;
     setIsLoadingUsers(true);
     try {
@@ -263,11 +269,11 @@ export default function Admin({
     } finally {
       setIsLoadingUsers(false);
     }
-  };
+  }, [isAdmin, db, appId, setAuthError]);
 
   useEffect(() => {
     if (activeTab === "users" && isAdmin) fetchUsers();
-  }, [activeTab, isAdmin]);
+  }, [activeTab, isAdmin, fetchUsers]);
 
   const filteredUsers = useMemo(() => {
     const term = userSearchTerm.toLowerCase().trim();
@@ -285,28 +291,29 @@ export default function Admin({
     () => normalizeRewardIds(selectedUserForSticker?.rewards || []),
     [selectedUserForSticker?.rewards]
   );
+  const selectedUserId = selectedUserForSticker?.id;
 
   useEffect(() => {
     const fetchSelectedUserStats = async () => {
-      if (!selectedUserForSticker?.id || !db) return;
+      if (!selectedUserId || !db) return;
 
       try {
-        const ref = doc(db, "artifacts", appId, "public_stats", selectedUserForSticker.id);
+        const ref = userProfileDocRef(db, appId, selectedUserId);
         const snap = await getDoc(ref);
         if (!snap.exists()) return;
 
-        const latest = { id: snap.id, ...snap.data() };
-        setSelectedUserForSticker(latest);
-        setNicknameDraft(latest.nickname || "");
-        setLevelOverrideName(latest.levelOverrideName || "");
-        setLevelOverrideColor(latest.levelOverrideColor || "");
+        const data = snap.data() || {};
+        setSelectedUserForSticker((current) => ({ ...current, ...data, id: selectedUserId }));
+        setNicknameDraft(data.nickname || "");
+        setLevelOverrideName(data.levelOverrideName || "");
+        setLevelOverrideColor(data.levelOverrideColor || "");
       } catch (e) {
         console.error("선택 유저 불러오기 실패:", e);
       }
     };
 
     fetchSelectedUserStats();
-  }, [selectedUserForSticker?.id, db, appId]);
+  }, [selectedUserId, db, appId]);
 
   if (!isAdmin) {
     return (
@@ -661,36 +668,64 @@ export default function Admin({
     }
   };
 
-  const saveSelectedUser = async (payload) => {
+  const saveSelectedPublicUser = async (payload, successMessage = "유저 정보 저장 완료") => {
     if (!selectedUserForSticker?.id) return;
     try {
       await setDoc(
-        doc(db, "artifacts", appId, "public_stats", selectedUserForSticker.id),
+        publicUserDocRef(db, appId, selectedUserForSticker.id),
         payload,
         { merge: true }
       );
       setSelectedUserForSticker((prev) => ({ ...prev, ...payload }));
-      setToastMessage?.("유저 정보 저장 완료");
+      setToastMessage?.(successMessage);
     } catch (e) {
       console.error(e);
       setAuthError?.("유저 정보 저장 실패");
     }
   };
 
+  const saveSelectedProfile = async (payload, successMessage = "사용자 보상 저장 완료") => {
+    if (!selectedUserForSticker?.id) return;
+    try {
+      await setDoc(
+        userProfileDocRef(db, appId, selectedUserForSticker.id),
+        payload,
+        { merge: true }
+      );
+      setSelectedUserForSticker((prev) => ({ ...prev, ...payload }));
+      setToastMessage?.(successMessage);
+    } catch (e) {
+      console.error(e);
+      setAuthError?.("사용자 프로필 저장 실패");
+    }
+  };
+
   const handleSaveNicknameAndLevel = async () => {
     if (!selectedUserForSticker) return;
-    await saveSelectedUser({
+    const payload = {
       nickname: nicknameDraft,
       levelOverrideName,
       levelOverrideColor,
-    });
+    };
+
+    try {
+      await Promise.all([
+        setDoc(userProfileDocRef(db, appId, selectedUserForSticker.id), payload, { merge: true }),
+        setDoc(publicUserDocRef(db, appId, selectedUserForSticker.id), payload, { merge: true }),
+      ]);
+      setSelectedUserForSticker((prev) => ({ ...prev, ...payload }));
+      setToastMessage?.("유저 프로필 저장 완료");
+    } catch (e) {
+      console.error(e);
+      setAuthError?.("유저 프로필 저장 실패");
+    }
   };
 
   const handleToggleRankingHidden = async () => {
     if (!selectedUserForSticker) return;
-    await saveSelectedUser({
+    await saveSelectedPublicUser({
       isRankingHidden: !selectedUserForSticker?.isRankingHidden,
-    });
+    }, "랭킹 노출 설정 저장 완료");
   };
 
   const toggleSticker = async (stickerId) => {
@@ -702,14 +737,73 @@ export default function Admin({
       ? removeRewardById(currentRewards, stickerId)
       : addRewardObject(currentRewards, stickerId, { adminGranted: true });
 
-    await saveSelectedUser({ rewards: nextRewards });
+    await saveSelectedProfile({ rewards: nextRewards }, exists ? "보상 회수 완료" : "보상 지급 완료");
+
+    await setDoc(
+      publicUserDocRef(db, appId, selectedUserForSticker.id),
+      { rewardCount: nextRewards.length },
+      { merge: true }
+    ).catch(() => {});
   };
 
   const runAnnualSettlement = async () => {
     if (!settleYear || !db) return;
     setIsSettling(true);
     try {
-      setToastMessage?.(`${settleYear} 배치 정산은 현재 구조상 수동 기준으로 운영합니다.`);
+      const targetYear = Number(settleYear);
+      if (targetYear !== 2026) {
+        setAuthError?.("현재 연간 스티커는 2026년 정산만 지원합니다.");
+        return;
+      }
+
+      const publicUsersSnapshot = await getDocs(
+        collection(db, "artifacts", appId, "public_stats")
+      );
+      const annualIds = [
+        "annual_bronze_2026",
+        "annual_silver_2026",
+        "annual_gold_2026",
+      ];
+      let grantedCount = 0;
+
+      for (const userDoc of publicUsersSnapshot.docs) {
+        const profileRef = userProfileDocRef(db, appId, userDoc.id);
+        const profileSnapshot = await getDoc(profileRef);
+        if (!profileSnapshot.exists()) continue;
+
+        const profile = profileSnapshot.data() || {};
+        const rewards = asObjectRewards(profile.rewards || []);
+        const achievementCount = rewards.filter((reward) =>
+          Number(reward?.year) === targetYear && Boolean(ACHIEVEMENT_CATALOG[reward?.id])
+        ).length;
+
+        const tierId = achievementCount >= 20
+          ? "annual_gold_2026"
+          : achievementCount >= 10
+            ? "annual_silver_2026"
+            : achievementCount >= 5
+              ? "annual_bronze_2026"
+              : null;
+
+        const withoutAnnualTier = rewards.filter((reward) => !annualIds.includes(reward?.id));
+        const nextRewards = tierId
+          ? addRewardObject(withoutAnnualTier, tierId, {
+              annualSettlement: true,
+              achievementCount,
+              year: targetYear,
+            })
+          : withoutAnnualTier;
+
+        await setDoc(profileRef, { rewards: nextRewards }, { merge: true });
+        await setDoc(
+          publicUserDocRef(db, appId, userDoc.id),
+          { rewardCount: nextRewards.length },
+          { merge: true }
+        );
+        if (tierId) grantedCount += 1;
+      }
+
+      setToastMessage?.(`${targetYear} 연간 정산 완료 · ${grantedCount}명 스티커 지급`);
     } catch (e) {
       console.error(e);
       setAuthError?.("배치 정산 실패");

@@ -179,7 +179,6 @@ const AppRoutes = memo(function AppRoutes({
         element={
           <Admin
             isAdmin={isAdmin}
-            user={user}
             tracks={tracks}
             playlists={playlists}
             gatheringPlaylists={gatheringPlaylists}

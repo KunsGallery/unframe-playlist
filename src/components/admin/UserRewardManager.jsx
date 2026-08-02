@@ -1,56 +1,11 @@
+import { Loader2, Search, Star } from "lucide-react";
 import {
-  Calendar,
-  Crown,
-  Flame,
-  Heart,
-  Loader2,
-  Medal,
-  Moon,
-  Music,
-  Repeat,
-  Search,
-  Share2,
-  Sparkles,
-  Star,
-  Sunrise,
-  Target,
-  Trophy,
-  Waves,
-  Zap,
-} from "lucide-react";
+  ACHIEVEMENT_CATALOG,
+  COLLECTIVE_CATALOG,
+} from "../../constants/rewardCatalog";
 
 const glass =
   "bg-white/[0.03] backdrop-blur-[40px] border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]";
-
-const ACHIEVEMENT_DATA = {
-  first_listen: { title: "첫 감상", icon: Music, color: "#a78bfa" },
-  first_complete: { title: "첫 완주", icon: Trophy, color: "#fb7185" },
-  first_like: { title: "첫 좋아요", icon: Heart, color: "#f87171" },
-  first_share: { title: "첫 공유", icon: Share2, color: "#34d399" },
-  repeat_10: { title: "반복의 의식", icon: Repeat, color: "#fb7185" },
-  complete_10: { title: "10번의 완주", icon: Zap, color: "#fbbf24" },
-  complete_50: { title: "50번의 완주", icon: Zap, color: "#f59e0b" },
-  daily_like_5: { title: "하루 5좋아요", icon: Heart, color: "#f87171" },
-  share_10: { title: "10회 공유", icon: Share2, color: "#22d3ee" },
-  all_tracks_liked: { title: "올 컬렉션", icon: Medal, color: "#a78bfa" },
-  streak_7: { title: "7일 연속", icon: Calendar, color: "#fb923c" },
-  streak_30: { title: "30일 연속", icon: Star, color: "#fef08a" },
-  streak_100: { title: "100일 동행", icon: Star, color: "#ffd600" },
-  day_and_night: { title: "낮과 밤", icon: Moon, color: "#818cf8" },
-  weekend_listener: { title: "주말의 여유", icon: Sparkles, color: "#c084fc" },
-  playlist_trinity: { title: "큐레이션 완주", icon: Target, color: "#2dd4bf" },
-};
-
-const COLLECTIVE_DATA = {
-  eternal_origin: { title: "The Origin (초기멤버)", icon: Flame, color: "#ef4444" },
-  unframe_genesis: { title: "The Genesis", icon: Crown, color: "#fbbf24" },
-  new_year_2026: { title: "2026 First Light", icon: Sunrise, color: "#fb7185" },
-  pioneer_26: { title: "Pioneer 26", icon: Target, color: "#2dd4bf" },
-  insadong_wave: { title: "Insadong Wave", icon: Waves, color: "#3b82f6" },
-  annual_bronze_2026: { title: "2026 Bronze", icon: Medal, color: "#cd7f32" },
-  annual_silver_2026: { title: "2026 Silver", icon: Medal, color: "#c0c0c0" },
-  annual_gold_2026: { title: "2026 Gold", icon: Trophy, color: "#fbbf24" },
-};
 
 export default function UserRewardManager({
   allUsers,
@@ -187,7 +142,7 @@ export default function UserRewardManager({
             <div className="space-y-4">
               <h3 className="text-xl font-black uppercase">Achievements & Stickers</h3>
               <div className="grid md:grid-cols-2 gap-3">
-                {Object.entries({ ...ACHIEVEMENT_DATA, ...COLLECTIVE_DATA }).map(([id, meta]) => {
+                {Object.entries({ ...ACHIEVEMENT_CATALOG, ...COLLECTIVE_CATALOG }).map(([id, meta]) => {
                   const Icon = meta.icon || Star;
                   const active = selectedUserRewardIds.has(id);
                   return (
@@ -204,9 +159,12 @@ export default function UserRewardManager({
                         </div>
                         <div>
                           <p className="font-black uppercase tracking-tight">{meta.title}</p>
-                          <p className="text-[10px] text-zinc-500 uppercase tracking-widest">{id}</p>
+                          <p className="text-[10px] text-zinc-500 uppercase tracking-widest">
+                            {meta.type === "achievement" ? "Auto achievement" : "Collectible sticker"} · {id}
+                          </p>
                         </div>
                       </div>
+                      <p className="mb-3 text-xs leading-relaxed text-zinc-500">{meta.desc}</p>
                       <p className={`text-[10px] font-black uppercase tracking-widest ${active ? "text-[#8db4ff]" : "text-zinc-600"}`}>
                         {active ? "Granted" : "Not Granted"}
                       </p>
@@ -218,6 +176,9 @@ export default function UserRewardManager({
 
             <div className="border-t border-white/10 pt-8 space-y-4">
               <h3 className="text-xl font-black uppercase">Annual Settlement</h3>
+              <p className="text-xs leading-relaxed text-zinc-500">
+                해당 연도 자동 어치브먼트 5개는 Bronze, 10개는 Silver, 20개는 Gold 스티커를 지급합니다.
+              </p>
               <div className="flex flex-wrap items-center gap-3">
                 <input
                   value={settleYear}
