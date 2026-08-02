@@ -86,6 +86,7 @@ const FullPlayer = ({
   const [isVolumeOpen, setIsVolumeOpen] = useState(false);
 
   const isLiked = userLikes.includes(currentTrack.id);
+  const artworkSrc = currentTrack.image || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17";
 
   useEffect(() => {
     if (playerView === 'lyrics' && activeLyricIdx !== -1 && lyricsContainerRef.current) {
@@ -178,15 +179,24 @@ const FullPlayer = ({
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="w-full aspect-square max-w-md rounded-[2.5rem] lg:rounded-[4rem] overflow-hidden shadow-2xl shadow-black/50 border border-white/5 bg-zinc-900 mx-6"
+              className="up-player-artwork w-full aspect-square max-w-md mx-6"
               onClick={() => setPlayerView('lyrics')}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') setPlayerView('lyrics');
+              }}
+              role="button"
+              tabIndex={0}
+              aria-label="앨범 아트를 눌러 가사 보기"
             >
-              <img
-                src={currentTrack.image || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17"}
-                loading="lazy"
-                className="w-full h-full object-cover"
-                alt="Album Cover"
-              />
+              <div className={`up-vinyl-disc ${isPlaying && !isBuffering ? 'is-playing' : ''}`} aria-hidden="true">
+                <span className="up-vinyl-disc__shine" />
+                <span className="up-vinyl-label"><img src={artworkSrc} alt="" /></span>
+                <span className="up-vinyl-spindle" />
+              </div>
+              <div className="up-vinyl-sleeve">
+                <img src={artworkSrc} loading="lazy" alt={`${currentTrack.title} album cover`} />
+                <span className="up-vinyl-sleeve__edge">UP · UNFRAME PLAYLIST</span>
+              </div>
             </motion.div>
           )}
 

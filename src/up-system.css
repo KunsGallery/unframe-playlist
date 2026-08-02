@@ -342,6 +342,14 @@ button, a { -webkit-tap-highlight-color: transparent; }
   filter: blur(22px); mix-blend-mode: multiply;
 }
 .up-full-player__sheet > *:not(.up-player-paint) { position: relative; z-index: 1; }
+.up-player-artwork {
+  position: relative; overflow: hidden; border: 1px solid var(--up-line); border-radius: 2.5rem;
+  background: var(--up-paper-2); box-shadow: 0 24px 60px rgba(17,17,15,.25); cursor: pointer;
+}
+.up-vinyl-sleeve { position: absolute; inset: 0; overflow: hidden; background: var(--up-paper-2); }
+.up-vinyl-sleeve > img { width: 100%; height: 100%; object-fit: cover; }
+.up-vinyl-sleeve__edge { display: none; }
+.up-vinyl-disc { display: none; }
 
 @media (min-width: 901px) {
   .up-full-player {
@@ -369,10 +377,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
     grid-column: 1; grid-row: 2; max-width: none; height: 100%; padding: 28px;
     border-right: 1px solid var(--up-ink); background: var(--up-blue);
   }
-  .up-full-player__visual > div[key="cover"] { max-width: 100%; }
   .up-full-player__visual > div { max-height: 100%; }
-  .up-full-player__visual img { border-radius: inherit; }
-  .up-full-player__visual .rounded-\[4rem\] { border-radius: 24px; }
   .up-full-player__visual [class*="h-[60vh]"] { height: 100%; padding-inline: 10px; }
   .up-full-player__visual [class*="pt-[20vh]"] { padding-top: 45%; }
   .up-full-player__controls {
@@ -383,7 +388,49 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .up-full-player__controls > div:nth-child(3) { max-width: 470px; margin-inline: auto; }
   .up-full-player__controls .w-24.h-24 { width: 82px; height: 82px; }
   .up-full-player__close { width: 48px; height: 48px; margin-left: 0; box-shadow: 4px 4px 0 var(--up-lime); }
+  .up-player-artwork {
+    width: min(84%, 500px); max-width: none; aspect-ratio: 1.12 / 1; margin-inline: auto !important; overflow: visible;
+    border: 0; border-radius: 0; background: transparent; box-shadow: none;
+  }
+  .up-vinyl-sleeve {
+    z-index: 2; inset: 7% auto auto -3%; width: 75%; aspect-ratio: 1; padding: 9px 9px 25px;
+    border: 1px solid rgba(255,255,255,.28); border-radius: 4px; background: #11110f;
+    box-shadow: 16px 20px 42px rgba(5,5,5,.42), 5px 5px 0 var(--up-lime);
+    transform: rotate(-1.2deg); transition: transform .35s ease;
+  }
+  .up-player-artwork:hover .up-vinyl-sleeve { transform: rotate(-2deg) translateX(-3px); }
+  .up-vinyl-sleeve > img { border-radius: 1px; }
+  .up-vinyl-sleeve__edge {
+    position: absolute; right: 10px; bottom: 7px; left: 10px; display: block; overflow: hidden;
+    color: #a4a49e; font: 800 7px ui-monospace, monospace; letter-spacing: .17em; white-space: nowrap;
+  }
+  .up-vinyl-disc {
+    position: absolute; z-index: 1; top: 15%; right: -10%; width: 72%; aspect-ratio: 1; display: block;
+    border: 1px solid rgba(255,255,255,.24); border-radius: 50%;
+    background:
+      repeating-radial-gradient(circle at center, transparent 0 3px, rgba(255,255,255,.055) 3.5px 4px),
+      radial-gradient(circle at center, #242422 0 7%, #0b0b0a 8% 58%, #1b1b19 72%, #050505 100%);
+    box-shadow: 13px 18px 34px rgba(5,5,5,.48), inset 0 0 22px rgba(255,255,255,.08);
+    animation: up-vinyl-spin 12s linear infinite; animation-play-state: paused;
+    will-change: transform;
+  }
+  .up-vinyl-disc.is-playing { animation-play-state: running; }
+  .up-vinyl-disc__shine {
+    position: absolute; inset: 3%; border-radius: 50%;
+    background: conic-gradient(from 25deg, transparent 0 15%, rgba(255,255,255,.13) 19%, transparent 27% 58%, rgba(255,255,255,.08) 63%, transparent 72%);
+    -webkit-mask: radial-gradient(circle, transparent 0 23%, black 24% 100%);
+    mask: radial-gradient(circle, transparent 0 23%, black 24% 100%);
+  }
+  .up-vinyl-label {
+    position: absolute; z-index: 2; top: 50%; left: 50%; width: 38%; aspect-ratio: 1;
+    overflow: hidden; border: 3px solid #0b0b0a; border-radius: 50%; transform: translate(-50%,-50%);
+    background: var(--up-orange); box-shadow: 0 0 0 1px rgba(255,255,255,.32);
+  }
+  .up-vinyl-label img { width: 100%; height: 100%; object-fit: cover; }
+  .up-vinyl-spindle { position: absolute; z-index: 3; top: 50%; left: 50%; width: 9px; height: 9px; border: 2px solid #111; border-radius: 50%; background: #ece8da; transform: translate(-50%,-50%); }
 }
+
+@keyframes up-vinyl-spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 900px) {
   .up-mini-player { right: 10px; bottom: calc(74px + env(safe-area-inset-bottom)); left: 10px; }
