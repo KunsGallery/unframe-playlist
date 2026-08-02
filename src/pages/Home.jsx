@@ -3,17 +3,25 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowUpRight,
+  CalendarDays,
   Disc3,
   Heart,
+  MapPin,
   Pause,
   Play,
   Search,
   Share2,
   Sparkles,
   Trophy,
+  Youtube,
 } from "lucide-react";
 import { doc, getDoc } from "firebase/firestore";
 import PlaylistModal from "../components/home/PlaylistModal";
+import GatheringPlaylistModal from "../components/home/GatheringPlaylistModal";
+import {
+  formatGatheringDate,
+  getGatheringSortTime,
+} from "../utils/youtubePlaylist";
 
 const safeSrc = (v) => (typeof v === "string" && v.trim() ? v : null);
 const hideBrokenImage = (event) => {
@@ -144,6 +152,7 @@ const dedupeRankingUsers = (users = [], scoreKey = DEFAULT_RANKING_THEME.scoreKe
 export default function Home({
   tracks = [],
   playlists = [],
+  gatheringPlaylists = [],
   isPlaying = false,
   currentTrack,
   playTrack,
@@ -154,6 +163,7 @@ export default function Home({
   siteConfig,
   rankingTheme,
   allUsers = [],
+  pauseForExternalPlayback,
 }) {
   const [featuredData, setFeaturedData] = useState(null);
   const [featuredTrack, setFeaturedTrack] = useState(null);
@@ -161,6 +171,7 @@ export default function Home({
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedGenre, setSelectedGenre] = useState("All");
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
+  const [selectedGatheringPlaylist, setSelectedGatheringPlaylist] = useState(null);
   const [heroIndex, setHeroIndex] = useState(0);
   const [rankingIndex, setRankingIndex] = useState(0);
   const [activeMood, setActiveMood] = useState(null);
@@ -562,6 +573,13 @@ export default function Home({
       .slice(0, 10);
   }, [playlists, genrePlaylists]);
 
+  const publishedGatheringPlaylists = useMemo(() => {
+    return [...(gatheringPlaylists || [])]
+      .filter((playlist) => playlist?.isPublished !== false && playlist?.youtubePlaylistId)
+      .sort((a, b) => getGatheringSortTime(b) - getGatheringSortTime(a))
+      .slice(0, 12);
+  }, [gatheringPlaylists]);
+
   const heroImage = currentHero?.coverImage || currentHero?.backgroundImage || currentHero?.items?.[0]?.image || "";
 
   return (
@@ -570,6 +588,10 @@ export default function Home({
         normalizedSelectedPlaylist={normalizedSelectedPlaylist}
         setSelectedPlaylist={setSelectedPlaylist}
         safePlay={safePlay}
+      />
+      <GatheringPlaylistModal
+        playlist={selectedGatheringPlaylist}
+        onClose={() => setSelectedGatheringPlaylist(null)}
       />
 
       <section className="up-hero" aria-labelledby="up-hero-title">
@@ -644,6 +666,44 @@ export default function Home({
           })}
         </div>
       </section>
+
+      {publishedGatheringPlaylists.length > 0 && (
+        <section id="gatherings" className="up-section up-section--gatherings">
+          <div className="up-section__head">
+            <div><p className="up-kicker">Music left in the room</p><h2>Playlists from the room</h2></div>
+            <p>언프레임의 오프라인 모임이 끝난 뒤에도 남아 있는 음악. 그날의 공간과 사람을 플레이리스트로 기록합니다.</p>
+          </div>
+
+          <div className="up-gatherings">
+            {publishedGatheringPlaylists.map((playlist, index) => (
+              <button
+                type="button"
+                className="up-gathering-card"
+                key={playlist.id}
+                onClick={() => {
+                  pauseForExternalPlayback?.();
+                  setSelectedGatheringPlaylist(playlist);
+                }}
+                aria-label={`${playlist.title || "UNFRAME 모임"} 유튜브 플레이리스트 열기`}
+              >
+                <span className={`up-gathering-card__cover ${playlist.image ? "" : "is-fallback"}`}>
+                  {playlist.image && <img src={playlist.image} alt="" loading="lazy" onError={hideBrokenImage} />}
+                  <i><Youtube aria-hidden="true" /> PLAY ON YOUTUBE</i>
+                </span>
+                <span className="up-gathering-card__body">
+                  <small>ROOM LOG · {String(index + 1).padStart(2, "0")}</small>
+                  <strong>{playlist.title || "UNFRAME GATHERING PLAYLIST"}</strong>
+                  <span>
+                    <em><CalendarDays aria-hidden="true" /> {formatGatheringDate(playlist.eventDate)}</em>
+                    {playlist.location && <em><MapPin aria-hidden="true" /> {playlist.location}</em>}
+                  </span>
+                  <b><Play aria-hidden="true" /> OPEN PLAYLIST</b>
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="up-section up-discovery">
         <div className="up-catalog">

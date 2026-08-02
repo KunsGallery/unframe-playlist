@@ -38,6 +38,7 @@ export function useAppDataSync({
   setTracks,
   setCurrentQueue,
   setPlaylists,
+  setGatheringPlaylists,
   setUserLikes,
   setSiteConfig,
 
@@ -119,6 +120,11 @@ export function useAppDataSync({
       (snap) => setPlaylists(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
     );
 
+    const unsubGatheringPlaylists = onSnapshot(
+      query(collection(db, "artifacts", appId, "public", "data", "gathering_playlists")),
+      (snap) => setGatheringPlaylists(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+    );
+
     const unsubLikes = onSnapshot(
       collection(db, "artifacts", appId, "users", user.uid, "likes"),
       (snap) => setUserLikes(snap.docs.map((d) => d.id))
@@ -135,6 +141,7 @@ export function useAppDataSync({
       unsubPublicUsers();
       unsubTracks();
       unsubPlaylists();
+      unsubGatheringPlaylists();
       unsubLikes();
     };
   }, [
@@ -150,6 +157,7 @@ export function useAppDataSync({
     setTracks,
     setCurrentQueue,
     setPlaylists,
+    setGatheringPlaylists,
     setUserLikes,
     setSiteConfig,
     engineRef,

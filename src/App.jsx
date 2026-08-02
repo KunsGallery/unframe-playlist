@@ -94,6 +94,7 @@ const INITIAL_USER_PROFILE = {
 const AppRoutes = memo(function AppRoutes({
   publicTracks,
   playlists,
+  gatheringPlaylists,
   isPlaying,
   currentTrack,
   playTrack,
@@ -112,6 +113,7 @@ const AppRoutes = memo(function AppRoutes({
   isAdmin,
   setToastMessage,
   setIsPlayerExpanded,
+  pauseForExternalPlayback,
   appId,
 }) {
   return (
@@ -122,6 +124,7 @@ const AppRoutes = memo(function AppRoutes({
           <Home
             tracks={publicTracks}
             playlists={playlists}
+            gatheringPlaylists={gatheringPlaylists}
             isPlaying={isPlaying}
             currentTrack={currentTrack}
             playTrack={playTrack}
@@ -133,6 +136,7 @@ const AppRoutes = memo(function AppRoutes({
             siteConfig={siteConfig}
             allUsers={allUsers}
             rankingTheme={rankingTheme}
+            pauseForExternalPlayback={pauseForExternalPlayback}
           />
         }
       />
@@ -178,6 +182,7 @@ const AppRoutes = memo(function AppRoutes({
             user={user}
             tracks={tracks}
             playlists={playlists}
+            gatheringPlaylists={gatheringPlaylists}
             db={db}
             appId={appId}
             setToastMessage={setToastMessage}
@@ -197,6 +202,7 @@ export default function App() {
 
   const [tracks, setTracks] = useState([]);
   const [playlists, setPlaylists] = useState([]);
+  const [gatheringPlaylists, setGatheringPlaylists] = useState([]);
   const [userLikes, setUserLikes] = useState([]);
 
   const [userProfile, setUserProfile] = useState(INITIAL_USER_PROFILE);
@@ -517,6 +523,7 @@ export default function App() {
     setTracks,
     setCurrentQueue,
     setPlaylists,
+    setGatheringPlaylists,
     setUserLikes,
     setSiteConfig,
 
@@ -640,6 +647,12 @@ export default function App() {
     }
   }, [audioRef, isPlaying, setIsPlaying, setIsBuffering]);
 
+  const pauseForExternalPlayback = useCallback(() => {
+    audioRef.current?.pause();
+    setIsPlaying(false);
+    setIsBuffering(false);
+  }, [audioRef, setIsPlaying, setIsBuffering]);
+
   const handleNaturalTrackEnd = useCallback(() => {
     const q = currentQueue || [];
     if (!q.length) return;
@@ -710,6 +723,7 @@ export default function App() {
         <AppRoutes
           publicTracks={publicTracks}
           playlists={playlists}
+          gatheringPlaylists={gatheringPlaylists}
           isPlaying={isPlaying}
           currentTrack={currentTrack}
           playTrack={playTrack}
@@ -728,6 +742,7 @@ export default function App() {
           isAdmin={isAdmin}
           setToastMessage={setToastMessage}
           setIsPlayerExpanded={setIsPlayerExpanded}
+          pauseForExternalPlayback={pauseForExternalPlayback}
           appId={appId}
         />
         </AppShell>

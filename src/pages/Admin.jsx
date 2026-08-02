@@ -15,8 +15,13 @@ import { auth } from "../firebase";
 import AdminTabs from "../components/admin/AdminTabs";
 import TrackManager from "../components/admin/TrackManager";
 import PlaylistManager from "../components/admin/PlaylistManager";
+import GatheringPlaylistManager from "../components/admin/GatheringPlaylistManager";
 import SiteConfigManager from "../components/admin/SiteConfigManager";
 import UserRewardManager from "../components/admin/UserRewardManager";
+import {
+  createEmptyGatheringPlaylist,
+  extractYouTubePlaylistId,
+} from "../utils/youtubePlaylist";
 import {
   createEmptyTrack,
   getMissingTrackCurationPatch,
@@ -31,6 +36,7 @@ const IMGBB_API_KEY = "d1d66a67fff0404d782a4a001dfb40e2";
 const ADMIN_SECTIONS = {
   tracks: { eyebrow: "Audio Library", title: "Tracks", desc: "음원 파일, 커버, 곡 정보와 큐레이션 태그를 관리합니다." },
   playlists: { eyebrow: "Curation Desk", title: "Playlists", desc: "공개 컬렉션을 만들고 곡의 순서와 대표 이미지를 관리합니다." },
+  gatherings: { eyebrow: "Offline Archive", title: "Gatherings", desc: "오프라인 모임의 유튜브 플레이리스트와 홈 노출을 관리합니다." },
   config: { eyebrow: "Exhibition Editor", title: "Page", desc: "홈 히어로, Director’s Pick과 주요 문구를 관리합니다." },
   users: { eyebrow: "Listener Office", title: "Listeners", desc: "회원 정보, 등급과 수집 리워드를 관리합니다." },
 };
@@ -139,12 +145,19 @@ const playlistsCollectionRef = (db, appId) =>
 const playlistDocRef = (db, appId, id) =>
   doc(db, "artifacts", appId, "public", "data", "playlists", id);
 
+const gatheringPlaylistsCollectionRef = (db, appId) =>
+  collection(db, "artifacts", appId, "public", "data", "gathering_playlists");
+
+const gatheringPlaylistDocRef = (db, appId, id) =>
+  doc(db, "artifacts", appId, "public", "data", "gathering_playlists", id);
+
 export default function Admin({
   isAdmin,
   user,
   signInWithPopup,
   tracks = [],
   playlists = [],
+  gatheringPlaylists = [],
   db,
   appId,
   setToastMessage,
@@ -159,6 +172,10 @@ export default function Admin({
   const [newPlaylist, setNewPlaylist] = useState({ title: "", desc: "", image: "", trackIds: [] });
   const [editingPlaylistId, setEditingPlaylistId] = useState(null);
   const [isUploadingPLImg, setIsUploadingPLImg] = useState(false);
+
+  const [newGatheringPlaylist, setNewGatheringPlaylist] = useState(createEmptyGatheringPlaylist);
+  const [editingGatheringPlaylistId, setEditingGatheringPlaylistId] = useState(null);
+  const [isUploadingGatheringImage, setIsUploadingGatheringImage] = useState(false);
 
   const [featuredData, setFeaturedData] = useState({
     headline: "",
@@ -199,6 +216,7 @@ export default function Admin({
   const adminCounts = {
     tracks: tracks.length,
     playlists: playlists.length,
+    gatherings: gatheringPlaylists.length,
     config: Array.isArray(siteConfig.heroSlides) ? siteConfig.heroSlides.length : 0,
     users: allUsers.length,
   };
@@ -379,7 +397,9 @@ export default function Admin({
 
   const handleImageUpload = async (file, setter, fieldName) => {
     if (!file) return;
-    fieldName === "track" ? setIsUploadingImg(true) : setIsUploadingPLImg(true);
+    if (fieldName === "track") setIsUploadingImg(true);
+    else if (fieldName === "gathering") setIsUploadingGatheringImage(true);
+    else setIsUploadingPLImg(true);
 
     try {
       const url = await uploadImageToImgBB(file);
@@ -389,7 +409,9 @@ export default function Admin({
       console.error("이미지 업로드 실패:", error);
       setAuthError?.("이미지 업로드 실패");
     } finally {
-      fieldName === "track" ? setIsUploadingImg(false) : setIsUploadingPLImg(false);
+      if (fieldName === "track") setIsUploadingImg(false);
+      else if (fieldName === "gathering") setIsUploadingGatheringImage(false);
+      else setIsUploadingPLImg(false);
     }
   };
 
@@ -547,6 +569,78 @@ export default function Admin({
     });
   };
 
+  const handleSaveGatheringPlaylist = async () => {
+    const youtubePlaylistId = extractYouTubePlaylistId(
+      newGatheringPlaylist.youtubeUrl || newGatheringPlaylist.youtubePlaylistId
+    );
+
+    if (!youtubePlaylistId) {
+      setAuthError?.("유효한 유튜브 플레이리스트 공유주소를 입력해주세요.");
+      return;
+    }
+
+    try {
+      const payload = {
+        ...newGatheringPlaylist,
+        youtubeUrl: (newGatheringPlaylist.youtubeUrl || "").trim(),
+        youtubePlaylistId,
+        title: (newGatheringPlaylist.title || "").trim() || "UNFRAME GATHERING PLAYLIST",
+        desc: (newGatheringPlaylist.desc || "").trim(),
+        location: (newGatheringPlaylist.location || "").trim() || "UNFRAME",
+        eventDate: newGatheringPlaylist.eventDate || new Date().toISOString().slice(0, 10),
+        image: (newGatheringPlaylist.image || "").trim(),
+        isPublished: newGatheringPlaylist.isPublished !== false,
+        updatedAt: Timestamp.now(),
+      };
+
+      if (editingGatheringPlaylistId) {
+        await updateDoc(
+          gatheringPlaylistDocRef(db, appId, editingGatheringPlaylistId),
+          payload
+        );
+        setToastMessage?.("모임 플레이리스트 수정 완료");
+      } else {
+        await addDoc(gatheringPlaylistsCollectionRef(db, appId), {
+          ...payload,
+          createdAt: Timestamp.now(),
+        });
+        setToastMessage?.("모임 플레이리스트 발행 완료");
+      }
+
+      setNewGatheringPlaylist(createEmptyGatheringPlaylist());
+      setEditingGatheringPlaylistId(null);
+    } catch (error) {
+      console.error(error);
+      setAuthError?.("모임 플레이리스트 저장 실패");
+    }
+  };
+
+  const handleDeleteGatheringPlaylist = async (id) => {
+    if (!window.confirm("이 모임 플레이리스트를 삭제할까요?")) return;
+
+    try {
+      await deleteDoc(gatheringPlaylistDocRef(db, appId, id));
+      if (editingGatheringPlaylistId === id) {
+        setEditingGatheringPlaylistId(null);
+        setNewGatheringPlaylist(createEmptyGatheringPlaylist());
+      }
+      setToastMessage?.("모임 플레이리스트 삭제 완료");
+    } catch (error) {
+      console.error(error);
+      setAuthError?.("모임 플레이리스트 삭제 실패");
+    }
+  };
+
+  const handleEditGatheringPlaylist = (playlist) => {
+    setEditingGatheringPlaylistId(playlist.id);
+    setNewGatheringPlaylist({
+      ...createEmptyGatheringPlaylist(),
+      ...playlist,
+      youtubePlaylistId: playlist.youtubePlaylistId || extractYouTubePlaylistId(playlist.youtubeUrl),
+      isPublished: playlist.isPublished !== false,
+    });
+  };
+
   const handleSaveAllConfig = async () => {
     try {
       await setDoc(
@@ -636,6 +730,7 @@ export default function Admin({
           <div className="up-admin-metrics" aria-label="Content summary">
             <div><span>Tracks</span><strong>{tracks.length}</strong><small>{activeTrackCount} published</small></div>
             <div><span>Playlists</span><strong>{playlists.length}</strong><small>public collections</small></div>
+            <div><span>Gatherings</span><strong>{gatheringPlaylists.length}</strong><small>offline archives</small></div>
             <div><span>Hero</span><strong>{adminCounts.config}</strong><small>page slides</small></div>
           </div>
         </header>
@@ -680,6 +775,25 @@ export default function Admin({
             handleSavePlaylist={handleSavePlaylist}
             handleDeletePlaylist={handleDeletePlaylist}
             handleEditPlaylist={handleEditPlaylist}
+          />
+        )}
+
+        {activeTab === "gatherings" && (
+          <GatheringPlaylistManager
+            gatheringPlaylists={gatheringPlaylists}
+            draft={newGatheringPlaylist}
+            setDraft={setNewGatheringPlaylist}
+            editingId={editingGatheringPlaylistId}
+            setEditingId={setEditingGatheringPlaylistId}
+            isUploadingImage={isUploadingGatheringImage}
+            handleImageUpload={(file) => handleImageUpload(
+              file,
+              (url) => setNewGatheringPlaylist((current) => ({ ...current, image: url })),
+              "gathering"
+            )}
+            handleSave={handleSaveGatheringPlaylist}
+            handleDelete={handleDeleteGatheringPlaylist}
+            handleEdit={handleEditGatheringPlaylist}
           />
         )}
 

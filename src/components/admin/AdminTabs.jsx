@@ -1,9 +1,10 @@
 import React from "react";
-import { ListMusic, Music, Settings2, Users } from "lucide-react";
+import { ListMusic, Music, Settings2, Users, Youtube } from "lucide-react";
 
 const TABS = [
   { id: "tracks", label: "Tracks", desc: "음원·메타데이터", icon: Music },
   { id: "playlists", label: "Playlists", desc: "선곡·재생 순서", icon: ListMusic },
+  { id: "gatherings", label: "Gatherings", desc: "모임·유튜브 플리", icon: Youtube },
   { id: "config", label: "Page", desc: "홈·히어로·문구", icon: Settings2 },
   { id: "users", label: "Listeners", desc: "회원·리워드", icon: Users },
 ];
