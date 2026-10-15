@@ -82,7 +82,7 @@ const notFoundHtml = (message = "Track not found") => `<!doctype html>
 </body>
 </html>`;
 
-exports.handler = async function handler(event) {
+export async function handler(event) {
   const trackId =
     event.queryStringParameters?.id ||
     event.path?.split("/").filter(Boolean).pop();

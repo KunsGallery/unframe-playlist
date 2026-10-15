@@ -18,7 +18,7 @@ const getFirestoreString = (fields, key, fallback = "") => {
   return fallback;
 };
 
-exports.handler = async function handler(event) {
+export async function handler(event) {
   const trackId =
     event.queryStringParameters?.id ||
     event.path.split("/").filter(Boolean).pop();
