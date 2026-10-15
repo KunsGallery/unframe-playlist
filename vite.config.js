@@ -21,7 +21,7 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     // 개발 서버 실행 시 자동으로 브라우저 열기
-    open: true,
+    open: false,
   },
   build: {
     outDir: 'dist',
@@ -34,6 +34,7 @@ export default defineConfig({
         manualChunks: {
           vendor: ['react', 'react-dom', 'firebase/app', 'firebase/auth', 'firebase/firestore'],
           icons: ['lucide-react'],
+          animation: ['framer-motion'],
         },
       },
     },
