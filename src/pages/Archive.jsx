@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { doc, updateDoc, setDoc } from 'firebase/firestore';
 import { LEVELS, getLevelInfo } from '../levels';
+import { achievementProgress } from '../utils/rewardState';
 import {
   ACHIEVEMENT_CATALOG,
   COLLECTIVE_CATALOG,
@@ -54,6 +55,8 @@ const StickerItem = memo(function StickerItem({
   hoveredSticker,
   setHoveredSticker,
   onShareReward,
+  progress,
+  reward,
 }) {
   const isAchievement = type === 'achievement';
   const isCollective = type === 'collective';
@@ -92,6 +95,10 @@ const StickerItem = memo(function StickerItem({
       onMouseEnter={() => setHoveredSticker(id)}
       onMouseLeave={() => setHoveredSticker(null)}
       onClick={(e) => isActive && onShareReward?.(e, id)}
+      role="button" tabIndex={0}
+      aria-label={`${safeTitle}. ${safeDesc}. ${isActive ? '획득 완료. 공유하기' : progress || '미획득'}`}
+      onFocus={() => setHoveredSticker(id)} onBlur={() => setHoveredSticker(null)}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (isActive) onShareReward?.(e, id); else setHoveredSticker(id); } }}
       className={`relative aspect-square flex items-center justify-center transition-opacity duration-300 ${isActive ? 'cursor-pointer' : 'opacity-40 hover:opacity-70'}`}
     >
       <div className={`w-full h-full transition-transform duration-300 ${isActive ? 'hover:scale-110' : ''}`}>
@@ -120,8 +127,10 @@ const StickerItem = memo(function StickerItem({
               </p>
               <h4 className="text-sm font-black text-white mb-1 uppercase tracking-tight">{safeTitle}</h4>
               <p className="text-[10px] leading-relaxed text-zinc-400 font-bold uppercase">
-                {isActive ? safeDesc : "아직 기록되지 않은 순간입니다."}
+                {safeDesc}
               </p>
+              {progress && !isActive && <p className="text-sm text-white mt-2">{progress}</p>}
+              {isActive && reward?.unlockedAt && <p className="text-xs text-white mt-2">{new Date(reward.unlockedAt?.toMillis?.() ?? reward.unlockedAt).toLocaleDateString('ko-KR')} 획득</p>}
               <div className="absolute top-full left-1/2 -translate-x-1/2 w-3 h-3 bg-[#0c0c0e] border-r border-b border-white/20 rotate-45 -translate-y-1.5" />
             </div>
           </Motion.div>
@@ -194,8 +203,9 @@ export default function Archive({
 
   const myRank = useMemo(() => {
     if (!user || !allUsers?.length) return '?';
-    const index = allUsers.findIndex(u => u.id === user.uid);
-    return index === -1 ? allUsers.length + 1 : index + 1;
+    const list = allUsers.filter((u) => !u.isRankingHidden).sort((a, b) => Number(b.listenCount || 0) - Number(a.listenCount || 0));
+    const index = list.findIndex(u => u.id === user.uid);
+    return index >= 0 && index < 3 ? index + 1 : '—';
   }, [user, allUsers]);
 
   const profileBorderStyle = useMemo(() => {
@@ -242,14 +252,8 @@ export default function Archive({
           const ctx = canvas.getContext('2d');
           if (!ctx) { setIsUploadingProfile(false); return; }
 
-          ctx.drawImage(
-            img,
-            Math.max(0, (img.width - 512) / 2),
-            Math.max(0, (img.height - 512) / 2),
-            512, 512,
-            0, 0,
-            512, 512
-          );
+          const crop = Math.min(img.width, img.height);
+          ctx.drawImage(img, (img.width - crop) / 2, (img.height - crop) / 2, crop, crop, 0, 0, 512, 512);
 
           const base64Data = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
           const formData = new FormData();
@@ -664,6 +668,8 @@ export default function Archive({
                   data={data}
                   isActive={rewardIds.has(key)}
                   type="achievement"
+                  progress={achievementProgress(key, userProfile, userLikes.length)}
+                  reward={rewardMap.get(key)}
                   hoveredSticker={hoveredSticker}
                   setHoveredSticker={setHoveredSticker}
                   onShareReward={onShareReward}
@@ -764,6 +770,7 @@ export default function Archive({
                       data={data}
                       isActive={rewardIds.has(key)}
                       type="collective"
+                      reward={rewardMap.get(key)}
                       hoveredSticker={hoveredSticker}
                       setHoveredSticker={setHoveredSticker}
                       onShareReward={onShareReward}

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { motion } from "framer-motion";
+import { motion as Motion } from "framer-motion";
 import { Disc3, Home, Loader2, Play } from "lucide-react";
 
 const glass =
@@ -105,11 +105,10 @@ export default function TrackShareLanding({
 
   useEffect(() => {
     if (visibleTracks.length > 0) {
-      setCanShowEmptyState(true);
-      return undefined;
+      const timer = window.setTimeout(() => setCanShowEmptyState(true), 0);
+      return () => window.clearTimeout(timer);
     }
 
-    setCanShowEmptyState(false);
     const timer = window.setTimeout(() => {
       setCanShowEmptyState(true);
     }, 1200);
@@ -185,7 +184,7 @@ export default function TrackShareLanding({
   }
 
   return (
-    <motion.div
+    <Motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       className="min-h-screen bg-[#050505] text-white pt-32 lg:pt-40 px-6 pb-24 relative overflow-hidden"
@@ -302,6 +301,6 @@ export default function TrackShareLanding({
           </section>
         )}
       </div>
-    </motion.div>
+    </Motion.div>
   );
 }

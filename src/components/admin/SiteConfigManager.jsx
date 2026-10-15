@@ -48,7 +48,7 @@ export default function SiteConfigManager({
   const selectedTrack = useMemo(() => {
     if (!featuredData?.linkedTrackId) return null;
     return tracks.find((track) => track.id === featuredData.linkedTrackId) || null;
-  }, [tracks, featuredData?.linkedTrackId]);
+  }, [tracks, featuredData]);
 
   const updateSiteConfig = (field, value) => {
     setSiteConfig((prev) => ({

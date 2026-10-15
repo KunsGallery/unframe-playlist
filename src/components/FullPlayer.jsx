@@ -1,7 +1,8 @@
 // src/components/FullPlayer.jsx
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { useDialogFocus } from '../hooks/useDialogFocus';
 import { formatTime } from "../utils/PlayerUtils";
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion as Motion, AnimatePresence } from 'framer-motion';
 import {
   Play,
   Pause,
@@ -66,7 +67,6 @@ const FullPlayer = ({
   playTrack,
   playNext,
   playPrev,
-  currentTrackIdx,
   publicTracks,
   isBuffering,
   playerView,
@@ -79,11 +79,16 @@ const FullPlayer = ({
   loopMode,
   toggleLoop,
   isShuffle,
-  toggleShuffle
+  toggleShuffle,
+  onMoveQueue,
+  onRemoveQueue,
 }) => {
   const lyricsContainerRef = useRef(null);
   const listContainerRef = useRef(null);
   const [isVolumeOpen, setIsVolumeOpen] = useState(false);
+  const dialogRef = useRef(null);
+  const closeDialog = useCallback(() => setIsPlayerExpanded(false), [setIsPlayerExpanded]);
+  useDialogFocus(dialogRef, true, closeDialog);
 
   const isLiked = userLikes.includes(currentTrack.id);
   const artworkSrc = currentTrack.image || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17";
@@ -117,7 +122,7 @@ const FullPlayer = ({
   }, [setIsPlayerExpanded]);
 
   return (
-    <motion.div
+    <Motion.div
       key="full-player"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -125,10 +130,11 @@ const FullPlayer = ({
       transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
       className="up-full-player fixed inset-0 z-400 flex flex-col pt-safe-top"
       role="dialog"
+      ref={dialogRef}
       aria-modal="true"
       aria-label={`${currentTrack.title || '현재 곡'} 플레이어`}
     >
-      <motion.button
+      <Motion.button
         type="button"
         className="up-full-player__backdrop"
         onClick={() => setIsPlayerExpanded(false)}
@@ -138,12 +144,12 @@ const FullPlayer = ({
         exit={{ opacity: 0 }}
         transition={{ duration: 0.38 }}
       />
-      <motion.div
+      <Motion.div
         layoutId="up-player-surface"
         className="up-full-player__sheet"
         transition={{ layout: { type: "spring", stiffness: 210, damping: 27, mass: 0.9 } }}
       >
-      <motion.div
+      <Motion.div
         className="up-player-paint"
         aria-hidden="true"
         initial={{ opacity: 0.78, scaleX: 0.04, scaleY: 0.12, y: "42%" }}
@@ -174,7 +180,7 @@ const FullPlayer = ({
       <div className="up-full-player__visual flex-1 overflow-hidden flex flex-col items-center justify-center relative w-full max-w-2xl mx-auto">
         <AnimatePresence mode="wait">
           {playerView === 'cover' && (
-            <motion.div
+            <Motion.div
               key="cover"
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -194,14 +200,14 @@ const FullPlayer = ({
                 <span className="up-vinyl-spindle" />
               </div>
               <div className="up-vinyl-sleeve">
-                <img src={artworkSrc} loading="lazy" alt={`${currentTrack.title} album cover`} />
+                <img src={artworkSrc} loading="lazy" alt={`${currentTrack.title} album cover`} onError={(e) => { if (!e.currentTarget.src.endsWith('/icon.png')) e.currentTarget.src = '/icon.png'; }} />
                 <span className="up-vinyl-sleeve__edge">UP · UNFRAME PLAYLIST</span>
               </div>
-            </motion.div>
+            </Motion.div>
           )}
 
           {playerView === 'lyrics' && (
-            <motion.div
+            <Motion.div
               key="lyrics"
               ref={lyricsContainerRef}
               initial={{ opacity: 0, y: 20 }}
@@ -256,11 +262,11 @@ const FullPlayer = ({
                   </span>
                 </div>
               )}
-            </motion.div>
+            </Motion.div>
           )}
 
           {playerView === 'list' && (
-            <motion.div
+            <Motion.div
               key="list"
               ref={listContainerRef}
               initial={{ opacity: 0, y: 20 }}
@@ -277,12 +283,19 @@ const FullPlayer = ({
                       key={track.id}
                       id={`track-${track.id}`}
                       onClick={() => playTrack(idx, publicTracks)}
+                      role="button" tabIndex={0}
+                      onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); playTrack(idx, publicTracks); } }}
                       className={`flex items-center gap-4 p-4 rounded-2xl cursor-pointer transition-all ${
                         isCurrent
                           ? 'bg-white/10 border border-white/10'
                           : 'hover:bg-white/5 border border-transparent'
                       }`}
                     >
+                      <div className="up-queue-actions" onClick={(e) => e.stopPropagation()}>
+                        <button aria-label={`${track.title} 위로 이동`} disabled={idx === 0} onClick={() => onMoveQueue?.(idx, idx - 1)}>위로</button>
+                        <button aria-label={`${track.title} 아래로 이동`} disabled={idx === publicTracks.length - 1} onClick={() => onMoveQueue?.(idx, idx + 1)}>아래로</button>
+                        <button aria-label={`${track.title} 대기열에서 제거`} disabled={isCurrent} onClick={() => onRemoveQueue?.(idx)}>제거</button>
+                      </div>
                       <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 relative">
                         <img
                           src={track.image}
@@ -312,7 +325,7 @@ const FullPlayer = ({
                   );
                 })}
               </div>
-            </motion.div>
+            </Motion.div>
           )}
         </AnimatePresence>
       </div>
@@ -353,6 +366,7 @@ const FullPlayer = ({
 
           <input
             type="range"
+            aria-label="재생 위치"
             min="0"
             max={duration || 0}
             step="0.1"
@@ -374,6 +388,7 @@ const FullPlayer = ({
         <div className="flex items-center justify-between px-2">
           <button
             onClick={toggleShuffle}
+            aria-label="셔플 재생" aria-pressed={isShuffle}
             className={`p-3 transition-colors ${isShuffle ? 'text-[#004aad]' : 'text-zinc-500 hover:text-white'}`}
           >
             <Shuffle className="w-6 h-6" />
@@ -381,6 +396,7 @@ const FullPlayer = ({
 
           <button
             onClick={playPrev}
+            aria-label="이전 곡"
             className="p-4 text-white hover:scale-110 transition-transform"
           >
             <SkipBack className="w-10 h-10 fill-current" />
@@ -388,6 +404,7 @@ const FullPlayer = ({
 
           <button
             onClick={togglePlay}
+            aria-label={isPlaying ? '일시정지' : '재생'}
             className="w-24 h-24 bg-white text-black rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shadow-2xl"
           >
             {isPlaying ? (
@@ -405,6 +422,7 @@ const FullPlayer = ({
 
           <button
             onClick={playNext}
+            aria-label="다음 곡"
             className="p-4 text-white hover:scale-110 transition-transform"
           >
             <SkipForward className="w-10 h-10 fill-current" />
@@ -412,6 +430,7 @@ const FullPlayer = ({
 
           <button
             onClick={toggleLoop}
+            aria-label={`반복 재생: ${loopMode === 2 ? '한 곡' : loopMode === 1 ? '전체' : '끔'}`}
             className={`p-3 transition-colors ${loopMode > 0 ? 'text-[#004aad]' : 'text-zinc-500 hover:text-white'}`}
           >
             {loopMode === 2 ? (
@@ -463,6 +482,7 @@ const FullPlayer = ({
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => setIsMuted(!isMuted)}
+                    aria-label={isMuted ? '음소거 해제' : '음소거'}
                     className="text-zinc-400 hover:text-white"
                   >
                     {isMuted || volume === 0 ? (
@@ -474,6 +494,7 @@ const FullPlayer = ({
 
                   <input
                     type="range"
+                    aria-label="음량"
                     min="0"
                     max="1"
                     step="0.01"
@@ -504,8 +525,8 @@ const FullPlayer = ({
           </button>
         </div>
       </div>
-      </motion.div>
-    </motion.div>
+      </Motion.div>
+    </Motion.div>
   );
 };
 

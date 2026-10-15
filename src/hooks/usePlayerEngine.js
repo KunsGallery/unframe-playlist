@@ -1,6 +1,7 @@
 // src/hooks/usePlayerEngine.js
 import { useEffect, useCallback, useRef } from "react";
 import { getDirectLink } from "../utils/PlayerUtils";
+import { nextQueueIndex } from '../utils/catalog';
 
 export function usePlayerEngine({
   audioRef,
@@ -20,6 +21,8 @@ export function usePlayerEngine({
   queueRef,
   idxRef,
   playTrackRef,
+  isShuffle,
+  setPlaybackError,
 }) {
   const playRequestRef = useRef(0);
 
@@ -80,6 +83,9 @@ export function usePlayerEngine({
       if (!directUrl) return;
 
       const playId = ++playRequestRef.current;
+      queueRef.current = activeQueue;
+      idxRef.current = targetIdx;
+      setPlaybackError?.('');
 
       try {
         const currentSrc = audio.currentSrc || audio.src || "";
@@ -105,6 +111,9 @@ export function usePlayerEngine({
           startedAt: Date.now(),
           trackId: targetTrack.id,
           playlistKey: context?.playlistKey || context?.playlistId || null,
+          heardSeconds: 0,
+          lastPosition: 0,
+          lastTick: Date.now(),
         };
 
         syncMediaSession(targetTrack, "playing");
@@ -124,7 +133,7 @@ export function usePlayerEngine({
                   trackId: targetTrack.id,
                 });
 
-                if (context?.playlistKey || context?.playlistId) {
+                if (!context?.continuation && (context?.playlistKey || context?.playlistId)) {
                   void emit({
                     type: "playlist_play",
                     playlistKey: context?.playlistKey || null,
@@ -140,6 +149,7 @@ export function usePlayerEngine({
               if (playRequestRef.current !== playId) return;
               setIsPlaying(false);
               setIsBuffering?.(false);
+              setPlaybackError?.(err?.name === 'NotAllowedError' ? '재생 버튼을 눌러 음악을 시작해 주세요.' : '음원을 재생하지 못했습니다. 다시 시도하거나 다음 곡을 선택해 주세요.');
             });
         } else {
           setIsPlaying(true);
@@ -165,6 +175,7 @@ export function usePlayerEngine({
       queueRef,
       idxRef,
       syncMediaSession,
+      setPlaybackError,
     ]
   );
 
@@ -177,20 +188,21 @@ export function usePlayerEngine({
     if (!q.length) return;
 
     const i = idxRef.current || 0;
-    const nextIdx = (i + 1) % q.length;
+    const nextIdx = nextQueueIndex(q.length, i, isShuffle);
 
-    playTrackRef.current?.(nextIdx, q, null);
-  }, [queueRef, idxRef, playTrackRef]);
+    playTrackRef.current?.(nextIdx, q, { playlistKey: playSessionRef.current.playlistKey || null, continuation: true });
+  }, [queueRef, idxRef, playTrackRef, isShuffle, playSessionRef]);
 
   const playPrev = useCallback(() => {
     const q = queueRef.current || [];
     if (!q.length) return;
 
     const i = idxRef.current || 0;
+    if (audioRef.current?.currentTime > 3) { audioRef.current.currentTime = 0; return; }
     const prevIdx = (i - 1 + q.length) % q.length;
 
-    playTrackRef.current?.(prevIdx, q, null);
-  }, [queueRef, idxRef, playTrackRef]);
+    playTrackRef.current?.(prevIdx, q, { playlistKey: playSessionRef.current.playlistKey || null, continuation: true });
+  }, [queueRef, idxRef, playTrackRef, audioRef, playSessionRef]);
 
   useEffect(() => {
     if (!("mediaSession" in navigator)) return;

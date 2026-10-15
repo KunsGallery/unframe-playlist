@@ -1,5 +1,8 @@
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion as Motion } from "framer-motion";
 import { Heart, ListMusic, Play, X } from "lucide-react";
+import { useRef, useCallback } from 'react';
+import { useDialogFocus } from '../../hooks/useDialogFocus';
+import ArchiveShareTools from '../ArchiveShareTools';
 
 const glass = "bg-white/[0.03] backdrop-blur-[40px] border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]";
 
@@ -10,24 +13,28 @@ export default function PlaylistModal({
   setSelectedPlaylist,
   safePlay,
 }) {
+  const dialogRef = useRef(null);
+  const close = useCallback(() => setSelectedPlaylist(null), [setSelectedPlaylist]);
+  useDialogFocus(dialogRef, Boolean(normalizedSelectedPlaylist), close);
   return (
     <AnimatePresence>
       {normalizedSelectedPlaylist && (
-        <motion.div
+        <Motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-500 bg-black/95 flex items-center justify-center p-6 backdrop-blur-3xl"
+          ref={dialogRef} role="dialog" aria-modal="true" aria-label={normalizedSelectedPlaylist.title || '플레이리스트'}
           onClick={() => setSelectedPlaylist(null)}
         >
-          <motion.div
+          <Motion.div
             initial={{ scale: 0.9, y: 50 }}
             animate={{ scale: 1, y: 0 }}
             exit={{ scale: 0.9, y: 50 }}
             className={`${glass} w-full max-w-4xl h-[80vh] rounded-[3rem] p-8 lg:p-12 border-white/20 shadow-2xl flex flex-col relative overflow-hidden`}
             onClick={(e) => e.stopPropagation()}
           >
-            <button onClick={() => setSelectedPlaylist(null)} className="absolute top-8 right-8 p-3 rounded-full bg-white/5 hover:bg-white/20 transition-all">
+            <button aria-label="플레이리스트 닫기" onClick={() => setSelectedPlaylist(null)} className="absolute top-8 right-8 p-3 rounded-full bg-white/5 hover:bg-white/20 transition-all">
               <X className="w-6 h-6" />
             </button>
 
@@ -54,6 +61,9 @@ export default function PlaylistModal({
                 <p className="text-zinc-400 text-sm">
                   {normalizedSelectedPlaylist.desc} • {normalizedSelectedPlaylist.items.length} tracks
                 </p>
+                {normalizedSelectedPlaylist.exhibitionTitle && <p className="text-sm text-white">전시 · {normalizedSelectedPlaylist.exhibitionTitle}</p>}
+                {normalizedSelectedPlaylist.curatorNote && <p className="text-sm text-zinc-300">{normalizedSelectedPlaylist.curatorNote}</p>}
+                {normalizedSelectedPlaylist.id && <ArchiveShareTools id={normalizedSelectedPlaylist.id} title={normalizedSelectedPlaylist.title} />}
 
                 <button
                   onClick={() => {
@@ -74,6 +84,8 @@ export default function PlaylistModal({
                   <div
                     key={track?.id ?? `${idx}`}
                     onClick={() => safePlay(idx, normalizedSelectedPlaylist.items, { playlistKey: normalizedSelectedPlaylist.id })}
+                    role="button" tabIndex={0}
+                    onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); safePlay(idx, normalizedSelectedPlaylist.items, { playlistKey: normalizedSelectedPlaylist.id }); } }}
                     className="flex items-center gap-4 p-3 rounded-xl hover:bg-white/5 cursor-pointer group transition-colors border-b border-white/5 last:border-0"
                   >
                     <div className="w-8 text-center text-zinc-600 font-bold text-xs">{idx + 1}</div>
@@ -87,15 +99,15 @@ export default function PlaylistModal({
                       <p className="text-xs text-zinc-500 truncate">{track?.artist ?? ""}</p>
                     </div>
 
-                    <button className="text-zinc-600 group-hover:text-white">
+                    <span aria-hidden="true" className="text-zinc-600 group-hover:text-white">
                       <Play className="w-4 h-4" />
-                    </button>
+                    </span>
                   </div>
                 );
               })}
             </div>
-          </motion.div>
-        </motion.div>
+          </Motion.div>
+        </Motion.div>
       )}
     </AnimatePresence>
   );

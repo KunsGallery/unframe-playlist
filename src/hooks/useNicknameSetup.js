@@ -61,8 +61,7 @@ export function useNicknameSetup({
     }
   }, [
     user,
-    userProfile?.nicknameUpdatedCount,
-    userProfile?.nicknameChanged,
+    userProfile,
     nickInput,
     setNickError,
     setToastMessage,

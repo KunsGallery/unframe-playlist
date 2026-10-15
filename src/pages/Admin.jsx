@@ -1,15 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { ShieldCheck } from "lucide-react";
 import {
   addDoc,
   collection,
-  deleteDoc,
   doc,
   getDoc,
   getDocs,
   setDoc,
   Timestamp,
   updateDoc,
+  runTransaction,
+  writeBatch,
 } from "firebase/firestore";
 import { auth } from "../firebase";
 import AdminTabs from "../components/admin/AdminTabs";
@@ -18,11 +19,14 @@ import PlaylistManager from "../components/admin/PlaylistManager";
 import GatheringPlaylistManager from "../components/admin/GatheringPlaylistManager";
 import SiteConfigManager from "../components/admin/SiteConfigManager";
 import UserRewardManager from "../components/admin/UserRewardManager";
+import PublicationTools from '../components/admin/PublicationTools';
+import { saveContent } from '../utils/contentHistory';
+import { settleRewards, normalizeRewards } from '../utils/rewardState';
+import { trackUsage } from '../utils/catalog';
 import {
   createEmptyGatheringPlaylist,
   extractYouTubePlaylistId,
 } from "../utils/youtubePlaylist";
-import { ACHIEVEMENT_CATALOG } from "../constants/rewardCatalog";
 import {
   createEmptyTrack,
   getMissingTrackCurationPatch,
@@ -46,30 +50,6 @@ const normalizeRewardIds = (rewards) => {
   if (!Array.isArray(rewards) || rewards.length === 0) return new Set();
   if (typeof rewards[0] === "string") return new Set(rewards.filter(Boolean));
   return new Set(rewards.map((r) => r?.id).filter(Boolean));
-};
-
-const asObjectRewards = (rewards) => {
-  if (!Array.isArray(rewards)) return [];
-  if (rewards.length === 0) return [];
-  if (typeof rewards[0] === "object") return rewards.filter(Boolean);
-  const year = new Date().getFullYear();
-  const nowTs = Timestamp.fromMillis(Date.now());
-  return rewards
-    .filter((x) => typeof x === "string" && x.trim())
-    .map((id) => ({ id, unlockedAt: nowTs, year, meta: { migratedFromAdmin: true } }));
-};
-
-const addRewardObject = (rewards, id, meta = {}) => {
-  const base = asObjectRewards(rewards);
-  const ids = normalizeRewardIds(base);
-  if (ids.has(id)) return base;
-  const year = new Date().getFullYear();
-  return [...base, { id, unlockedAt: Timestamp.fromMillis(Date.now()), year, meta }];
-};
-
-const removeRewardById = (rewards, id) => {
-  const base = asObjectRewards(rewards);
-  return base.filter((r) => r?.id !== id);
 };
 
 const HERO_SLIDE_TYPES = [
@@ -217,6 +197,18 @@ export default function Admin({
 
   const [settleYear, setSettleYear] = useState(String(new Date().getFullYear()));
   const [isSettling, setIsSettling] = useState(false);
+  const [settlementPreview, setSettlementPreview] = useState(null);
+  const [settlementProgress, setSettlementProgress] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const savingRef = useRef(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const reportError = (message) => { setErrorMessage(message); setAuthError?.(message); };
+  const selectedEditor = activeTab === 'tracks' ? { value: newTrack, set: setNewTrack, id: editingId, list: tracks, ref: trackDocRef } : activeTab === 'playlists' ? { value: newPlaylist, set: setNewPlaylist, id: editingPlaylistId, list: playlists, ref: playlistDocRef } : activeTab === 'gatherings' ? { value: newGatheringPlaylist, set: setNewGatheringPlaylist, id: editingGatheringPlaylistId, list: gatheringPlaylists, ref: gatheringPlaylistDocRef } : null;
+  const guardedSave = async (action) => {
+    if (savingRef.current) return;
+    savingRef.current = true; setIsSaving(true); setErrorMessage('');
+    try { await action(); } finally { savingRef.current = false; setIsSaving(false); }
+  };
   const activeSection = ADMIN_SECTIONS[activeTab] || ADMIN_SECTIONS.tracks;
   const activeTrackCount = tracks.filter((track) => track?.isActive !== false).length;
   const adminCounts = {
@@ -303,7 +295,7 @@ export default function Admin({
         if (!snap.exists()) return;
 
         const data = snap.data() || {};
-        setSelectedUserForSticker((current) => ({ ...current, ...data, id: selectedUserId }));
+        setSelectedUserForSticker((current) => current?.id === selectedUserId ? { ...current, ...data, id: selectedUserId } : current);
         setNicknameDraft(data.nickname || "");
         setLevelOverrideName(data.levelOverrideName || "");
         setLevelOverrideColor(data.levelOverrideColor || "");
@@ -445,7 +437,7 @@ export default function Admin({
       }
 
       if (editingId) {
-        await updateDoc(trackDocRef(db, appId, editingId), payload);
+        await saveContent(db, trackDocRef(db, appId, editingId), payload, auth.currentUser?.uid);
         setToastMessage?.("트랙 수정 완료");
       } else {
         await addDoc(tracksCollectionRef(db, appId), payload);
@@ -461,9 +453,10 @@ export default function Admin({
   };
 
   const handleDeleteTrack = async (id) => {
-    if (!window.confirm("이 트랙을 삭제할까요?")) return;
+    const uses = trackUsage(id, playlists, siteConfig.heroSlides || []);
+    if (!window.confirm(`이 트랙을 휴지통으로 이동할까요? 나중에 복원할 수 있습니다.${uses.length ? `\n연결된 콘텐츠: ${uses.join(', ')}` : ''}`)) return;
     try {
-      await deleteDoc(trackDocRef(db, appId, id));
+      await saveContent(db, trackDocRef(db, appId, id), { isHidden: true, status: 'draft', trashedAt: Date.now() }, auth.currentUser?.uid);
       setToastMessage?.("트랙 삭제 완료");
     } catch (e) {
       console.error(e);
@@ -525,9 +518,7 @@ export default function Admin({
     try {
       const payload = {
         ...newPlaylist,
-        items: (newPlaylist.trackIds || [])
-          .map((id) => tracks.find((t) => t.id === id))
-          .filter(Boolean),
+        items: [],
         updatedAt: Timestamp.now(),
       };
 
@@ -536,7 +527,7 @@ export default function Admin({
       }
 
       if (editingPlaylistId) {
-        await updateDoc(playlistDocRef(db, appId, editingPlaylistId), payload);
+        await saveContent(db, playlistDocRef(db, appId, editingPlaylistId), payload, auth.currentUser?.uid);
         setToastMessage?.("플레이리스트 수정 완료");
       } else {
         await addDoc(playlistsCollectionRef(db, appId), payload);
@@ -554,7 +545,7 @@ export default function Admin({
   const handleDeletePlaylist = async (id) => {
     if (!window.confirm("이 플레이리스트를 삭제할까요?")) return;
     try {
-      await deleteDoc(playlistDocRef(db, appId, id));
+      await saveContent(db, playlistDocRef(db, appId, id), { status: 'draft', isPublished: false, trashedAt: Date.now() }, auth.currentUser?.uid);
       setToastMessage?.("플레이리스트 삭제 완료");
     } catch (e) {
       console.error(e);
@@ -565,6 +556,7 @@ export default function Admin({
   const handleEditPlaylist = (playlist) => {
     setEditingPlaylistId(playlist.id);
     setNewPlaylist({
+      ...playlist,
       title: playlist.title || "",
       desc: playlist.desc || "",
       image: playlist.image || "",
@@ -601,10 +593,7 @@ export default function Admin({
       };
 
       if (editingGatheringPlaylistId) {
-        await updateDoc(
-          gatheringPlaylistDocRef(db, appId, editingGatheringPlaylistId),
-          payload
-        );
+        await saveContent(db, gatheringPlaylistDocRef(db, appId, editingGatheringPlaylistId), payload, auth.currentUser?.uid);
         setToastMessage?.("모임 플레이리스트 수정 완료");
       } else {
         await addDoc(gatheringPlaylistsCollectionRef(db, appId), {
@@ -626,7 +615,7 @@ export default function Admin({
     if (!window.confirm("이 모임 플레이리스트를 삭제할까요?")) return;
 
     try {
-      await deleteDoc(gatheringPlaylistDocRef(db, appId, id));
+      await saveContent(db, gatheringPlaylistDocRef(db, appId, id), { status: 'draft', isPublished: false, trashedAt: Date.now() }, auth.currentUser?.uid);
       if (editingGatheringPlaylistId === id) {
         setEditingGatheringPlaylistId(null);
         setNewGatheringPlaylist(createEmptyGatheringPlaylist());
@@ -684,22 +673,6 @@ export default function Admin({
     }
   };
 
-  const saveSelectedProfile = async (payload, successMessage = "사용자 보상 저장 완료") => {
-    if (!selectedUserForSticker?.id) return;
-    try {
-      await setDoc(
-        userProfileDocRef(db, appId, selectedUserForSticker.id),
-        payload,
-        { merge: true }
-      );
-      setSelectedUserForSticker((prev) => ({ ...prev, ...payload }));
-      setToastMessage?.(successMessage);
-    } catch (e) {
-      console.error(e);
-      setAuthError?.("사용자 프로필 저장 실패");
-    }
-  };
-
   const handleSaveNicknameAndLevel = async () => {
     if (!selectedUserForSticker) return;
     const payload = {
@@ -709,10 +682,10 @@ export default function Admin({
     };
 
     try {
-      await Promise.all([
-        setDoc(userProfileDocRef(db, appId, selectedUserForSticker.id), payload, { merge: true }),
-        setDoc(publicUserDocRef(db, appId, selectedUserForSticker.id), payload, { merge: true }),
-      ]);
+      const batch = writeBatch(db);
+      batch.set(userProfileDocRef(db, appId, selectedUserForSticker.id), payload, { merge: true });
+      batch.set(publicUserDocRef(db, appId, selectedUserForSticker.id), { nickname: nicknameDraft, levelName: levelOverrideName, levelColor: levelOverrideColor }, { merge: true });
+      await batch.commit();
       setSelectedUserForSticker((prev) => ({ ...prev, ...payload }));
       setToastMessage?.("유저 프로필 저장 완료");
     } catch (e) {
@@ -730,23 +703,24 @@ export default function Admin({
 
   const toggleSticker = async (stickerId) => {
     if (!selectedUserForSticker) return;
-    const currentRewards = asObjectRewards(selectedUserForSticker.rewards || []);
-    const exists = normalizeRewardIds(currentRewards).has(stickerId);
-
-    const nextRewards = exists
-      ? removeRewardById(currentRewards, stickerId)
-      : addRewardObject(currentRewards, stickerId, { adminGranted: true });
-
-    await saveSelectedProfile({ rewards: nextRewards }, exists ? "보상 회수 완료" : "보상 지급 완료");
-
-    await setDoc(
-      publicUserDocRef(db, appId, selectedUserForSticker.id),
-      { rewardCount: nextRewards.length },
-      { merge: true }
-    ).catch(() => {});
+    const uid = selectedUserForSticker.id;
+    await guardedSave(async () => {
+      try {
+        const rewards = await runTransaction(db, async (tx) => {
+          const ref = userProfileDocRef(db, appId, uid), snap = await tx.get(ref);
+          const current = normalizeRewards(snap.data()?.rewards || []);
+          const exists = current.some((r) => r.id === stickerId);
+          const next = exists ? current.filter((r) => r.id !== stickerId) : [...current, { id: stickerId, year: new Date().getFullYear(), unlockedAt: Date.now(), meta: { adminGranted: true, grantedBy: auth.currentUser?.uid || '' } }];
+          tx.set(ref, { rewards: next }, { merge: true });
+          return next;
+        });
+        setSelectedUserForSticker((current) => current?.id === uid ? { ...current, rewards } : current);
+        setToastMessage?.('보상 변경을 저장했습니다.');
+      } catch { reportError('보상 변경을 저장하지 못했습니다. 다시 시도해 주세요.'); }
+    });
   };
 
-  const runAnnualSettlement = async () => {
+  const runAnnualSettlement = async (execute = false) => {
     if (!settleYear || !db) return;
     setIsSettling(true);
     try {
@@ -759,51 +733,31 @@ export default function Admin({
       const publicUsersSnapshot = await getDocs(
         collection(db, "artifacts", appId, "public_stats")
       );
-      const annualIds = [
-        "annual_bronze_2026",
-        "annual_silver_2026",
-        "annual_gold_2026",
-      ];
       let grantedCount = 0;
+      const preview = [];
+      const failed = [];
 
       for (const userDoc of publicUsersSnapshot.docs) {
         const profileRef = userProfileDocRef(db, appId, userDoc.id);
         const profileSnapshot = await getDoc(profileRef);
         if (!profileSnapshot.exists()) continue;
 
-        const profile = profileSnapshot.data() || {};
-        const rewards = asObjectRewards(profile.rewards || []);
-        const achievementCount = rewards.filter((reward) =>
-          Number(reward?.year) === targetYear && Boolean(ACHIEVEMENT_CATALOG[reward?.id])
-        ).length;
-
-        const tierId = achievementCount >= 20
-          ? "annual_gold_2026"
-          : achievementCount >= 10
-            ? "annual_silver_2026"
-            : achievementCount >= 5
-              ? "annual_bronze_2026"
-              : null;
-
-        const withoutAnnualTier = rewards.filter((reward) => !annualIds.includes(reward?.id));
-        const nextRewards = tierId
-          ? addRewardObject(withoutAnnualTier, tierId, {
-              annualSettlement: true,
-              achievementCount,
-              year: targetYear,
-            })
-          : withoutAnnualTier;
-
-        await setDoc(profileRef, { rewards: nextRewards }, { merge: true });
-        await setDoc(
-          publicUserDocRef(db, appId, userDoc.id),
-          { rewardCount: nextRewards.length },
-          { merge: true }
-        );
-        if (tierId) grantedCount += 1;
+        const result = settleRewards(profileSnapshot.data()?.rewards || [], targetYear);
+        preview.push({ uid: userDoc.id, name: userDoc.data().nickname || userDoc.id, tier: result.tier, count: result.count });
+        if (result.tier) grantedCount += 1;
+        if (execute === true) {
+          try {
+            await runTransaction(db, async (tx) => {
+              const latest = await tx.get(profileRef);
+              const next = settleRewards(latest.data()?.rewards || [], targetYear);
+              tx.set(profileRef, { rewards: next.rewards }, { merge: true });
+            });
+          } catch { failed.push(userDoc.id); }
+        }
+        setSettlementProgress(`${preview.length} / ${publicUsersSnapshot.size}명 확인${failed.length ? ` · 실패 ${failed.length}명` : ''}`);
       }
-
-      setToastMessage?.(`${targetYear} 연간 정산 완료 · ${grantedCount}명 스티커 지급`);
+      setSettlementPreview({ year: targetYear, rows: preview, failed });
+      setToastMessage?.(execute === true ? `${targetYear} 정산 완료 · ${grantedCount}명 대상 · 실패 ${failed.length}명` : `${targetYear} 정산 미리보기 · ${grantedCount}명 지급 대상`);
     } catch (e) {
       console.error(e);
       setAuthError?.("배치 정산 실패");
@@ -840,6 +794,9 @@ export default function Admin({
           <div className="up-admin-live"><i /> LIVE DATABASE</div>
         </div>
         <section className="up-admin-stage" aria-label={`${activeSection.title} workspace`}>
+        {errorMessage && <p className="up-notice" role="alert">{errorMessage}</p>}
+        {selectedEditor && <PublicationTools key={`${activeTab}:${selectedEditor.id || 'new'}`} kind={activeTab} identity={`${activeTab}:${selectedEditor.id || 'new'}`} value={selectedEditor.value} setValue={selectedEditor.set} original={selectedEditor.list.find((item) => item.id === selectedEditor.id)} onRestore={async (data) => { if (!selectedEditor.id) return; await guardedSave(async () => { try { await saveContent(db, selectedEditor.ref(db, appId, selectedEditor.id), data, auth.currentUser?.uid, true); selectedEditor.set(data); setToastMessage?.('이전 버전으로 복원했습니다.'); } catch { reportError('복원하지 못했습니다.'); } }); }} />}
+        <fieldset disabled={isSaving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
         {activeTab === "tracks" && (
             <TrackManager
               tracks={tracks}
@@ -849,7 +806,7 @@ export default function Admin({
             setEditingId={setEditingId}
             isUploadingImg={isUploadingImg}
               handleImageUpload={handleImageUpload}
-              handleSaveTrack={handleSaveTrack}
+              handleSaveTrack={() => guardedSave(handleSaveTrack)}
               handleDeleteTrack={handleDeleteTrack}
               handleEditTrack={handleEditTrack}
               onFillMissingCurationFields={handleFillMissingCurationFields}
@@ -866,7 +823,7 @@ export default function Admin({
             setEditingPlaylistId={setEditingPlaylistId}
             isUploadingPLImg={isUploadingPLImg}
             handleImageUpload={handleImageUpload}
-            handleSavePlaylist={handleSavePlaylist}
+            handleSavePlaylist={() => guardedSave(handleSavePlaylist)}
             handleDeletePlaylist={handleDeletePlaylist}
             handleEditPlaylist={handleEditPlaylist}
           />
@@ -885,7 +842,7 @@ export default function Admin({
               (url) => setNewGatheringPlaylist((current) => ({ ...current, image: url })),
               "gathering"
             )}
-            handleSave={handleSaveGatheringPlaylist}
+            handleSave={() => guardedSave(handleSaveGatheringPlaylist)}
             handleDelete={handleDeleteGatheringPlaylist}
             handleEdit={handleEditGatheringPlaylist}
           />
@@ -932,9 +889,13 @@ export default function Admin({
             settleYear={settleYear}
             setSettleYear={setSettleYear}
             isSettling={isSettling}
-            runAnnualSettlement={runAnnualSettlement}
+            runAnnualSettlement={() => runAnnualSettlement(false)}
+            executeAnnualSettlement={() => runAnnualSettlement(true)}
+            settlementPreview={settlementPreview}
+            settlementProgress={settlementProgress}
           />
         )}
+        </fieldset>
         </section>
       </div>
     </div>

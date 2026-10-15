@@ -1,4 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useCallback } from "react";
+import { useDialogFocus } from '../../hooks/useDialogFocus';
+import ArchiveShareTools from '../ArchiveShareTools';
 import { AnimatePresence, motion as Motion } from "framer-motion";
 import { CalendarDays, ExternalLink, MapPin, X, Youtube } from "lucide-react";
 import {
@@ -7,6 +9,11 @@ import {
 } from "../../utils/youtubePlaylist";
 
 export default function GatheringPlaylistModal({ playlist, onClose }) {
+  const dialogRef = useRef(null);
+  const closeRef = useRef(onClose);
+  useEffect(() => { closeRef.current = onClose; }, [onClose]);
+  const close = useCallback(() => closeRef.current?.(), []);
+  useDialogFocus(dialogRef, Boolean(playlist), close);
   const embedUrl = buildYouTubePlaylistEmbedUrl(playlist?.youtubePlaylistId || "");
 
   useEffect(() => {
@@ -36,6 +43,7 @@ export default function GatheringPlaylistModal({ playlist, onClose }) {
           exit={{ opacity: 0 }}
           onClick={onClose}
           role="dialog"
+          ref={dialogRef}
           aria-modal="true"
           aria-labelledby="up-gathering-modal-title"
         >
@@ -49,7 +57,7 @@ export default function GatheringPlaylistModal({ playlist, onClose }) {
           >
             <header className="up-gathering-modal__head">
               <div>
-                <span><Youtube aria-hidden="true" /> PLAYLISTS FROM THE ROOM</span>
+                <span><Youtube aria-hidden="true" /> 그날 함께 들은 음악 · YouTube에서 재생</span>
                 <h2 id="up-gathering-modal-title">{playlist.title || "UNFRAME GATHERING PLAYLIST"}</h2>
               </div>
               <button type="button" onClick={onClose} aria-label="모임 플레이리스트 닫기"><X /></button>
@@ -67,6 +75,9 @@ export default function GatheringPlaylistModal({ playlist, onClose }) {
                 <div className="up-gathering-modal__error">재생 가능한 유튜브 플레이리스트 주소가 없습니다.</div>
               )}
             </div>
+            {playlist.memoryPhoto && <img className="up-gathering-photo" src={playlist.memoryPhoto} alt={`${playlist.title} 현장 기록`} loading="lazy" />}
+            {playlist.memoryNote && <p className="up-memory-note">{playlist.memoryNote}</p>}
+            <ArchiveShareTools kind="gathering" id={playlist.id} title={playlist.title} />
 
             <footer className="up-gathering-modal__foot">
               <div className="up-gathering-modal__meta">

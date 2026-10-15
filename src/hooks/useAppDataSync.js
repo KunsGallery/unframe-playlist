@@ -1,6 +1,6 @@
 // src/hooks/useAppDataSync.js
 import { useEffect } from "react";
-import { doc, setDoc, collection, onSnapshot, query, getDoc } from "firebase/firestore";
+import { doc, setDoc, collection, onSnapshot, query, getDoc, orderBy, limit } from "firebase/firestore";
 import { createAchievementEngine } from "../store";
 import { getLevelInfo } from "../levels";
 
@@ -44,10 +44,17 @@ export function useAppDataSync({
 
   engineRef,
   userProfile,
+  setDataError,
+  retryToken = 0,
+  onRewards,
+  setDataLoading,
 }) {
   // 1) 인증 완료 + user 확보 후 전체 데이터 구독
   useEffect(() => {
     if (!isAuthReady || !user) return;
+    setDataError?.('');
+    setDataLoading?.(true);
+    const onError = () => { setDataLoading?.(false); setDataError?.('콘텐츠를 불러오지 못했습니다. 연결을 확인하고 다시 시도해 주세요.'); };
 
     const isAnonymous = !!user.isAnonymous;
     engineRef.current = createAchievementEngine({
@@ -63,7 +70,7 @@ export function useAppDataSync({
       setNickError("");
       setIsNickModalOpen(false);
     } else {
-      engineRef.current.migrateRewardsToObjects().catch(() => {});
+      engineRef.current.processEvent({ type: 'daily_active' }).then((result) => { if (result.unlockedRewards?.length) onRewards?.(result.unlockedRewards); }).catch(onError);
     }
 
     const profileRef = doc(db, "artifacts", appId, "users", user.uid, "profile", "stats");
@@ -74,7 +81,7 @@ export function useAppDataSync({
           if (!snap.exists()) return;
 
           const data = snap.data();
-          setUserProfile(data);
+          setUserProfile({ ...data, _uid: user.uid });
 
           const hasNickname = typeof data?.nickname === "string" && data.nickname.trim();
           const prompted = !!data?.nicknamePrompted;
@@ -99,35 +106,40 @@ export function useAppDataSync({
             setIsNickModalOpen(true);
             await setDoc(profileRef, { nicknamePrompted: true }, { merge: true }).catch(() => {});
           }
-        });
+        }, onError);
 
-    const unsubPublicUsers = onSnapshot(
-      collection(db, "artifacts", appId, "public_stats"),
-      (snap) => setAllUsers(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-    );
+    const rankingRows = new Map();
+    const unsubPublicUsers = ['listenCount', 'shareCount', 'xp', 'likedCount'].map((score) => onSnapshot(
+      query(collection(db, 'artifacts', appId, 'public_stats'), orderBy(score, 'desc'), limit(30)),
+      (snap) => {
+        rankingRows.set(score, snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        setAllUsers([...new Map([...rankingRows.values()].flat().map((u) => [u.id, u])).values()]);
+      }, onError
+    ));
 
     const unsubTracks = onSnapshot(
       query(collection(db, "artifacts", appId, "public", "data", "tracks")),
       (snap) => {
         const loaded = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         setTracks(loaded);
-        setCurrentQueue((prev) => (prev?.length ? prev : loaded.filter((t) => !t.isHidden)));
-      }
+        setDataLoading?.(false);
+        setCurrentQueue((prev) => prev?.length ? prev.map((t) => loaded.find((current) => current.id === t.id) || t) : []);
+      }, onError
     );
 
     const unsubPlaylists = onSnapshot(
       query(collection(db, "artifacts", appId, "public", "data", "playlists")),
-      (snap) => setPlaylists(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+      (snap) => setPlaylists(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), onError
     );
 
     const unsubGatheringPlaylists = onSnapshot(
       query(collection(db, "artifacts", appId, "public", "data", "gathering_playlists")),
-      (snap) => setGatheringPlaylists(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+      (snap) => setGatheringPlaylists(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), onError
     );
 
     const unsubLikes = onSnapshot(
       collection(db, "artifacts", appId, "users", user.uid, "likes"),
-      (snap) => setUserLikes(snap.docs.map((d) => d.id))
+      (snap) => setUserLikes(snap.docs.map((d) => d.id)), onError
     );
 
     getDoc(doc(db, "artifacts", appId, "public", "data", "site_config", "main_texts"))
@@ -138,7 +150,7 @@ export function useAppDataSync({
 
     return () => {
       unsubProfile();
-      unsubPublicUsers();
+      unsubPublicUsers.forEach((unsubscribe) => unsubscribe());
       unsubTracks();
       unsubPlaylists();
       unsubGatheringPlaylists();
@@ -161,6 +173,10 @@ export function useAppDataSync({
     setUserLikes,
     setSiteConfig,
     engineRef,
+    setDataError,
+    retryToken,
+    onRewards,
+    setDataLoading,
   ]);
 
   // 2) public_stats 업데이트
@@ -176,8 +192,9 @@ export function useAppDataSync({
       user?.displayName ||
       (user?.isAnonymous ? "Guest" : "Collector");
 
-    const manualName = isAnonymous ? "" : (userProfile?.manualLevelName || "").trim();
-    const manualColor = isAnonymous ? "" : (userProfile?.manualLevelColor || "").trim();
+    if (isAnonymous || userProfile?._uid !== user.uid) return;
+    const manualName = (userProfile?.levelOverrideName || userProfile?.manualLevelName || '').trim();
+    const manualColor = (userProfile?.levelOverrideColor || userProfile?.manualLevelColor || '').trim();
     const finalLevelName = manualName || lv.name;
     const finalLevelColor = manualName ? (manualColor || lv.color) : lv.color;
 

@@ -5,7 +5,7 @@ import MiniPlayer from './MiniPlayer';
 import FullPlayer from './FullPlayer';
 
 const AudioPlayer = (props) => {
-  const { currentTrack, currentTime, parsedLyrics, setParsedLyrics, isPlayerExpanded, playerView } = props; // playerView 추가됨
+  const { currentTrack, currentTime, parsedLyrics, setParsedLyrics, isPlayerExpanded } = props;
 
   // 가사 파싱 (기존 동일)
   useEffect(() => {

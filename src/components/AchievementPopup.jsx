@@ -1,5 +1,6 @@
-import React from "react";
-import { motion } from "framer-motion";
+import React, { useRef, useCallback } from "react";
+import { useDialogFocus } from '../hooks/useDialogFocus';
+import { motion as Motion } from "framer-motion";
 import { Share, X } from "lucide-react";
 
 export default function AchievementPopup({
@@ -10,13 +11,16 @@ export default function AchievementPopup({
   setNewAchievement,
   setShareItem,
 }) {
+  const dialogRef = useRef(null);
+  const close = useCallback(() => setNewAchievement(null), [setNewAchievement]);
+  useDialogFocus(dialogRef, Boolean(newAchievement), close);
   if (!newAchievement || !popupMeta) return null;
 
   const Icon = popupMeta.icon;
 
   return (
-    <div className="fixed inset-0 z-10000 flex items-center justify-center px-4 py-6 bg-black/90 backdrop-blur-xl">
-      <motion.div
+    <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="새로운 어치브먼트" className="fixed inset-0 z-10000 flex items-center justify-center px-4 py-6 bg-black/90 backdrop-blur-xl">
+      <Motion.div
         initial={{ y: 40, opacity: 0, scale: 0.95 }}
         animate={{ y: 0, opacity: 1, scale: 1 }}
         exit={{ y: 20, opacity: 0, scale: 0.98 }}
@@ -98,7 +102,7 @@ export default function AchievementPopup({
             </div>
           </div>
         </div>
-      </motion.div>
+      </Motion.div>
     </div>
   );
 }

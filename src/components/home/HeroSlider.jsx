@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion as Motion } from "framer-motion";
 import {
   ChevronLeft,
   ChevronRight,
@@ -30,7 +30,7 @@ export default function HeroSlider({
         {currentHero ? (
           <div className="relative">
             <AnimatePresence mode="wait">
-              <motion.div
+              <Motion.div
                 key={currentHero.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -246,7 +246,7 @@ export default function HeroSlider({
                     )}
                   </div>
                 </div>
-              </motion.div>
+              </Motion.div>
             </AnimatePresence>
 
             {heroSlides.length > 1 && (

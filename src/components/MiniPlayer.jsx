@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { motion } from "framer-motion";
+import { motion as Motion } from "framer-motion";
 import { Heart, Loader2, Pause, Play, Share2, SkipForward, Volume2, VolumeX } from "lucide-react";
 import { formatTime } from "../utils/PlayerUtils";
 
@@ -32,12 +32,12 @@ const MiniPlayer = ({
       key="mini-player"
       className="up-mini-player"
     >
-      <motion.div
+      <Motion.div
         layoutId="up-player-surface"
         className="up-mini-player__bar"
         transition={{ layout: { type: "spring", stiffness: 210, damping: 27, mass: 0.9 } }}
       >
-        <motion.div
+        <Motion.div
           className="up-mini-player__return-paint"
           aria-hidden="true"
           initial={{ opacity: 0.58, scaleX: 2.8, scaleY: 2.1 }}
@@ -60,7 +60,7 @@ const MiniPlayer = ({
         <span className="up-mini-player__time">{formatTime(currentTime)} / {formatTime(duration)}</span>
 
         <div className="up-mini-player__actions">
-          <button type="button" className={isLiked ? "is-liked" : ""} onClick={(e) => handleToggleLike(e, currentTrack.id)} aria-label="Add to archive"><Heart /></button>
+          <button type="button" className={isLiked ? "is-liked" : ""} onClick={(e) => handleToggleLike(e, currentTrack.id)} aria-label={isLiked ? '아카이브에서 제거' : '아카이브에 추가'} aria-pressed={isLiked}><Heart /></button>
           <button type="button" onClick={(e) => handleShare(e, currentTrack, "track")} aria-label="Share track"><Share2 /></button>
 
           <div className="up-mini-player__volume">
@@ -81,7 +81,7 @@ const MiniPlayer = ({
           </button>
           <button type="button" onClick={playNext} aria-label="Next track"><SkipForward /></button>
         </div>
-      </motion.div>
+      </Motion.div>
     </div>
   );
 };

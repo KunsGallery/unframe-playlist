@@ -1,0 +1,45 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function admin() {
+      return signedIn() && request.auth.token.firebase.sign_in_provider == 'google.com'
+        && request.auth.token.email in ['gallerykuns@gmail.com', 'cybog2004@gmail.com', 'sylove887@gmail.com'];
+    }
+    function owner(uid) { return signedIn() && request.auth.uid == uid; }
+    function adminFields() { return ['levelOverrideName', 'levelOverrideColor', 'manualLevelName', 'manualLevelColor', 'isRankingHidden', 'adminRewards']; }
+    function publicFields() { return ['displayName', 'nickname', 'profileImg', 'listenCount', 'shareCount', 'likedCount', 'xp', 'levelKey', 'level', 'levelName', 'levelColor', 'rewardCount', 'updatedAt']; }
+    function publicValid() {
+      return (!('xp' in request.resource.data) || (request.resource.data.xp is number && request.resource.data.xp >= 0))
+        && (!('listenCount' in request.resource.data) || (request.resource.data.listenCount is number && request.resource.data.listenCount >= 0))
+        && (!('likedCount' in request.resource.data) || (request.resource.data.likedCount is number && request.resource.data.likedCount >= 0));
+    }
+    match /artifacts/{appId}/public/data/{document=**} {
+      allow read: if true;
+      allow write: if admin();
+    }
+    match /artifacts/{appId}/users/{uid} {
+      allow read: if owner(uid) || admin();
+      allow create: if admin() || (owner(uid) && !request.resource.data.keys().hasAny(adminFields()));
+      allow update: if admin() || (owner(uid) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(adminFields()));
+      allow delete: if admin();
+    }
+    match /artifacts/{appId}/users/{uid}/profile/{document} {
+      allow read: if owner(uid) || admin();
+      allow create: if admin() || (owner(uid) && !request.resource.data.keys().hasAny(adminFields()));
+      allow update: if admin() || (owner(uid) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(adminFields()));
+      allow delete: if admin();
+    }
+    match /artifacts/{appId}/users/{uid}/likes/{trackId} {
+      allow read: if owner(uid) || admin();
+      allow create, update: if admin() || (owner(uid) && request.resource.data.keys().hasOnly(['likedAt']) && request.resource.data.likedAt is number);
+      allow delete: if owner(uid) || admin();
+    }
+    match /artifacts/{appId}/public_stats/{uid} {
+      allow read: if true;
+      allow create: if admin() || (owner(uid) && request.resource.data.keys().hasOnly(publicFields()) && publicValid());
+      allow update: if admin() || (owner(uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(publicFields()) && publicValid());
+      allow delete: if admin();
+    }
+  }
+}

@@ -72,6 +72,7 @@ export default function TrackManager({
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortMode, setSortMode] = useState("newest");
+  const [visibility, setVisibility] = useState('all');
 
   const selectedTrack = useMemo(() => {
     if (!editingId) return null;
@@ -82,6 +83,9 @@ export default function TrackManager({
     const term = searchTerm.trim().toLowerCase();
 
     let list = [...(tracks || [])].filter(Boolean);
+    if (visibility === 'trash') list = list.filter((t) => t.trashedAt);
+    if (visibility === 'draft') list = list.filter((t) => t.status === 'draft' && !t.trashedAt);
+    if (visibility === 'published') list = list.filter((t) => t.status !== 'draft' && !t.isHidden && t.isActive !== false);
 
     if (term) {
       list = list.filter((track) => {
@@ -118,7 +122,7 @@ export default function TrackManager({
     });
 
     return list;
-  }, [tracks, searchTerm, sortMode]);
+  }, [tracks, searchTerm, sortMode, visibility]);
 
   const startNewTrack = () => {
     setEditingId(null);
@@ -178,6 +182,7 @@ export default function TrackManager({
         )}
 
         <div className="grid gap-3">
+          <label>공개 상태<select aria-label="음원 공개 상태 필터" value={visibility} onChange={(e) => setVisibility(e.target.value)} className="w-full bg-white/5 p-3 rounded-xl"><option value="all">전체</option><option value="published">발행됨</option><option value="draft">임시저장</option><option value="trash">휴지통</option></select></label>
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
             <input

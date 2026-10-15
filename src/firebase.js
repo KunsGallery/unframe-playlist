@@ -17,4 +17,4 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 
 export const appId = 'unframe-playlist-v1';
-export const ADMIN_EMAILS = ['gallerykuns@gmail.com', 'sylove887@gmail.com'];
+export const ADMIN_EMAILS = ['gallerykuns@gmail.com', 'cybog2004@gmail.com', 'sylove887@gmail.com'];

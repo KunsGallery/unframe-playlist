@@ -1,4 +1,4 @@
-import { motion } from "framer-motion";
+import { motion as Motion } from "framer-motion";
 import { ListMusic } from "lucide-react";
 
 const subTitle = "font-bold uppercase tracking-[0.4em] text-[#004aad]";
@@ -33,7 +33,7 @@ export default function PlaylistRail({
             const coverImg = safeSrc(pl?.image || plItems?.[0]?.image);
 
             return (
-              <motion.div
+              <Motion.div
                 key={pl?.id ?? idx}
                 whileHover={{ y: -6 }}
                 onClick={() =>
@@ -69,7 +69,7 @@ export default function PlaylistRail({
                     {pl?.desc ?? "Curated selection"}
                   </p>
                 </div>
-              </motion.div>
+              </Motion.div>
             );
           })}
 
@@ -78,7 +78,7 @@ export default function PlaylistRail({
             const coverImg = safeSrc(pl.image);
 
             return (
-              <motion.div
+              <Motion.div
                 key={pl.id}
                 whileHover={{ y: -6 }}
                 onClick={() => setSelectedPlaylist(pl)}
@@ -105,7 +105,7 @@ export default function PlaylistRail({
                     {plItems.length} tracks
                   </p>
                 </div>
-              </motion.div>
+              </Motion.div>
             );
           })}
         </div>

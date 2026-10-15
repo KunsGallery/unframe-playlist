@@ -54,12 +54,12 @@ export default function HeroSlideManager({
   const linkedPlaylist = useMemo(() => {
     if (!selectedSlide?.linkedPlaylistId) return null;
     return playlists.find((playlist) => playlist.id === selectedSlide.linkedPlaylistId) || null;
-  }, [playlists, selectedSlide?.linkedPlaylistId]);
+  }, [playlists, selectedSlide]);
 
   const linkedTracks = useMemo(() => {
     const idSet = new Set(selectedSlide?.trackIds || []);
     return (tracks || []).filter((track) => idSet.has(track.id));
-  }, [tracks, selectedSlide?.trackIds]);
+  }, [tracks, selectedSlide]);
 
   const filteredTracks = useMemo(() => {
     const term = trackSearch.trim().toLowerCase();

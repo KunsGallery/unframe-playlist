@@ -1,6 +1,5 @@
 // src/hooks/useShareCard.js
 import { useEffect } from "react";
-import { domToPng } from "modern-screenshot";
 import { waitForImages } from "../utils/PlayerUtils";
 
 const getShareUrl = (item) => {
@@ -64,6 +63,7 @@ export function useShareCard({
 
         if (document.fonts?.ready) await document.fonts.ready;
         await waitForImages(shareCardRef.current);
+        const { domToPng } = await import('modern-screenshot');
 
         const dataUrl = await domToPng(shareCardRef.current, {
           backgroundColor: "#1a1a1a",

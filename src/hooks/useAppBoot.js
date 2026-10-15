@@ -9,6 +9,7 @@ export function useAppBoot({
   setIsAdmin,
   setLoading,
   setScrolled,
+  setDataError,
 }) {
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (u) => {
@@ -20,7 +21,7 @@ export function useAppBoot({
       } else {
         signInAnonymously(auth)
           .then(() => setLoading(false))
-          .catch(() => setLoading(false));
+          .catch(() => { setLoading(false); setDataError?.('접속을 준비하지 못했습니다. 연결을 확인하고 다시 불러와 주세요.'); });
       }
     });
 
@@ -31,5 +32,5 @@ export function useAppBoot({
       unsubAuth();
       window.removeEventListener("scroll", handleScroll);
     };
-  }, [auth, ADMIN_EMAILS, setUser, setIsAdmin, setLoading, setScrolled]);
+  }, [auth, ADMIN_EMAILS, setUser, setIsAdmin, setLoading, setScrolled, setDataError]);
 }

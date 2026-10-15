@@ -30,6 +30,9 @@ export default function UserRewardManager({
   setSettleYear,
   isSettling,
   runAnnualSettlement,
+  executeAnnualSettlement,
+  settlementPreview,
+  settlementProgress,
 }) {
   void allUsers;
 
@@ -193,7 +196,10 @@ export default function UserRewardManager({
                 >
                   {isSettling ? "Settling..." : "Run Settlement"}
                 </button>
+                {settlementPreview?.year === Number(settleYear) && <button type="button" disabled={isSettling} onClick={executeAnnualSettlement}>미리보기 결과로 정산 실행 / 재시도</button>}
               </div>
+              <p role="status">{settlementProgress}</p>
+              {settlementPreview && <div className="max-h-60 overflow-auto"><p>정산 시점의 최신 기록으로 지급하며, 기존 동일 등급의 획득일은 유지됩니다.</p>{settlementPreview.rows.map((row) => <p key={row.uid}>{row.name} · 자동 업적 {row.count}개 · {row.tier || '지급 대상 아님'}</p>)}{!!settlementPreview.failed.length && <p role="alert">실패: {settlementPreview.failed.join(', ')}</p>}</div>}
             </div>
           </>
         )}

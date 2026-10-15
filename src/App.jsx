@@ -1,5 +1,5 @@
 // src/App.jsx
-import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, memo, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { auth, db, appId, ADMIN_EMAILS } from './firebase';
 import confetti from 'canvas-confetti';
@@ -7,15 +7,12 @@ import {
   signOut,
   signInWithPopup,
   GoogleAuthProvider,
+  signInAnonymously,
 } from 'firebase/auth';
 import {
   doc,
   setDoc,
-  collection,
-  onSnapshot,
-  query,
   deleteDoc,
-  getDoc,
 } from 'firebase/firestore';
 import {
   Loader2,
@@ -27,16 +24,16 @@ import {
   getDirectLink,
   toDataUrl
 } from "./utils/PlayerUtils";
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion as Motion, AnimatePresence } from 'framer-motion';
 
 import AudioPlayer from './components/AudioPlayer';
 import Home from './pages/Home';
 import Archive from './pages/Archive';
-import Admin from './pages/Admin';
+const Admin = lazy(() => import('./pages/Admin'));
 import About from './pages/About';
 import TrackShareLanding from './pages/TrackShareLanding';
 import ScrollToTop from './components/ScrollToTop';
-import ShareCard from "./components/ShareCard";
+import ShareCard from './components/ShareCard';
 import AchievementPopup from "./components/AchievementPopup";
 import NicknameModal from "./components/NicknameModal";
 import AppShell from "./components/AppShell";
@@ -51,8 +48,9 @@ import { useToastTimer } from "./hooks/useToastTimer";
 
 import { getAchievementMeta } from "./constants/achievements";
 
-import { createAchievementEngine } from './store';
 import { getLevelInfo } from './levels';
+import { isPublishedTrack, resolvePlaylist, nextQueueIndex } from './utils/catalog';
+import { useListeningMemory } from './hooks/useListeningMemory';
 
 // ---------------------
 // 날짜 포맷
@@ -94,10 +92,12 @@ const INITIAL_USER_PROFILE = {
 const AppRoutes = memo(function AppRoutes({
   publicTracks,
   playlists,
+  adminPlaylists,
   gatheringPlaylists,
   isPlaying,
   currentTrack,
   playTrack,
+  togglePlay,
   userLikes,
   handleToggleLike,
   setSelectedTrack,
@@ -128,6 +128,7 @@ const AppRoutes = memo(function AppRoutes({
             isPlaying={isPlaying}
             currentTrack={currentTrack}
             playTrack={playTrack}
+            togglePlay={togglePlay}
             userLikes={userLikes}
             handleToggleLike={handleToggleLike}
             setSelectedTrack={setSelectedTrack}
@@ -180,7 +181,7 @@ const AppRoutes = memo(function AppRoutes({
           <Admin
             isAdmin={isAdmin}
             tracks={tracks}
-            playlists={playlists}
+            playlists={adminPlaylists || playlists}
             gatheringPlaylists={gatheringPlaylists}
             db={db}
             appId={appId}
@@ -224,7 +225,7 @@ export default function App() {
 
   const [currentTrackIdx, setCurrentTrackIdx] = useState(0);
   const [currentQueue, setCurrentQueue] = useState([]);
-  const [scrolled, setScrolled] = useState(false);
+  const [, setScrolled] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
 
   const [shareItem, setShareItem] = useState(null);
@@ -256,6 +257,13 @@ export default function App() {
   const shareCardRef = useRef(null);
   const engineRef = useRef(null);
   const completedOnceRef = useRef(new Set());
+  const [playbackError, setPlaybackError] = useState('');
+  const [dataError, setDataError] = useState('');
+  const [dataLoading, setDataLoading] = useState(true);
+  const [retryToken, setRetryToken] = useState(0);
+  const [achievementQueue, setAchievementQueue] = useState([]);
+  const onRewards = useCallback((rewards) => setAchievementQueue((queue) => [...queue, ...rewards]), []);
+  const likePendingRef = useRef(new Set());
   const playSessionRef = useRef({ startedAt: 0, trackId: null, playlistKey: null });
 
   const queueRef = useRef([]);
@@ -266,9 +274,10 @@ export default function App() {
     const audio = audioRef.current;
     if (!audio) return;
     audio.volume = isMuted ? 0 : volume;
-  }, [volume, isMuted, audioRef]);
+  }, [volume, isMuted, audioRef, loading]);
 
-  const publicTracks = useMemo(() => tracks.filter(t => !t.isHidden), [tracks]);
+  const publicTracks = useMemo(() => tracks.filter(isPublishedTrack), [tracks]);
+  const publicPlaylists = useMemo(() => playlists.filter((p) => p.status !== 'draft' && p.isPublished !== false).map((p) => resolvePlaylist(p, publicTracks)), [playlists, publicTracks]);
 
   const currentTrack = useMemo(() => {
     if (!currentQueue || currentQueue.length === 0) return null;
@@ -279,8 +288,8 @@ export default function App() {
 
   const membership = useMemo(() => {
     return {
-      name: levelInfo?.name || "User",
-      color: levelInfo?.color || "#004AAD",
+      name: userProfile?.levelOverrideName || userProfile?.manualLevelName || levelInfo?.name || "User",
+      color: userProfile?.levelOverrideColor || userProfile?.manualLevelColor || levelInfo?.color || "#004AAD",
       bg: `${(levelInfo?.color || "#004AAD")}22`,
       icon: Sparkles,
       key: levelInfo?.key || "user",
@@ -291,7 +300,7 @@ export default function App() {
       xpNext: levelInfo?.xpNext || 0,
       isMax: !!levelInfo?.isMax,
     };
-  }, [levelInfo]);
+  }, [levelInfo, userProfile]);
 
   const displayName = useMemo(() => {
     const nick = (userProfile?.nickname || "").trim();
@@ -303,15 +312,23 @@ export default function App() {
     const engine = engineRef.current;
     if (!engine || !user || user.isAnonymous) return null;
 
-    const res = await engine.processEvent({ ...event, at: event.at || new Date() });
+    let res;
+    try { res = await engine.processEvent({ ...event, at: event.at || new Date() }); }
+    catch { setToastMessage('기록을 저장하지 못했습니다. 네트워크 연결을 확인해 주세요.'); return null; }
 
     if (res?.unlockedRewards?.length) {
-      const last = res.unlockedRewards[res.unlockedRewards.length - 1];
-      setNewAchievement(last);
-      confetti({ particleCount: 180, spread: 80, origin: { y: 0.6 } });
+      setAchievementQueue((queue) => [...queue, ...res.unlockedRewards]);
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) confetti({ particleCount: 80, spread: 65, origin: { y: 0.6 } });
     }
     return res;
   }, [user]);
+
+  useEffect(() => {
+    if (!newAchievement && achievementQueue.length) {
+      setNewAchievement(achievementQueue[0]);
+      setAchievementQueue((queue) => queue.slice(1));
+    }
+  }, [newAchievement, achievementQueue]);
 
   useEffect(() => {
     if (!user?.isAnonymous) return;
@@ -335,11 +352,18 @@ export default function App() {
     queueRef,
     idxRef,
     playTrackRef,
+    isShuffle,
+    setPlaybackError,
   });
+
+  useListeningMemory({ audioRef, currentQueue, currentTrackIdx, currentTrack, publicTracks, setCurrentQueue, setCurrentTrackIdx, setCurrentTime, loopMode, isShuffle });
 
   const handleToggleLike = useCallback(async (e, trackId) => {
     if (e) e.stopPropagation();
     if (!user || !trackId) return;
+    if (likePendingRef.current.has(trackId)) return;
+    likePendingRef.current.add(trackId);
+    try {
 
     const likeDoc = doc(db, 'artifacts', appId, 'users', user.uid, 'likes', trackId);
     const publicStatsDoc = doc(db, 'artifacts', appId, 'public_stats', user.uid);
@@ -352,14 +376,14 @@ export default function App() {
     if (isAlreadyLiked) {
       await deleteDoc(likeDoc);
 
-      await setDoc(
+      if (!user.isAnonymous) await setDoc(
         publicStatsDoc,
         {
           likedCount: nextLikedCount,
           updatedAt: Date.now(),
         },
         { merge: true }
-      );
+      ).catch(() => {});
 
       setToastMessage("아카이브에서 제거되었습니다");
       return;
@@ -367,14 +391,14 @@ export default function App() {
 
     await setDoc(likeDoc, { likedAt: Date.now() });
 
-    await setDoc(
+    if (!user.isAnonymous) await setDoc(
       publicStatsDoc,
       {
         likedCount: nextLikedCount,
         updatedAt: Date.now(),
       },
       { merge: true }
-    );
+    ).catch(() => {});
 
     setToastMessage("아카이브에 기록되었습니다 💗");
 
@@ -384,7 +408,9 @@ export default function App() {
       totalTracks: (publicTracks?.length || 0),
       likedCount: nextLikedCount,
     });
-  }, [user, userLikes, publicTracks, emit, db, appId, setToastMessage]);
+    } catch { setToastMessage('좋아요를 저장하지 못했습니다. 다시 시도해 주세요.'); }
+    finally { likePendingRef.current.delete(trackId); }
+  }, [user, userLikes, publicTracks, emit, setToastMessage]);
 
   const handleShare = useCallback(async (e, item, type = 'track') => {
     if (e) e.stopPropagation();
@@ -421,6 +447,7 @@ export default function App() {
           setToastMessage("곡 링크를 클립보드에 복사했습니다 🔗");
         } else {
           setToastMessage("공유를 지원하지 않는 환경입니다.");
+          return;
         }
 
         await emit({ type: "share_card", trackId: item?.id || null });
@@ -471,12 +498,19 @@ export default function App() {
       const cur = audio.currentTime;
       if (!dur || dur <= 0) return;
 
-      const pct = cur / dur;
+      const session = playSessionRef.current;
+      const now = Date.now();
+      const elapsed = (now - (session.lastTick || now)) / 1000;
+      const delta = cur - (session.lastPosition || 0);
+      if (!audio.seeking && !audio.paused && delta > 0 && delta <= elapsed * (audio.playbackRate || 1) + 1.5) session.heardSeconds = (session.heardSeconds || 0) + Math.min(delta, elapsed * (audio.playbackRate || 1));
+      session.lastPosition = cur; session.lastTick = now;
+      const pct = Math.min(1, (session.heardSeconds || 0) / dur);
       if (pct >= 0.9) {
         const key = `${tid}:${playSessionRef.current.startedAt}`;
         if (!completedOnceRef.current.has(key)) {
           completedOnceRef.current.add(key);
-          emit({ type: "track_complete", trackId: tid, progress: pct });
+          if (completedOnceRef.current.size > 100) completedOnceRef.current.clear();
+          emit({ type: "track_complete", trackId: tid, progress: pct, eventId: `complete:${key}` });
         }
       }
     };
@@ -500,6 +534,7 @@ export default function App() {
     setIsAdmin,
     setLoading,
     setScrolled,
+    setDataError,
   });
 
   useToastTimer({
@@ -527,6 +562,10 @@ export default function App() {
     setSiteConfig,
 
     engineRef,
+    setDataError,
+    retryToken,
+    setDataLoading,
+    onRewards,
     userProfile,
   });
 
@@ -568,7 +607,7 @@ export default function App() {
           audioRef.current.src = url;
           audioRef.current.load();
         }
-      } catch {}
+      } catch { /* Optional browser capability. */ }
 
       setToastMessage(`공유된 곡을 불러왔습니다: ${track.title}`);
 
@@ -598,19 +637,7 @@ export default function App() {
     if (!Array.isArray(queue) || queue.length === 0) return 0;
     if (queue.length === 1) return 0;
 
-    if (!isShuffle) {
-      return (currentIdx + 1) % queue.length;
-    }
-
-    let nextIdx = currentIdx;
-    let safety = 0;
-
-    while (nextIdx === currentIdx && safety < 20) {
-      nextIdx = Math.floor(Math.random() * queue.length);
-      safety += 1;
-    }
-
-    return nextIdx;
+    return nextQueueIndex(queue.length, currentIdx, isShuffle);
   }, [isShuffle]);
 
   const togglePlay = useCallback(async () => {
@@ -625,7 +652,15 @@ export default function App() {
     }
 
     try {
+      setPlaybackError('');
       setIsBuffering(true);
+
+      if (playSessionRef.current.trackId !== currentTrack?.id && currentTrack) {
+        playSessionRef.current = { trackId: currentTrack.id, startedAt: Date.now(), heardSeconds: 0, lastPosition: audio.currentTime, lastTick: Date.now() };
+        void emit({ type: 'track_play_start', trackId: currentTrack.id });
+      } else {
+        playSessionRef.current.lastTick = Date.now(); playSessionRef.current.lastPosition = audio.currentTime;
+      }
 
       const playPromise = audio.play();
       if (playPromise !== undefined) {
@@ -641,16 +676,33 @@ export default function App() {
       }
 
       console.error("togglePlay error:", err);
+      setPlaybackError('재생하지 못했습니다. 다시 시도하거나 다음 곡을 선택해 주세요.');
       setIsPlaying(false);
       setIsBuffering(false);
     }
-  }, [audioRef, isPlaying, setIsPlaying, setIsBuffering]);
+  }, [audioRef, isPlaying, setIsPlaying, setIsBuffering, currentTrack, emit]);
 
   const pauseForExternalPlayback = useCallback(() => {
     audioRef.current?.pause();
     setIsPlaying(false);
     setIsBuffering(false);
   }, [audioRef, setIsPlaying, setIsBuffering]);
+
+  const retryPlayback = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const position = audio.currentTime || 0;
+    setPlaybackError(''); setIsBuffering(true);
+    audio.addEventListener('loadedmetadata', () => { if (Number.isFinite(audio.duration)) audio.currentTime = Math.min(position, audio.duration); }, { once: true });
+    audio.load();
+    audio.play().catch(() => { setIsBuffering(false); setPlaybackError('재생 연결이 복구되지 않았습니다. 다음 곡을 선택하거나 잠시 후 다시 시도해 주세요.'); });
+  }, [audioRef, setIsBuffering]);
+
+  useEffect(() => {
+    if (!isBuffering) return;
+    const timer = setTimeout(() => { setIsBuffering(false); setPlaybackError('음원 응답이 늦어지고 있습니다. 연결을 확인한 뒤 다시 재생해 주세요.'); }, 15000);
+    return () => clearTimeout(timer);
+  }, [isBuffering, setIsBuffering]);
 
   const handleNaturalTrackEnd = useCallback(() => {
     const q = currentQueue || [];
@@ -666,7 +718,7 @@ export default function App() {
         if ("mediaSession" in navigator) {
           navigator.mediaSession.playbackState = "none";
         }
-      } catch {}
+      } catch { /* Optional browser capability. */ }
 
       return;
     }
@@ -683,6 +735,7 @@ export default function App() {
     void playTrack(nextIdx, q, {
       playlistKey: playSessionRef.current?.playlistKey || null,
       restart: loopMode === 2,
+      continuation: true,
     });
   }, [
     currentQueue,
@@ -719,13 +772,18 @@ export default function App() {
 
       <div className={`relative overflow-x-hidden ${isPlayerExpanded ? 'h-screen overflow-hidden' : ''}`}>
         <AppShell user={user} userProfile={userProfile} membership={membership} isAdmin={isAdmin} playerOpen={isPlayerExpanded}>
+        {dataLoading && <p className="up-notice" role="status">사운드 아카이브를 불러오고 있습니다.</p>}
+        {dataError && <div className="up-notice" role="alert">{dataError}<button onClick={async () => { if (!user) await signInAnonymously(auth).catch(() => setDataError('접속하지 못했습니다. 네트워크를 확인해 주세요.')); setRetryToken((n) => n + 1); }}>다시 불러오기</button></div>}
+        <Suspense fallback={<p className="up-notice" role="status">페이지를 준비하고 있습니다.</p>}>
         <AppRoutes
           publicTracks={publicTracks}
-          playlists={playlists}
+          playlists={publicPlaylists}
+          adminPlaylists={playlists}
           gatheringPlaylists={gatheringPlaylists}
           isPlaying={isPlaying}
           currentTrack={currentTrack}
           playTrack={playTrack}
+          togglePlay={togglePlay}
           userLikes={userLikes}
           handleToggleLike={handleToggleLike}
           setSelectedTrack={setSelectedTrack}
@@ -744,7 +802,10 @@ export default function App() {
           pauseForExternalPlayback={pauseForExternalPlayback}
           appId={appId}
         />
+        </Suspense>
         </AppShell>
+
+        {playbackError && <div className="up-playback-error" role="alert"><span>{playbackError}</span><button onClick={retryPlayback}>다시 재생</button><button onClick={playNext}>다음 곡</button><button aria-label="오류 안내 닫기" onClick={() => setPlaybackError('')}>닫기</button></div>}
 
         <AudioPlayer
           currentTrack={currentTrack}
@@ -778,6 +839,16 @@ export default function App() {
           toggleLoop={toggleLoop}
           isShuffle={isShuffle}
           toggleShuffle={toggleShuffle}
+          onMoveQueue={(from, to) => {
+            if (to < 0 || to >= currentQueue.length) return;
+            const next = [...currentQueue]; const [item] = next.splice(from, 1); next.splice(to, 0, item);
+            setCurrentQueue(next); setCurrentTrackIdx(next.findIndex((t) => t.id === currentTrack.id));
+          }}
+          onRemoveQueue={(index) => {
+            if (index === currentTrackIdx) return;
+            const next = currentQueue.filter((_, i) => i !== index);
+            setCurrentQueue(next); setCurrentTrackIdx(next.findIndex((t) => t.id === currentTrack.id));
+          }}
         />
 
         <NicknameModal
@@ -802,16 +873,16 @@ export default function App() {
           />
         )}
 
-        <ShareCard
+        {shareItem && <ShareCard
           shareItem={shareItem}
           shareCardRef={shareCardRef}
           user={user}
           formatDateTime={formatDateTime}
-        />
+        />}
 
         <AnimatePresence>
           {toastMessage && (
-            <motion.div
+            <Motion.div
               initial={{ opacity: 0, y: 20, x: '-50%' }}
               animate={{ opacity: 1, y: 0, x: '-50%' }}
               exit={{ opacity: 0 }}
@@ -828,7 +899,7 @@ export default function App() {
               <CheckCircle2 className="w-3 h-3" />
               {toastMessage}
               {lastCardUrl ? <span className="opacity-80"> • CLICK TO DOWNLOAD</span> : null}
-            </motion.div>
+            </Motion.div>
           )}
         </AnimatePresence>
 
@@ -849,13 +920,17 @@ export default function App() {
           onPlaying={() => {
             setIsBuffering(false);
             setIsPlaying(true);
+            setPlaybackError('');
+            try { if (navigator.mediaSession) navigator.mediaSession.playbackState = 'playing'; } catch { /* Optional capability. */ }
           }}
           onPause={() => {
             setIsPlaying(false);
+            try { if (navigator.mediaSession) navigator.mediaSession.playbackState = 'paused'; } catch { /* Optional capability. */ }
           }}
           onError={() => {
             setIsBuffering(false);
             setIsPlaying(false);
+            setPlaybackError('음원을 불러오지 못했습니다. 연결을 확인한 뒤 다시 재생해 주세요.');
           }}
           onLoadedMetadata={(e) => {
             const a = e.currentTarget;
@@ -870,7 +945,7 @@ export default function App() {
                   position: a.currentTime || 0,
                 });
               }
-            } catch {}
+            } catch { /* Optional browser capability. */ }
           }}
           onLoadedData={(e) => {
             const a = e.currentTarget;
@@ -889,7 +964,7 @@ export default function App() {
                   position: a.currentTime || 0,
                 });
               }
-            } catch {}
+            } catch { /* Optional browser capability. */ }
           }}
           onEnded={handleNaturalTrackEnd}
           preload="metadata"

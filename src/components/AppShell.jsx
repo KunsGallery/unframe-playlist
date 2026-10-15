@@ -64,7 +64,8 @@ export default function AppShell({ children, user, userProfile, membership, isAd
           </Link>
         </header>
 
-        <main className="up-content">{children}</main>
+        <a className="up-skip-link" href="#up-main-content">본문으로 건너뛰기</a>
+        <main id="up-main-content" className="up-content" tabIndex={-1}>{children}</main>
       </div>
 
       <nav className="up-mobile-nav" aria-label="Mobile navigation">

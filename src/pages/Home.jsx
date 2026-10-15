@@ -75,6 +75,7 @@ const getRankingDisplayName = (user) => {
 };
 
 const getRankingIdentityKey = (user) => {
+  if (user?.id) return user.id;
   const name = getRankingDisplayName(user);
 
   return name.toLowerCase().replace(/\s+/g, "");
@@ -156,6 +157,7 @@ export default function Home({
   isPlaying = false,
   currentTrack,
   playTrack,
+  togglePlay,
   userLikes = [],
   handleToggleLike,
   db,
@@ -175,8 +177,10 @@ export default function Home({
   const [heroIndex, setHeroIndex] = useState(0);
   const [rankingIndex, setRankingIndex] = useState(0);
   const [activeMood, setActiveMood] = useState(null);
+  const [catalogLimit, setCatalogLimit] = useState(9);
 
   const scrollContainerRef = useRef(null);
+  const deepLinkHandled = useRef(false);
 
   const rankingCandidates = useMemo(
     () => (Array.isArray(allUsers) ? allUsers : []).filter((user) => !shouldExcludeRankingUser(user)),
@@ -374,7 +378,7 @@ export default function Home({
       return filtered;
     }
 
-    return filtered.slice(0, 9);
+    return filtered;
   }, [tracks, searchTerm, selectedGenre]);
 
   useEffect(() => {
@@ -565,13 +569,38 @@ export default function Home({
   }, [tracks, latestTracks]);
 
   const activeMoodCard = moodCards.find((mood) => mood.id === activeMood) || null;
-  const discoveryTracks = activeMoodCard?.items?.length ? activeMoodCard.items : displayTracks;
+  const filteredDiscovery = activeMoodCard?.items?.length ? activeMoodCard.items : displayTracks;
+  const discoveryTracks = filteredDiscovery.slice(0, catalogLimit);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (deepLinkHandled.current) return;
+    const playlistId = params.get('playlist'), gatheringId = params.get('gathering');
+    const timer = setTimeout(() => {
+      if (playlistId) {
+        let found = [...playlists, ...genrePlaylists].find((p) => p.id === playlistId);
+        if (!found && playlistId.startsWith('exhibition-')) {
+          const name = playlistId.slice(11), items = tracks.filter((t) => t.exhibition?.trim() === name);
+          if (items.length) found = { id: playlistId, title: name, exhibitionTitle: name, curatorNote: items[0].curatorNote || '', image: items[0].image, items };
+        }
+        if (found) { setSelectedPlaylist(found); deepLinkHandled.current = true; }
+      }
+      if (gatheringId) { const found = gatheringPlaylists.find((p) => p.id === gatheringId && p.isPublished !== false); if (found) { setSelectedGatheringPlaylist(found); pauseForExternalPlayback?.(); deepLinkHandled.current = true; } }
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [playlists, gatheringPlaylists, genrePlaylists, tracks, pauseForExternalPlayback]);
 
   const collectionCards = useMemo(() => {
-    return [...(playlists || []), ...genrePlaylists]
+    const exhibitions = new Map();
+    for (const track of tracks) {
+      const name = track.exhibition?.trim();
+      if (!name) continue;
+      if (!exhibitions.has(name)) exhibitions.set(name, { id: `exhibition-${name}`, title: name, exhibitionTitle: name, desc: '전시에서 이어지는 사운드', image: track.image, curatorNote: track.curatorNote || '', items: [] });
+      exhibitions.get(name).items.push(track);
+    }
+    return [...(playlists || []), ...exhibitions.values(), ...genrePlaylists]
       .filter((playlist) => Array.isArray(playlist?.items) && playlist.items.length)
       .slice(0, 10);
-  }, [playlists, genrePlaylists]);
+  }, [playlists, genrePlaylists, tracks]);
 
   const publishedGatheringPlaylists = useMemo(() => {
     return [...(gatheringPlaylists || [])]
@@ -716,7 +745,7 @@ export default function Home({
           </div>
 
           <div className="up-genres" aria-label="Genre filters">
-            {GENRE_OPTIONS.slice(0, 8).map((genre) => (
+            {GENRE_OPTIONS.filter((genre) => genre === 'All' || tracks.some((t) => getTrackGenre(t) === genre)).map((genre) => (
               <button type="button" key={genre} className={selectedGenre === genre && !activeMood ? "is-active" : ""} onClick={() => { setSelectedGenre(genre); setActiveMood(null); }}>
                 {genre}
               </button>
@@ -736,14 +765,15 @@ export default function Home({
               const liked = userLikes.includes(track.id);
               return (
                 <article className={`up-track ${isCurrent ? "is-current" : ""}`} key={track.id}>
-                  <button type="button" className="up-track__play" onClick={() => safePlay(index, discoveryTracks)} aria-label={`Play ${track.title}`}>
+                  <button type="button" className="up-track__play" onClick={() => isCurrent ? togglePlay?.() : safePlay(index, discoveryTracks)} aria-label={`${isCurrent && isPlaying ? 'Pause' : 'Play'} ${track.title}`}>
                     {isCurrent && isPlaying ? <Pause /> : <Play />}
                   </button>
                   <span className="up-track__index">{String(index + 1).padStart(2, "0")}</span>
                   <span className={`up-track__cover ${track.image ? "" : "is-fallback"}`}>{track.image && <img src={track.image} alt="" loading="lazy" onError={hideBrokenImage} />}</span>
                   <span className="up-track__title"><strong>{track.title}</strong><small>{track.artist}</small></span>
                   <span className="up-track__genre">{getTrackGenre(track)}</span>
-                  <button type="button" className={`up-track__like ${liked ? "is-liked" : ""}`} onClick={(e) => handleToggleLike(e, track.id)} aria-label="Add to archive"><Heart /></button>
+                  <button type="button" className={`up-track__like ${liked ? "is-liked" : ""}`} onClick={(e) => handleToggleLike(e, track.id)} aria-label={liked ? '아카이브에서 제거' : '아카이브에 추가'} aria-pressed={liked}><Heart /></button>
+                  {(track.curatorNote || track.exhibition || track.description) && <details className="up-track-story"><summary>곡 이야기</summary>{track.exhibition && <strong>{track.exhibition}</strong>}<p>{track.curatorNote || track.description}</p>{track.artworkTitle && <small>작품 · {track.artworkTitle}</small>}</details>}
                 </article>
               );
             })}
@@ -779,6 +809,7 @@ export default function Home({
         </aside>
       </section>
 
+      <div className="up-catalog-more">{filteredDiscovery.length > catalogLimit && <button type="button" className="up-action" onClick={() => setCatalogLimit((n) => n + 24)}>더 보기 · {discoveryTracks.length} / {filteredDiscovery.length}곡</button>}{catalogLimit === 9 && filteredDiscovery.length > 9 && <button type="button" className="up-action" onClick={() => setCatalogLimit(filteredDiscovery.length)}>전체 곡 보기</button>}</div>
       <footer className="up-footer"><strong>UNFRAME PLAYLIST®</strong><span>Music for exhibitions, people and the spaces between.</span><small>SEOUL · {new Date().getFullYear()}</small></footer>
     </div>
   );

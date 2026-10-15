@@ -102,9 +102,7 @@ export default function PlaylistManager({
     });
   }, [tracks, trackSearch]);
 
-  const selectedTrackIds = Array.isArray(newPlaylist.trackIds)
-    ? newPlaylist.trackIds
-    : [];
+  const selectedTrackIds = useMemo(() => Array.isArray(newPlaylist.trackIds) ? newPlaylist.trackIds : [], [newPlaylist.trackIds]);
 
   const selectedTracks = useMemo(() => {
     const idSet = new Set(selectedTrackIds);

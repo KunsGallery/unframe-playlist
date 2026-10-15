@@ -1,6 +1,7 @@
 // src/components/NicknameModal.jsx
-import React from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import React, { useRef, useCallback } from "react";
+import { useDialogFocus } from '../hooks/useDialogFocus';
+import { motion as Motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 
 export default function NicknameModal({
@@ -13,11 +14,14 @@ export default function NicknameModal({
   setIsNickModalOpen,
   saveNicknameOnce,
 }) {
+  const dialogRef = useRef(null);
+  const close = useCallback(() => setIsNickModalOpen(false), [setIsNickModalOpen]);
+  useDialogFocus(dialogRef, Boolean(isOpen && user && !user.isAnonymous), close);
   return (
     <AnimatePresence>
       {isOpen && user && !user.isAnonymous && (
-        <div className="fixed inset-0 z-10050 flex items-center justify-center p-6 bg-black/85 backdrop-blur-xl">
-          <motion.div
+        <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="닉네임 설정" className="fixed inset-0 z-10050 flex items-center justify-center p-6 bg-black/85 backdrop-blur-xl">
+          <Motion.div
             initial={{ y: 30, opacity: 0, scale: 0.98 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 20, opacity: 0, scale: 0.98 }}
@@ -50,6 +54,7 @@ export default function NicknameModal({
                 </p>
 
                 <input
+                  aria-label="닉네임" aria-invalid={Boolean(nickError)} maxLength={16}
                   value={nickInput}
                   onChange={(e) => {
                     setNickInput(e.target.value);
@@ -84,7 +89,7 @@ export default function NicknameModal({
                 </button>
               </div>
             </div>
-          </motion.div>
+          </Motion.div>
         </div>
       )}
     </AnimatePresence>

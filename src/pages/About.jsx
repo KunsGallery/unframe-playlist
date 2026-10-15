@@ -1,6 +1,6 @@
 // src/pages/About.jsx
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion as Motion } from 'framer-motion';
 import { Ghost, Archive, Sparkles, Smartphone, MoveRight, ExternalLink, Music, Heart, Share2, Compass, Layers, Globe } from 'lucide-react';
 import AboutCanvas from '../components/AboutCanvas';
 
@@ -8,25 +8,25 @@ const glass = "bg-white/[0.03] backdrop-blur-[40px] border border-white/10 shado
 const h1Title = "font-black uppercase tracking-[-0.07em] leading-[0.8] italic";
 const subTitle = "font-bold uppercase tracking-[0.4em] text-[#004aad]";
 
-const About = ({ siteConfig }) => {
+const About = () => {
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="up-themed-page up-about-page pt-32 lg:pt-40 relative min-h-screen overflow-hidden bg-[#050505]">
+    <Motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="up-themed-page up-about-page pt-32 lg:pt-40 relative min-h-screen overflow-hidden bg-[#050505]">
       <AboutCanvas />
       
       <div className="container mx-auto px-6 lg:px-8 relative z-10 pb-40">
         
         {/* [Part 1] Identity - 더 예술적으로 표현 */}
         <section className="mb-40 lg:mb-72">
-            <motion.div initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}>
+            <Motion.div initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}>
                 <span className={subTitle + " block mb-6"}>About Project UP</span>
                 <h2 className={`${h1Title} text-[15vw] lg:text-[12rem] mb-12 leading-none`}>
                     Art is<br/>
                     <span className="not-italic text-[#004aad] drop-shadow-[0_0_30px_rgba(0,74,173,0.5)]">Vibration</span>
                 </h2>
-            </motion.div>
+            </Motion.div>
             
             <div className="grid lg:grid-cols-2 gap-12 lg:gap-24 items-start">
-                <motion.div initial={{ y: 30, opacity: 0 }} whileInView={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }} viewport={{ once: true }} className="space-y-8">
+                <Motion.div initial={{ y: 30, opacity: 0 }} whileInView={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }} viewport={{ once: true }} className="space-y-8">
                     <p className="text-2xl lg:text-4xl font-black uppercase italic tracking-tighter leading-tight text-white">
                         "우리는 소리를 통해<br/> 공간의 기억을 수집합니다." 🎙️
                     </p>
@@ -36,10 +36,10 @@ const About = ({ siteConfig }) => {
                         단순히 음악을 듣는 기능을 넘어, 전시장의 공기와 작가의 의도가 담긴 
                         '소리의 조각(Sound Artifacts)'을 당신의 주머니 속으로 옮겨오는 실험입니다.
                     </p>
-                </motion.div>
+                </Motion.div>
                 
                 {/* UP의 3요소 시각화 */}
-                <motion.div initial={{ scale: 0.9, opacity: 0 }} whileInView={{ scale: 1, opacity: 1 }} transition={{ delay: 0.4 }} viewport={{ once: true }} className="grid grid-cols-1 gap-4">
+                <Motion.div initial={{ scale: 0.9, opacity: 0 }} whileInView={{ scale: 1, opacity: 1 }} transition={{ delay: 0.4 }} viewport={{ once: true }} className="grid grid-cols-1 gap-4">
                     {[
                         { icon: Compass, t: "Explore", d: "전시장의 맥락이 담긴 소리를 발견합니다." },
                         { icon: Layers, t: "Collect", d: "당신의 취향을 아카이브에 기록하고 스티커를 모읍니다." },
@@ -53,7 +53,7 @@ const About = ({ siteConfig }) => {
                             </div>
                         </div>
                     ))}
-                </motion.div>
+                </Motion.div>
             </div>
         </section>
 
@@ -91,7 +91,7 @@ const About = ({ siteConfig }) => {
                         detail: "사파리나 크롬 메뉴의 [홈 화면에 추가] 기능을 이용해 보세요. 브라우저 주소창 없이 오직 음악과 영상에만 집중할 수 있는 완벽한 몰입 환경을 만들어줍니다. 📱"
                     }
                 ].map((item, i) => (
-                    <motion.div key={i} initial={{ y: 20, opacity: 0 }} whileInView={{ y: 0, opacity: 1 }} transition={{ delay: i * 0.1 }} viewport={{ once: true }} className={`${glass} p-10 lg:p-14 rounded-[3.5rem] flex flex-col gap-6 hover:bg-[#004aad]/5 transition-all group border-white/5`}>
+                    <Motion.div key={i} initial={{ y: 20, opacity: 0 }} whileInView={{ y: 0, opacity: 1 }} transition={{ delay: i * 0.1 }} viewport={{ once: true }} className={`${glass} p-10 lg:p-14 rounded-[3.5rem] flex flex-col gap-6 hover:bg-[#004aad]/5 transition-all group border-white/5`}>
                         <div className="w-14 h-14 bg-[#004aad]/20 rounded-2xl flex items-center justify-center group-hover:rotate-12 transition-transform">
                             <item.icon className="w-7 h-7 text-[#004aad]" />
                         </div>
@@ -101,7 +101,7 @@ const About = ({ siteConfig }) => {
                             <p className="text-white font-bold text-lg">{item.desc}</p>
                             <p className="text-zinc-500 text-sm lg:text-base leading-relaxed font-medium">{item.detail}</p>
                         </div>
-                    </motion.div>
+                    </Motion.div>
                 ))}
             </div>
         </section>
@@ -109,7 +109,7 @@ const About = ({ siteConfig }) => {
         {/* [Part 3] Unframe Bridge - 포털 디자인 */}
         <section className="relative">
             <div className="absolute inset-0 bg-[#004aad]/10 blur-[120px] rounded-full" />
-            <motion.div initial={{ scale: 0.95, opacity: 0 }} whileInView={{ scale: 1, opacity: 1 }} viewport={{ once: true }} className={`${glass} p-12 lg:p-32 rounded-[5rem] lg:rounded-[10rem] text-center space-y-12 relative overflow-hidden border-white/20`}>
+            <Motion.div initial={{ scale: 0.95, opacity: 0 }} whileInView={{ scale: 1, opacity: 1 }} viewport={{ once: true }} className={`${glass} p-12 lg:p-32 rounded-[5rem] lg:rounded-[10rem] text-center space-y-12 relative overflow-hidden border-white/20`}>
                 <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-transparent via-[#004aad] to-transparent" />
                 
                 <div className="space-y-6">
@@ -133,11 +133,11 @@ const About = ({ siteConfig }) => {
                         Project Archive <MoveRight className="w-5 h-5" />
                     </a>
                 </div>
-            </motion.div>
+            </Motion.div>
         </section>
 
       </div>
-    </motion.div>
+    </Motion.div>
   );
 };
 

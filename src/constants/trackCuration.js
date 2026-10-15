@@ -129,6 +129,8 @@ export const normalizeTrackForEditor = (track = {}) => {
 
   return {
     ...createEmptyTrack(),
+    status: track.status || 'published',
+    isHidden: Boolean(track.isHidden),
     title: track.title || "",
     artist: track.artist || "",
     image: track.image || "",
