@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link } from 'react-router-dom';
+import RadioShelf from '../components/RadioShelf';
 import {
   ArrowLeft,
   ArrowRight,
@@ -734,6 +736,7 @@ export default function Home({
         </section>
       )}
 
+      <RadioShelf tracks={tracks} playTrack={playTrack} />
       <section className="up-section up-discovery">
         <div className="up-catalog">
           <div className="up-section__head up-section__head--stack">
@@ -770,7 +773,7 @@ export default function Home({
                   </button>
                   <span className="up-track__index">{String(index + 1).padStart(2, "0")}</span>
                   <span className={`up-track__cover ${track.image ? "" : "is-fallback"}`}>{track.image && <img src={track.image} alt="" loading="lazy" onError={hideBrokenImage} />}</span>
-                  <span className="up-track__title"><strong>{track.title}</strong><small>{track.artist}</small></span>
+                  <span className="up-track__title"><Link to={`/tracks/${track.id}`}><strong>{track.title}</strong></Link><small>{track.artist}</small></span>
                   <span className="up-track__genre">{getTrackGenre(track)}</span>
                   <button type="button" className={`up-track__like ${liked ? "is-liked" : ""}`} onClick={(e) => handleToggleLike(e, track.id)} aria-label={liked ? '아카이브에서 제거' : '아카이브에 추가'} aria-pressed={liked}><Heart /></button>
                   {(track.curatorNote || track.exhibition || track.description) && <details className="up-track-story"><summary>곡 이야기</summary>{track.exhibition && <strong>{track.exhibition}</strong>}<p>{track.curatorNote || track.description}</p>{track.artworkTitle && <small>작품 · {track.artworkTitle}</small>}</details>}

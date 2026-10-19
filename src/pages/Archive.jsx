@@ -6,7 +6,8 @@ import {
   Medal, LogIn, Lock, Sparkles, Layers,
   X
 } from 'lucide-react';
-import { doc, updateDoc, setDoc } from 'firebase/firestore';
+import { doc, updateDoc } from 'firebase/firestore';
+import { uploadImage } from '../utils/api';
 import { LEVELS, getLevelInfo } from '../levels';
 import { achievementProgress } from '../utils/rewardState';
 import {
@@ -17,7 +18,6 @@ import {
 
 const glass = "bg-white/[0.03] backdrop-blur-[40px] border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]";
 const h1Title = "font-black uppercase tracking-[-0.07em] leading-[0.8] italic";
-const IMGBB_API_KEY = "d1d66a67fff0404d782a4a001dfb40e2";
 
 const safeSrc = (v) => (typeof v === "string" && v.trim() ? v : null);
 
@@ -256,22 +256,14 @@ export default function Archive({
           ctx.drawImage(img, (img.width - crop) / 2, (img.height - crop) / 2, crop, crop, 0, 0, 512, 512);
 
           const base64Data = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
-          const formData = new FormData();
-          formData.append("image", base64Data);
-
-          const response = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
-            method: "POST",
-            body: formData
-          });
-          const result = await response.json();
-
-          if (result?.success) {
+          try {
+            const url = await uploadImage(base64Data);
             await updateDoc(
               doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'stats'),
-              { profileImg: result.data.url }
+              { profileImg: url }
             );
-          }
-          setIsUploadingProfile(false);
+          } catch (error) { alert(error.message || '업로드하지 못했습니다. 다시 시도해 주세요.'); }
+          finally { setIsUploadingProfile(false); }
         };
 
         img.onerror = () => setIsUploadingProfile(false);
@@ -319,13 +311,6 @@ export default function Archive({
       const privateRef = doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'stats');
       await updateDoc(privateRef, { nickname: next, nicknameUpdatedCount: 1 });
 
-      // public_stats도 가능하면 동기화 (규칙이 막으면 실패할 수 있음 → 무시)
-      try {
-        const publicRef = doc(db, 'artifacts', appId, 'public_stats', user.uid);
-        await setDoc(publicRef, { displayName: next, nickname: next }, { merge: true });
-      } catch {
-        // ignore
-      }
 
       setIsNickModalOpen(false);
     } catch (e) {

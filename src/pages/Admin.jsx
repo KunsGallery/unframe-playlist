@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { ShieldCheck } from "lucide-react";
 import {
-  addDoc,
   collection,
   doc,
   getDoc,
   getDocs,
+  deleteDoc,
   setDoc,
   Timestamp,
-  updateDoc,
   runTransaction,
   writeBatch,
 } from "firebase/firestore";
 import { auth } from "../firebase";
+import { uploadImage } from '../utils/api';
 import AdminTabs from "../components/admin/AdminTabs";
 import TrackManager from "../components/admin/TrackManager";
 import PlaylistManager from "../components/admin/PlaylistManager";
@@ -36,7 +36,6 @@ import {
 
 const glass =
   "bg-white/[0.03] backdrop-blur-[40px] border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]";
-const IMGBB_API_KEY = "d1d66a67fff0404d782a4a001dfb40e2";
 
 const ADMIN_SECTIONS = {
   tracks: { eyebrow: "Audio Library", title: "Tracks", desc: "음원 파일, 커버, 곡 정보와 큐레이션 태그를 관리합니다." },
@@ -330,17 +329,7 @@ export default function Admin({
   }
 
   const uploadImageToImgBB = async (file) => {
-    const formData = new FormData();
-    formData.append("image", file);
-
-    const response = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
-      method: "POST",
-      body: formData,
-    });
-
-    const result = await response.json();
-    if (!result?.success) throw new Error("IMGBB upload failed");
-    return result.data.url;
+    return uploadImage(file);
   };
 
   const updateHeroSlide = (slideId, patch) => {
@@ -440,7 +429,7 @@ export default function Admin({
         await saveContent(db, trackDocRef(db, appId, editingId), payload, auth.currentUser?.uid);
         setToastMessage?.("트랙 수정 완료");
       } else {
-        await addDoc(tracksCollectionRef(db, appId), payload);
+        await saveContent(db, doc(tracksCollectionRef(db, appId)), payload, auth.currentUser?.uid);
         setToastMessage?.("트랙 업로드 완료");
       }
 
@@ -492,7 +481,7 @@ export default function Admin({
         const patchKeys = Object.keys(patch);
         if (patchKeys.length === 0) return null;
 
-        return updateDoc(trackDocRef(db, appId, track.id), patch);
+        return saveContent(db, trackDocRef(db, appId, track.id), patch, auth.currentUser?.uid);
       });
 
       const actionableUpdates = updates.filter(Boolean);
@@ -530,7 +519,7 @@ export default function Admin({
         await saveContent(db, playlistDocRef(db, appId, editingPlaylistId), payload, auth.currentUser?.uid);
         setToastMessage?.("플레이리스트 수정 완료");
       } else {
-        await addDoc(playlistsCollectionRef(db, appId), payload);
+        await saveContent(db, doc(playlistsCollectionRef(db, appId)), payload, auth.currentUser?.uid);
         setToastMessage?.("플레이리스트 생성 완료");
       }
 
@@ -596,10 +585,10 @@ export default function Admin({
         await saveContent(db, gatheringPlaylistDocRef(db, appId, editingGatheringPlaylistId), payload, auth.currentUser?.uid);
         setToastMessage?.("모임 플레이리스트 수정 완료");
       } else {
-        await addDoc(gatheringPlaylistsCollectionRef(db, appId), {
+        await saveContent(db, doc(gatheringPlaylistsCollectionRef(db, appId)), {
           ...payload,
           createdAt: Timestamp.now(),
-        });
+        }, auth.currentUser?.uid);
         setToastMessage?.("모임 플레이리스트 발행 완료");
       }
 
@@ -665,6 +654,7 @@ export default function Admin({
         payload,
         { merge: true }
       );
+      if (payload.isRankingHidden === true) await deleteDoc(doc(db, 'artifacts', appId, 'leaderboard', selectedUserForSticker.id));
       setSelectedUserForSticker((prev) => ({ ...prev, ...payload }));
       setToastMessage?.(successMessage);
     } catch (e) {

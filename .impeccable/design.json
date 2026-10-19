@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-19T02:15:00Z",
+  "title": "Design System: UP — Unframe Playlist",
+  "extensions": {
+    "colorMeta": {
+      "up-blue": { "role": "primary", "displayName": "UP Blue", "tonalRamp": ["oklch(15% 0.28 264)", "oklch(26% 0.28 264)", "oklch(38% 0.28 264)", "oklch(49% 0.28 264)", "oklch(61% 0.28 264)", "oklch(72% 0.28 264)", "oklch(84% 0.28 264)", "oklch(95% 0.28 264)"] },
+      "up-lime": { "role": "secondary", "displayName": "UP Lime", "tonalRamp": ["oklch(15% 0.23 121)", "oklch(26% 0.23 121)", "oklch(38% 0.23 121)", "oklch(49% 0.23 121)", "oklch(61% 0.23 121)", "oklch(72% 0.23 121)", "oklch(84% 0.23 121)", "oklch(95% 0.23 121)"] },
+      "up-orange": { "role": "tertiary", "displayName": "UP Orange", "tonalRamp": ["oklch(15% 0.20 34)", "oklch(26% 0.20 34)", "oklch(38% 0.20 34)", "oklch(49% 0.20 34)", "oklch(61% 0.20 34)", "oklch(72% 0.20 34)", "oklch(84% 0.20 34)", "oklch(95% 0.20 34)"] },
+      "up-paper": { "role": "neutral", "displayName": "UP Paper", "tonalRamp": ["oklch(15% 0.012 92)", "oklch(26% 0.012 92)", "oklch(38% 0.012 92)", "oklch(49% 0.012 92)", "oklch(61% 0.012 92)", "oklch(72% 0.012 92)", "oklch(84% 0.012 92)", "oklch(95% 0.012 92)"] },
+      "up-paper-2": { "role": "neutral", "displayName": "UP Paper 2", "tonalRamp": ["oklch(15% 0.013 90)", "oklch(26% 0.013 90)", "oklch(38% 0.013 90)", "oklch(49% 0.013 90)", "oklch(61% 0.013 90)", "oklch(72% 0.013 90)", "oklch(84% 0.013 90)", "oklch(95% 0.013 90)"] },
+      "up-ink": { "role": "neutral", "displayName": "UP Ink", "tonalRamp": ["oklch(15% 0.004 106)", "oklch(26% 0.004 106)", "oklch(38% 0.004 106)", "oklch(49% 0.004 106)", "oklch(61% 0.004 106)", "oklch(72% 0.004 106)", "oklch(84% 0.004 106)", "oklch(95% 0.004 106)"] },
+      "up-muted": { "role": "neutral", "displayName": "UP Muted", "tonalRamp": ["oklch(15% 0.012 92)", "oklch(26% 0.012 92)", "oklch(38% 0.012 92)", "oklch(49% 0.012 92)", "oklch(61% 0.012 92)", "oklch(72% 0.012 92)", "oklch(84% 0.012 92)", "oklch(95% 0.012 92)"] },
+      "up-line": { "role": "neutral", "displayName": "UP Line — translucent ink", "tonalRamp": ["oklch(15% 0.004 106 / 0.16)", "oklch(26% 0.004 106 / 0.16)", "oklch(38% 0.004 106 / 0.16)", "oklch(49% 0.004 106 / 0.16)", "oklch(61% 0.004 106 / 0.16)", "oklch(72% 0.004 106 / 0.16)", "oklch(84% 0.004 106 / 0.16)", "oklch(95% 0.004 106 / 0.16)"] },
+      "card-paper": { "role": "neutral", "displayName": "Card Paper", "tonalRamp": ["oklch(15% 0.012 96)", "oklch(26% 0.012 96)", "oklch(38% 0.012 96)", "oklch(49% 0.012 96)", "oklch(61% 0.012 96)", "oklch(72% 0.012 96)", "oklch(84% 0.012 96)", "oklch(95% 0.012 96)"] },
+      "field-paper": { "role": "neutral", "displayName": "Field Paper", "tonalRamp": ["oklch(15% 0.009 96)", "oklch(26% 0.009 96)", "oklch(38% 0.009 96)", "oklch(49% 0.009 96)", "oklch(61% 0.009 96)", "oklch(72% 0.009 96)", "oklch(84% 0.009 96)", "oklch(95% 0.009 96)"] },
+      "feedback-blue": { "role": "tertiary", "displayName": "Feedback Blue", "tonalRamp": ["oklch(15% 0.17 257)", "oklch(26% 0.17 257)", "oklch(38% 0.17 257)", "oklch(49% 0.17 257)", "oklch(61% 0.17 257)", "oklch(72% 0.17 257)", "oklch(84% 0.17 257)", "oklch(95% 0.17 257)"] },
+      "white": { "role": "neutral", "displayName": "White", "tonalRamp": ["oklch(15% 0 0)", "oklch(26% 0 0)", "oklch(38% 0 0)", "oklch(49% 0 0)", "oklch(61% 0 0)", "oklch(72% 0 0)", "oklch(84% 0 0)", "oklch(95% 0 0)"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Exhibition Display", "purpose": "Existing home hero; uppercase Latin, very heavy and tightly tracked." },
+      "headline": { "displayName": "Section Headline", "purpose": "Exhibition section headings, including UP Radio." },
+      "title": { "displayName": "Listening Title", "purpose": "Release and library headings; source does not declare a new font weight." },
+      "body": { "displayName": "Listening Body", "purpose": "Listening-page prose, maximum width 70ch." },
+      "label": { "displayName": "Mono Kicker", "purpose": "Small uppercase editorial annotations; breadcrumbs use their own observed sizes." }
+    },
+    "shadows": [
+      { "name": "brand-offset", "value": "5px 5px 0 var(--up-ink)", "purpose": "Circular UP mark." },
+      { "name": "hero-offset", "value": "9px 9px 0 var(--up-ink)", "purpose": "Desktop exhibition hero." },
+      { "name": "collection-hover", "value": "6px 6px 0 var(--up-blue)", "purpose": "Collection hover." },
+      { "name": "mini-player", "value": "0 18px 60px rgba(17,17,15,.28)", "purpose": "Floating persistent player." },
+      { "name": "player-sheet", "value": "12px 12px 0 var(--up-lime), 0 34px 100px rgba(17,17,15,.36)", "purpose": "Desktop LP player sheet." },
+      { "name": "lp-sleeve", "value": "16px 20px 42px rgba(5,5,5,.42), 5px 5px 0 var(--up-lime)", "purpose": "Existing LP sleeve." },
+      { "name": "feedback", "value": "0 12px 30px #11110f25", "purpose": "Fixed mutation feedback." },
+      { "name": "receipt", "value": "0 12px 30px #11110f0c", "purpose": "Monthly listening receipt." }
+    ],
+    "motion": [
+      { "name": "navigation", "value": ".2s ease", "purpose": "Existing navigation state transitions." },
+      { "name": "player-close", "value": "transform .18s ease, box-shadow .18s ease, background .18s ease", "purpose": "Compress the existing close-control shadow." },
+      { "name": "vinyl", "value": "12s linear infinite", "purpose": "Disc rotates only while playing and not buffering." },
+      { "name": "player-surface", "value": "spring(stiffness: 210, damping: 27, mass: 0.9)", "purpose": "Existing shared-surface expansion." },
+      { "name": "reduced-motion", "value": "animation-duration: .01ms; animation-iteration-count: 1; transition-duration: .01ms", "purpose": "Existing prefers-reduced-motion CSS; scroll behavior becomes auto." }
+    ],
+    "breakpoints": [
+      { "name": "home-intermediate", "value": "1120px" },
+      { "name": "shell-mobile", "value": "900px" },
+      { "name": "listening-stack", "value": "760px" },
+      { "name": "home-mobile", "value": "700px" },
+      { "name": "mini-player-compact", "value": "430px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Listening Primary Button", "kind": "button", "refersTo": "listening-primary",
+      "description": "Release playback and library save; retains the current generic paper hover cascade.",
+      "html": "<button class=\"ds-listening-primary\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><path d=\"m6 3 14 9-14 9V3Z\"/></svg>재생</button>",
+      "css": ".ds-listening-primary{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:10px 14px;min-height:42px;border:1px solid transparent;border-radius:8px;background:var(--up-blue,#143cff);color:white;font-family:Inter,Pretendard,'Apple SD Gothic Neo',system-ui,sans-serif;font-weight:650;cursor:pointer}.ds-listening-primary:hover:not(:disabled){background:var(--up-paper-2,#e8e5dc)}.ds-listening-primary:focus-visible{outline:3px solid var(--up-blue,#143cff);outline-offset:3px}.ds-listening-primary:disabled{opacity:.5;cursor:not-allowed}"
+    },
+    {
+      "name": "Listening Secondary Button", "kind": "button", "refersTo": "listening-secondary",
+      "description": "Quiet outlined follow, edit, share, and radio controls.",
+      "html": "<button class=\"ds-listening-secondary\">새 플레이리스트</button>",
+      "css": ".ds-listening-secondary{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:10px 14px;min-height:42px;border:1px solid var(--up-line,rgba(17,17,15,.16));border-radius:8px;background:var(--up-paper,#f1efe7);color:var(--up-ink,#11110f);font-family:Inter,Pretendard,'Apple SD Gothic Neo',system-ui,sans-serif;font-weight:650;cursor:pointer}.ds-listening-secondary:hover:not(:disabled){background:var(--up-paper-2,#e8e5dc)}.ds-listening-secondary:focus-visible{outline:3px solid var(--up-blue,#143cff);outline-offset:3px}.ds-listening-secondary:disabled{opacity:.5;cursor:not-allowed}"
+    },
+    {
+      "name": "Listening Field", "kind": "input", "refersTo": "listening-field",
+      "description": "Library form field with the implemented label and focus treatment.",
+      "html": "<label class=\"ds-field-label\">제목<input class=\"ds-field\" placeholder=\"플레이리스트 제목\" maxlength=\"80\"/></label>",
+      "css": ".ds-field-label{display:block;color:var(--up-ink,#11110f);font-family:Inter,Pretendard,'Apple SD Gothic Neo',system-ui,sans-serif;font-size:14px;font-weight:650}.ds-field{display:block;width:100%;border:1px solid #88867e;border-radius:6px;background:#fffdf7;color:var(--up-ink,#11110f);padding:11px;margin-top:7px;min-height:44px;font:inherit}.ds-field:focus-visible{outline:3px solid var(--up-blue,#143cff);outline-offset:3px}"
+    },
+    {
+      "name": "Desktop Navigation Item", "kind": "nav", "refersTo": "navigation-active",
+      "description": "Active Library destination with lime icon and a four-pixel shift.",
+      "html": "<nav><a class=\"ds-nav-item ds-nav-active\" href=\"#library\" aria-current=\"page\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><path d=\"M3 6h14M3 11h14M3 16h8M21 8v10a3 3 0 1 1-3-3h3\"/></svg><span><strong>Library</strong><small>Playlists &amp; follows</small></span></a></nav>",
+      "css": ".ds-nav-item{display:grid;grid-template-columns:38px 1fr;align-items:center;gap:8px;min-height:54px;padding:8px;border:1px solid transparent;border-radius:16px;color:var(--up-muted,#6e6c65);text-decoration:none;transition:.2s ease;font-family:Inter,Pretendard,'Apple SD Gothic Neo',system-ui,sans-serif}.ds-nav-item svg{width:19px}.ds-nav-item span{display:flex;flex-direction:column}.ds-nav-item strong{font-size:13px;text-transform:uppercase;letter-spacing:.04em}.ds-nav-item small{margin-top:3px;font-size:9px;text-transform:uppercase;letter-spacing:.08em}.ds-nav-item:hover{color:var(--up-ink,#11110f);border-color:var(--up-line,rgba(17,17,15,.16))}.ds-nav-active{color:white;background:var(--up-ink,#11110f);transform:translateX(4px)}.ds-nav-active svg{color:var(--up-lime,#ccff00)}.ds-nav-item:focus-visible{outline:3px solid #004aad;outline-offset:4px}"
+    },
+    {
+      "name": "Active Genre Chip", "kind": "chip", "refersTo": "genre-active",
+      "description": "Existing mono catalog filter, distinct from library tabs.",
+      "html": "<button class=\"ds-genre ds-genre-active\">Ambient</button>",
+      "css": ".ds-genre{padding:8px 12px;border:1px solid var(--up-line,rgba(17,17,15,.16));border-radius:100px;background:transparent;color:var(--up-muted,#6e6c65);font:800 9px ui-monospace,monospace;text-transform:uppercase;cursor:pointer}.ds-genre-active{border-color:var(--up-ink,#11110f);background:var(--up-ink,#11110f);color:white}.ds-genre:focus-visible{outline:3px solid #004aad;outline-offset:4px}"
+    },
+    {
+      "name": "Collection Card", "kind": "card", "refersTo": "collection",
+      "description": "Existing collection with its real blue UP artwork fallback.",
+      "html": "<button class=\"ds-collection\"><span class=\"ds-collection-number\">COLLECTION 01</span><span class=\"ds-collection-image\">UP</span><strong>Ambient</strong><small>Ambient selection</small></button>",
+      "css": ".ds-collection{width:280px;padding:14px;border:1px solid var(--up-ink,#11110f);border-radius:22px;background:#fffdf5;color:var(--up-ink,#11110f);text-align:left;cursor:pointer;transition:.2s ease;font-family:Inter,Pretendard,'Apple SD Gothic Neo',system-ui,sans-serif}.ds-collection:hover{transform:translateY(-5px) rotate(-.5deg);box-shadow:6px 6px 0 var(--up-blue,#143cff)}.ds-collection-number{display:block;padding:2px 2px 12px;font:850 9px ui-monospace,monospace;letter-spacing:.12em}.ds-collection-image{display:grid;place-items:center;aspect-ratio:1;overflow:hidden;border:1px solid var(--up-ink,#11110f);border-radius:14px;background:var(--up-blue,#143cff);color:white;font-size:64px;font-weight:950;letter-spacing:-.1em}.ds-collection>strong{display:block;margin:18px 3px 4px;font-size:22px;line-height:1;letter-spacing:-.04em;text-transform:uppercase}.ds-collection>small{display:block;margin:0 3px 5px;color:var(--up-muted,#6e6c65);font:700 10px/1.5 ui-monospace,monospace}.ds-collection:focus-visible{outline:3px solid #004aad;outline-offset:4px}"
+    },
+    {
+      "name": "Mutation Feedback", "kind": "custom", "refersTo": "feedback-toast",
+      "description": "Real toast styling; preview omits fixed viewport positioning only.",
+      "html": "<div class=\"ds-feedback\" role=\"status\" aria-live=\"polite\" aria-atomic=\"true\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"m8 12 3 3 5-6\"/></svg>플레이리스트를 저장했습니다.</div>",
+      "css": ".ds-feedback{display:flex;align-items:center;gap:10px;max-width:min(440px,calc(100vw - 32px));padding:16px 20px;border-radius:12px;background:#004aad;color:#fff;font-family:Inter,Pretendard,'Apple SD Gothic Neo',system-ui,sans-serif;font-size:14px;font-weight:650;line-height:1.5;box-shadow:0 12px 30px #11110f25;overflow-wrap:anywhere}.ds-feedback>svg{flex-shrink:0}"
+    },
+    {
+      "name": "LP Player Close Control", "kind": "custom",
+      "description": "Existing desktop LP-player signature control; full sleeve/disc behavior remains in FullPlayer.jsx.",
+      "html": "<button class=\"ds-player-close\" aria-label=\"플레이어 화면 닫기\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" aria-hidden=\"true\"><path d=\"m6 9 6 6 6-6\"/></svg></button>",
+      "css": ".ds-player-close{width:48px;height:48px;border:2px solid white;border-radius:50%;display:grid;place-items:center;color:white;background:var(--up-ink,#11110f);box-shadow:4px 4px 0 var(--up-lime,#ccff00);cursor:pointer;transition:transform .18s ease,box-shadow .18s ease,background .18s ease}.ds-player-close:hover{background:var(--up-blue,#143cff);transform:translate(2px,2px);box-shadow:3px 3px 0 var(--up-lime,#ccff00)}.ds-player-close:active{transform:translate(4px,4px);box-shadow:1px 1px 0 var(--up-lime,#ccff00)}.ds-player-close:focus-visible{outline:3px solid var(--up-blue,#143cff);outline-offset:4px}.ds-player-close svg{width:27px;height:27px;stroke-width:3}"
+    }
+  ],
+  "narrative": {
+    "northStar": "A personal listening desk for music issued by UNFRAME only.",
+    "overview": "This is a record of the implemented, approved incumbent system, not a replacement visual direction. The confirmed language is bright, unique, premium but witty. Warm paper, a faint square grid, heavy compressed-looking sans-serif headlines, compact mono annotations, saturated color, and small rotations make the identity recognizable. Listening-task pages deliberately use quieter type and thin dividers inside that same shell.\n\nThe release-detail, radio, exhibition-journey, and listener-library extension inherits the existing navigation, icons, palette, and persistent LP player. The north-star sentence comes from the first-body extension contract in `index.html`; it is not a newly invented metaphor. Extraction authority is `src/up-system.css`, `AppShell.jsx`, `FullPlayer.jsx`, `ReleaseDetail.jsx`, and `ListenerLibrary.jsx`, checked against supplied desktop library/radio and mobile release screenshots. Tokens above preserve source values; numeric weights are recorded only where explicitly styled.",
+    "keyCharacteristics": [
+      "Paper and ink ground saturated blue, lime, and orange.",
+      "Oversized, tightly tracked exhibition headlines coexist with readable listening-task headings.",
+      "Rounded containers, thin rules, hard offset shadows, and circular controls share one system.",
+      "Navigation and playback remain persistent as the content changes."
+    ],
+    "rules": [],
+    "dos": [
+      "Do preserve the paper grid, existing type stack, saturated accents, icons, and LP player when adding listening tools.",
+      "Do keep task pages quieter than exhibition headlines while retaining the shared shell.",
+      "Do retain wrapping, bottom-player clearance, visible focus, and explicit selected/disabled states.",
+      "Do use the implemented ruled rows, radio columns, and small form panels for their existing roles."
+    ],
+    "donts": [
+      "Don't replace the approved palette, normalize its two blues, or remove the grid as incidental cleanup.",
+      "Don't redesign the sleeve/disc player or replace it with a generic album card.",
+      "Don't promote a task-specific layout into a new global visual rule.",
+      "Don't invent a new font, color scale, metaphor, or component state and label it incumbent."
+    ]
+  }
+}

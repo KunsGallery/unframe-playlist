@@ -1,10 +1,11 @@
 import React from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
-import { Archive, CircleUserRound, Grid2X2, Info, Music2, Settings2 } from "lucide-react";
+import { Archive, CircleUserRound, Grid2X2, Info, Music2, Settings2, ListMusic } from "lucide-react";
 
 const navItems = [
   { to: "/", label: "Floor", sub: "Exhibition", icon: Grid2X2 },
   { to: "/archive", label: "Archive", sub: "Your collection", icon: Archive },
+  { to: "/library", label: "Library", sub: "Playlists & follows", icon: ListMusic },
   { to: "/about", label: "About", sub: "Why UP?", icon: Info },
 ];
 
@@ -12,6 +13,7 @@ export default function AppShell({ children, user, userProfile, membership, isAd
   const location = useLocation();
   const nickname = (userProfile?.nickname || user?.displayName || "Guest Listener").trim();
   const levelName = membership?.name || "Listener";
+  const routeLabel = location.pathname.startsWith('/tracks/') ? 'RELEASE NOTES' : location.pathname.startsWith('/exhibitions/') ? 'LISTENING JOURNEY' : location.pathname.startsWith('/playlist/') ? 'SHARED PLAYLIST' : location.pathname === '/library' ? 'LISTENER LIBRARY' : location.pathname === '/' ? 'EXHIBITION FLOOR' : location.pathname.slice(1).toUpperCase();
 
   return (
     <div className={`up-shell ${playerOpen ? "up-shell--player-open" : ""}`}>
@@ -55,7 +57,7 @@ export default function AppShell({ children, user, userProfile, membership, isAd
         <header className="up-topbar">
           <div className="up-topbar__route">
             <span>UP /</span>
-            <strong>{location.pathname === "/" ? "EXHIBITION FLOOR" : location.pathname.slice(1).toUpperCase()}</strong>
+            <strong>{routeLabel}</strong>
           </div>
 
           <Link to="/archive" className="up-member" aria-label="Open listener archive">

@@ -1,39 +1,42 @@
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, setDoc, updateDoc, getDoc } from 'firebase/firestore';
-import { createAchievementEngine } from '../src/store.js';
-import assert from 'node:assert/strict';
-
-test('Firestore protects admin settings and rejects new unauthorized fields', { skip: !process.env.FIRESTORE_EMULATOR_HOST }, async () => {
-  const environment = await initializeTestEnvironment({ projectId: 'demo-up', firestore: { rules: await readFile(new URL('../firestore.rules', import.meta.url), 'utf8') } });
+import { doc, setDoc, updateDoc, getDoc, getDocs, collection } from 'firebase/firestore';
+test('server-authoritative rules prevent reward forgery, private draft leaks and ranking exposure', { skip: !process.env.FIRESTORE_EMULATOR_HOST }, async () => {
+  const env = await initializeTestEnvironment({ projectId: 'demo-up', firestore: { rules: await readFile(new URL('../firestore.rules', import.meta.url), 'utf8') } });
   try {
-    await environment.clearFirestore();
-    const owner = environment.authenticatedContext('listener', { email: 'listener@example.com', firebase: { sign_in_provider: 'google.com' } }).firestore();
-    const stranger = environment.authenticatedContext('stranger').firestore();
-    const admin = environment.authenticatedContext('admin', { email: 'gallerykuns@gmail.com', firebase: { sign_in_provider: 'google.com' } }).firestore();
-    const profile = (db) => doc(db, 'artifacts/up/users/listener/profile/stats');
-    const stats = (db) => doc(db, 'artifacts/up/public_stats/listener');
-    await assertSucceeds(setDoc(profile(owner), { xp: 0, nickname: 'Listener' }));
-    await assertFails(updateDoc(profile(owner), { levelOverrideName: 'Admin' }));
-    await assertFails(updateDoc(profile(stranger), { nickname: 'Hijacked' }));
-    await assertSucceeds(updateDoc(profile(admin), { levelOverrideName: 'Family' }));
-    await assertSucceeds(updateDoc(profile(owner), { xp: 10 }));
-    const engine = createAchievementEngine({ db: owner, appId: 'up', uid: 'listener' });
-    await Promise.all([
-      engine.processEvent({ type: 'track_play_start', trackId: 'song-a', eventId: 'simultaneous-play' }),
-      engine.processEvent({ type: 'playlist_play', playlistKey: 'list-a', eventId: 'simultaneous-playlist' }),
-      engine.processEvent({ type: 'like_added', trackId: 'song-a', likedCount: 1, eventId: 'simultaneous-like' }),
-    ]);
-    const saved = (await getDoc(profile(owner))).data();
-    assert.equal(saved.counters.listens, 1); assert.equal(saved.counters.playlistPlays['list-a'], 1);
-    assert.ok(saved.rewards.some((r) => r.id === 'first_listen')); assert.ok(saved.rewards.some((r) => r.id === 'first_like'));
-    assert.equal(saved.levelOverrideName, 'Family');
-    await assertSucceeds(setDoc(stats(owner), { likedCount: 1, updatedAt: 1, rewardCount: 0 }));
-    await assertFails(updateDoc(stats(owner), { isRankingHidden: true }));
-    await assertFails(updateDoc(stats(owner), { unexpectedField: 'not allowed' }));
-    await assertSucceeds(updateDoc(stats(admin), { isRankingHidden: true }));
-    await assertFails(setDoc(doc(owner, 'artifacts/up/public/data/tracks/unauthorized'), { title: 'Not allowed' }));
-    await assertSucceeds(setDoc(doc(admin, 'artifacts/up/public/data/tracks/authorized'), { title: 'Allowed' }));
-  } finally { await environment.cleanup(); }
+    await env.clearFirestore();
+    const owner = env.authenticatedContext('listener', { email: 'listener@example.com', firebase: { sign_in_provider: 'google.com' } }).firestore();
+    const guest = env.unauthenticatedContext().firestore();
+    const stranger = env.authenticatedContext('stranger').firestore();
+    const admin = env.authenticatedContext('admin', { email: 'gallerykuns@gmail.com', firebase: { sign_in_provider: 'google.com' } }).firestore();
+    const profile = 'artifacts/up/users/listener/profile/stats';
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), profile), { xp: 100, nickname: 'Listener', nicknameUpdatedCount: 0, rewards: [] });
+      await setDoc(doc(ctx.firestore(), 'artifacts/up/public/data/tracks/published'), { title: 'Public', status: 'published', audioUrl: 'https://example.com/a.mp3' });
+      await setDoc(doc(ctx.firestore(), 'artifacts/up/editorial/data/tracks/draft'), { title: 'Secret draft', revisionHistory: [{ secret: true }] });
+      await setDoc(doc(ctx.firestore(), 'artifacts/up/public_stats/listener'), { xp: 100 });
+    });
+    for (const payload of [{ xp: 999999 }, { rewards: ['annual_gold'] }, { counters: { listens: 999 } }, { rankingOptIn: true }, { levelOverrideName: 'Admin' }]) await assertFails(updateDoc(doc(owner, profile), payload));
+    await assertSucceeds(updateDoc(doc(owner, profile), { nicknamePrompted: true }));
+    await assertSucceeds(updateDoc(doc(owner, profile), { nickname: 'New Name', nicknameUpdatedCount: 1 }));
+    await assertFails(updateDoc(doc(owner, profile), { nickname: 'Again', nicknameUpdatedCount: 1 }));
+    await assertFails(updateDoc(doc(owner, profile), { nicknameUpdatedCount: 0 }));
+    await assertFails(getDoc(doc(stranger, profile)));
+    await assertSucceeds(updateDoc(doc(admin, profile), { xp: 101 }));
+    await assertFails(getDoc(doc(guest, 'artifacts/up/editorial/data/tracks/draft')));
+    await assertSucceeds(getDoc(doc(admin, 'artifacts/up/editorial/data/tracks/draft')));
+    await assertSucceeds(getDocs(collection(guest, 'artifacts/up/public/data/tracks')));
+    await assertFails(setDoc(doc(admin, 'artifacts/up/public/data/tracks/unsafe-history'), { title: 'Draft leak', status: 'published', isPublished: true, revisionHistory: [{ secret: true }] }));
+    await assertFails(setDoc(doc(admin, 'artifacts/up/public/data/tracks/unsafe-draft'), { title: 'Draft', status: 'draft', isPublished: false }));
+    await assertSucceeds(setDoc(doc(admin, 'artifacts/up/public/data/tracks/safe'), { title: 'Public', status: 'published', isPublished: true, audioUrl: 'https://example.com/a.mp3' }));
+    await assertFails(getDoc(doc(guest, 'artifacts/up/public_stats/listener')));
+    await assertFails(setDoc(doc(owner, 'artifacts/up/leaderboard/listener'), { xp: 9999 }));
+    await assertSucceeds(getDocs(collection(guest, 'artifacts/up/leaderboard')));
+    await assertFails(getDocs(collection(guest, 'artifacts/up/shared_playlists')));
+    await assertFails(getDoc(doc(owner, 'artifacts/up/server_state/listener')));
+    await assertFails(setDoc(doc(owner, 'artifacts/up/users/listener/playlists/hacked'), { trackIds: ['other'] }));
+    await assertSucceeds(setDoc(doc(owner, 'artifacts/up/users/listener/likes/published'), { likedAt: Date.now() }));
+    await assertFails(setDoc(doc(owner, 'artifacts/up/users/listener/likes/draft'), { likedAt: Date.now() }));
+  } finally { await env.cleanup(); }
 });

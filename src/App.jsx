@@ -51,6 +51,11 @@ import { getAchievementMeta } from "./constants/achievements";
 import { getLevelInfo } from './levels';
 import { isPublishedTrack, resolvePlaylist, nextQueueIndex } from './utils/catalog';
 import { useListeningMemory } from './hooks/useListeningMemory';
+import { useListenerLibrary } from './hooks/useListenerLibrary';
+const ListenerLibrary = lazy(() => import('./pages/ListenerLibrary'));
+const ReleaseDetail = lazy(() => import('./pages/ReleaseDetail'));
+const ExhibitionJourney = lazy(() => import('./pages/ExhibitionJourney'));
+const SharedPlaylist = lazy(() => import('./pages/SharedPlaylist'));
 
 // ---------------------
 // 날짜 포맷
@@ -115,9 +120,14 @@ const AppRoutes = memo(function AppRoutes({
   setIsPlayerExpanded,
   pauseForExternalPlayback,
   appId,
+  library,
 }) {
   return (
     <Routes>
+      <Route path="/library" element={<ListenerLibrary user={user} profile={userProfile} tracks={publicTracks} playTrack={playTrack} library={library} notify={setToastMessage} login={() => signInWithPopup(auth, new GoogleAuthProvider()).catch(() => setToastMessage('로그인을 완료하지 못했습니다. 다시 시도해 주세요.'))} />} />
+      <Route path="/tracks/:trackId" element={<ReleaseDetail tracks={publicTracks} playTrack={playTrack} handleToggleLike={handleToggleLike} userLikes={userLikes} library={library} notify={setToastMessage} />} />
+      <Route path="/exhibitions/:name" element={<ExhibitionJourney tracks={publicTracks} playTrack={playTrack} library={library} notify={setToastMessage} />} />
+      <Route path="/playlist/:id" element={<SharedPlaylist tracks={publicTracks} playTrack={playTrack} />} />
       <Route
         path="/"
         element={
@@ -227,6 +237,7 @@ export default function App() {
   const [currentQueue, setCurrentQueue] = useState([]);
   const [, setScrolled] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
+  const library = useListenerLibrary(user, tracks);
 
   const [shareItem, setShareItem] = useState(null);
   const [allUsers, setAllUsers] = useState([]);
@@ -314,7 +325,7 @@ export default function App() {
 
     let res;
     try { res = await engine.processEvent({ ...event, at: event.at || new Date() }); }
-    catch { setToastMessage('기록을 저장하지 못했습니다. 네트워크 연결을 확인해 주세요.'); return null; }
+    catch (error) { if (event.type !== 'listening_pulse') setToastMessage(error.message || '기록을 저장하지 못했습니다. 네트워크 연결을 확인해 주세요.'); return null; }
 
     if (res?.unlockedRewards?.length) {
       setAchievementQueue((queue) => [...queue, ...res.unlockedRewards]);
@@ -366,7 +377,6 @@ export default function App() {
     try {
 
     const likeDoc = doc(db, 'artifacts', appId, 'users', user.uid, 'likes', trackId);
-    const publicStatsDoc = doc(db, 'artifacts', appId, 'public_stats', user.uid);
 
     const isAlreadyLiked = userLikes.includes(trackId);
     const nextLikedCount = isAlreadyLiked
@@ -376,14 +386,7 @@ export default function App() {
     if (isAlreadyLiked) {
       await deleteDoc(likeDoc);
 
-      if (!user.isAnonymous) await setDoc(
-        publicStatsDoc,
-        {
-          likedCount: nextLikedCount,
-          updatedAt: Date.now(),
-        },
-        { merge: true }
-      ).catch(() => {});
+      await emit({ type: 'like_removed', trackId });
 
       setToastMessage("아카이브에서 제거되었습니다");
       return;
@@ -391,14 +394,6 @@ export default function App() {
 
     await setDoc(likeDoc, { likedAt: Date.now() });
 
-    if (!user.isAnonymous) await setDoc(
-      publicStatsDoc,
-      {
-        likedCount: nextLikedCount,
-        updatedAt: Date.now(),
-      },
-      { merge: true }
-    ).catch(() => {});
 
     setToastMessage("아카이브에 기록되었습니다 💗");
 
@@ -505,12 +500,18 @@ export default function App() {
       if (!audio.seeking && !audio.paused && delta > 0 && delta <= elapsed * (audio.playbackRate || 1) + 1.5) session.heardSeconds = (session.heardSeconds || 0) + Math.min(delta, elapsed * (audio.playbackRate || 1));
       session.lastPosition = cur; session.lastTick = now;
       const pct = Math.min(1, (session.heardSeconds || 0) / dur);
+      const unreported = Math.max(0, (session.heardSeconds || 0) - (session.reportedSeconds || 0));
+      if (unreported >= 20 && pct < .9) {
+        session.reportedSeconds = session.heardSeconds;
+        void emit({ type: 'listening_pulse', trackId: tid, seconds: unreported });
+      }
       if (pct >= 0.9) {
         const key = `${tid}:${playSessionRef.current.startedAt}`;
         if (!completedOnceRef.current.has(key)) {
           completedOnceRef.current.add(key);
           if (completedOnceRef.current.size > 100) completedOnceRef.current.clear();
-          emit({ type: "track_complete", trackId: tid, progress: pct, eventId: `complete:${key}` });
+          session.reportedSeconds = session.heardSeconds;
+          emit({ type: "track_complete", trackId: tid, seconds: unreported, progress: pct, eventId: `complete:${key}` });
         }
       }
     };
@@ -801,6 +802,7 @@ export default function App() {
           setIsPlayerExpanded={setIsPlayerExpanded}
           pauseForExternalPlayback={pauseForExternalPlayback}
           appId={appId}
+          library={library}
         />
         </Suspense>
         </AppShell>
@@ -883,9 +885,12 @@ export default function App() {
         <AnimatePresence>
           {toastMessage && (
             <Motion.div
-              initial={{ opacity: 0, y: 20, x: '-50%' }}
-              animate={{ opacity: 1, y: 0, x: '-50%' }}
-              exit={{ opacity: 0 }}
+              initial={{ y: -8 }}
+              animate={{ y: 0 }}
+              exit={{ y: -8 }}
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
               onClick={() => {
                 if (!lastCardUrl) return;
                 const link = document.createElement('a');
@@ -893,10 +898,10 @@ export default function App() {
                 link.href = lastCardUrl;
                 link.click();
               }}
-              className="fixed bottom-32 left-1/2 z-1000 bg-[#004aad] text-white px-8 py-4 rounded-full font-black uppercase text-[10px] shadow-2xl flex items-center gap-2 cursor-pointer select-none"
+              className="up-feedback-toast"
               title={lastCardUrl ? "Click to download the last generated card" : ""}
             >
-              <CheckCircle2 className="w-3 h-3" />
+              <CheckCircle2 size={18} aria-hidden="true" />
               {toastMessage}
               {lastCardUrl ? <span className="opacity-80"> • CLICK TO DOWNLOAD</span> : null}
             </Motion.div>

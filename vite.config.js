@@ -22,6 +22,7 @@ export default defineConfig({
     strictPort: true,
     // 개발 서버 실행 시 자동으로 브라우저 열기
     open: false,
+    proxy: process.env.UP_API_TARGET ? { '/.netlify/functions': { target: process.env.UP_API_TARGET, changeOrigin: true } } : undefined,
   },
   build: {
     outDir: 'dist',

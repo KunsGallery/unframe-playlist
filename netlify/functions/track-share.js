@@ -59,6 +59,7 @@ export async function handler(event) {
 
     const json = await response.json();
     const fields = json.fields || {};
+    if (getFirestoreString(fields, 'status') !== 'published' || fields.revisionHistory) throw new Error('Unpublished track');
 
     const title = getFirestoreString(fields, "title", "UNFRAME PLAYLIST");
     const artist = getFirestoreString(fields, "artist", "UNFRAME");
@@ -68,7 +69,7 @@ export async function handler(event) {
       "전시와 사운드가 이어지는 음악 아카이브";
 
     const shareUrl = `${origin}/share/track/${encodeURIComponent(trackId)}`;
-    const appUrl = `${origin}/?track=${encodeURIComponent(trackId)}`;
+    const appUrl = `${origin}/tracks/${encodeURIComponent(trackId)}`;
 
     const safeTitle = escapeHtml(`${title} - ${artist}`);
     const safeDescription = escapeHtml(description);
@@ -81,6 +82,10 @@ export async function handler(event) {
       headers: {
         "Content-Type": "text/html; charset=utf-8",
         "Cache-Control": "public, max-age=300",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Content-Security-Policy": "default-src 'none'; img-src https: data:; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'",
       },
       body: `<!doctype html>
 <html lang="ko">
@@ -116,9 +121,6 @@ export async function handler(event) {
     </div>
   </main>
 
-  <script>
-    window.location.replace("${safeAppUrl}");
-  </script>
 </body>
 </html>`,
     };

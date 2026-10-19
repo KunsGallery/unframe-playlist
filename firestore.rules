@@ -2,44 +2,49 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
-    function admin() {
-      return signedIn() && request.auth.token.firebase.sign_in_provider == 'google.com'
-        && request.auth.token.email in ['gallerykuns@gmail.com', 'cybog2004@gmail.com', 'sylove887@gmail.com'];
-    }
+    // Email allow-list deliberately retained at the owner's request.
+    function admin() { return signedIn() && request.auth.token.firebase.sign_in_provider == 'google.com' && request.auth.token.email in ['gallerykuns@gmail.com', 'cybog2004@gmail.com', 'sylove887@gmail.com']; }
     function owner(uid) { return signedIn() && request.auth.uid == uid; }
-    function adminFields() { return ['levelOverrideName', 'levelOverrideColor', 'manualLevelName', 'manualLevelColor', 'isRankingHidden', 'adminRewards']; }
-    function publicFields() { return ['displayName', 'nickname', 'profileImg', 'listenCount', 'shareCount', 'likedCount', 'xp', 'levelKey', 'level', 'levelName', 'levelColor', 'rewardCount', 'updatedAt']; }
-    function publicValid() {
-      return (!('xp' in request.resource.data) || (request.resource.data.xp is number && request.resource.data.xp >= 0))
-        && (!('listenCount' in request.resource.data) || (request.resource.data.listenCount is number && request.resource.data.listenCount >= 0))
-        && (!('likedCount' in request.resource.data) || (request.resource.data.likedCount is number && request.resource.data.likedCount >= 0));
+    function editable() { return ['nickname', 'nicknameUpdatedCount', 'nicknamePrompted', 'profileImg']; }
+    function publicKeys(kind) {
+      let base = ['title', 'desc', 'description', 'image', 'createdAt', 'publishedAt', 'status', 'isPublished'];
+      let track = ['artist', 'tag', 'genre', 'audioUrl', 'lyrics', 'moods', 'timeSlots', 'useCases', 'energy', 'instrumental', 'language', 'tags', 'priority', 'isActive', 'curatorNote', 'album', 'exhibition', 'artworkTitle', 'coverUrl', 'releaseNumber', 'releasedAt', 'producedAt', 'credits', 'version', 'duration', 'durationSeconds', 'journeyStage', 'journeyNote'];
+      let playlist = ['trackIds', 'exhibitionTitle', 'curatorNote', 'journeySteps'];
+      let gathering = ['youtubeUrl', 'youtubePlaylistId', 'location', 'eventDate', 'memoryPhoto', 'memoryNote'];
+      return kind == 'tracks' ? base.concat(track) : kind == 'playlists' ? base.concat(playlist) : base.concat(gathering);
     }
-    match /artifacts/{appId}/public/data/{document=**} {
-      allow read: if true;
-      allow write: if admin();
+    function validProfile() {
+      return (!('nickname' in request.resource.data) || (request.resource.data.nickname is string && request.resource.data.nickname.size() >= 2 && request.resource.data.nickname.size() <= 16))
+        && (!('profileImg' in request.resource.data) || (request.resource.data.profileImg is string && request.resource.data.profileImg.size() <= 2048 && (request.resource.data.profileImg == '' || request.resource.data.profileImg.matches('https://i[.]ibb[.]co/.*'))))
+        && (!('nicknamePrompted' in request.resource.data) || request.resource.data.nicknamePrompted is bool)
+        && (!('nicknameUpdatedCount' in request.resource.data) || request.resource.data.nicknameUpdatedCount in [0, 1]);
     }
-    match /artifacts/{appId}/users/{uid} {
-      allow read: if owner(uid) || admin();
-      allow create: if admin() || (owner(uid) && !request.resource.data.keys().hasAny(adminFields()));
-      allow update: if admin() || (owner(uid) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(adminFields()));
+    match /artifacts/{appId}/public/data/{collection}/{id} {
+      allow read: if collection in ['tracks', 'playlists', 'gathering_playlists', 'featured', 'site_config'];
+      allow create, update: if admin() && ((collection in ['featured', 'site_config'] && !request.resource.data.keys().hasAny(['revisionHistory', 'updatedBy'])) || (collection in ['tracks', 'playlists', 'gathering_playlists'] && request.resource.data.keys().hasOnly(publicKeys(collection)) && request.resource.data.status == 'published' && request.resource.data.isPublished == true));
       allow delete: if admin();
     }
+    match /artifacts/{appId}/editorial/{document=**} { allow read, write: if admin(); }
+    match /artifacts/{appId}/users/{uid} { allow read, write: if admin(); }
     match /artifacts/{appId}/users/{uid}/profile/{document} {
       allow read: if owner(uid) || admin();
-      allow create: if admin() || (owner(uid) && !request.resource.data.keys().hasAny(adminFields()));
-      allow update: if admin() || (owner(uid) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(adminFields()));
+      allow create: if admin() || (document == 'stats' && owner(uid) && request.auth.token.firebase.sign_in_provider == 'google.com' && request.resource.data.keys().hasOnly(editable()) && validProfile());
+      allow update: if admin() || (document == 'stats' && owner(uid) && request.auth.token.firebase.sign_in_provider == 'google.com' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(editable()) && validProfile()
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['nickname', 'nicknameUpdatedCount']) || (resource.data.get('nicknameUpdatedCount', 0) == 0 && resource.data.get('nicknameChanged', false) == false && request.resource.data.get('nicknameUpdatedCount', 0) == 1)));
       allow delete: if admin();
     }
     match /artifacts/{appId}/users/{uid}/likes/{trackId} {
       allow read: if owner(uid) || admin();
-      allow create, update: if admin() || (owner(uid) && request.resource.data.keys().hasOnly(['likedAt']) && request.resource.data.likedAt is number);
+      allow create, update: if owner(uid) && request.resource.data.keys().hasOnly(['likedAt']) && request.resource.data.likedAt is number && exists(/databases/$(database)/documents/artifacts/$(appId)/public/data/tracks/$(trackId));
       allow delete: if owner(uid) || admin();
     }
-    match /artifacts/{appId}/public_stats/{uid} {
-      allow read: if true;
-      allow create: if admin() || (owner(uid) && request.resource.data.keys().hasOnly(publicFields()) && publicValid());
-      allow update: if admin() || (owner(uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(publicFields()) && publicValid());
-      allow delete: if admin();
+    match /artifacts/{appId}/users/{uid}/{collection}/{id} {
+      allow read: if (collection in ['playlists', 'follows']) && (owner(uid) || admin());
     }
+    // Legacy administrative index is no longer a public ranking dataset.
+    match /artifacts/{appId}/public_stats/{uid} { allow read, write: if admin(); }
+    match /artifacts/{appId}/leaderboard/{uid} { allow read: if true; allow delete: if admin(); }
+    match /artifacts/{appId}/shared_playlists/{id} { allow get: if true; }
+    // server_state / server_limits / backups: deny client access by default.
   }
 }

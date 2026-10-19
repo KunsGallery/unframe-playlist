@@ -12,6 +12,54 @@
   background: var(--up-paper);
 }
 
+/* New listening tools inherit UP's paper/blue system and existing player. */
+.up-listening-page { max-width: 1180px; margin: 0 auto; padding: 42px 16px 160px; }
+.up-listening-page h1 { font-size: clamp(2rem, 4.5vw, 3.7rem); letter-spacing: -.035em; line-height: 1.12; margin: 20px 0; overflow-wrap: anywhere; }
+.up-listening-page h2 { font-size: 1.35rem; margin: 32px 0 16px; }
+.up-listening-page p { line-height: 1.7; max-width: 70ch; }
+.up-listening-page button, .up-radio-shelf button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 10px 14px; min-height: 42px; border: 1px solid var(--up-line); background: var(--up-paper); border-radius: 8px; font-weight: 650; cursor: pointer; }
+.up-listening-page button:hover:not(:disabled), .up-radio-shelf button:hover:not(:disabled) { background: var(--up-paper-2); }
+.up-listening-page button.is-primary { background: var(--up-blue); color: white; border-color: transparent; }
+.up-listening-page button:disabled, .up-radio-shelf button:disabled { opacity: .5; cursor: not-allowed; }
+.up-listening-page a, .up-radio-shelf a { text-underline-offset: 4px; }
+.up-listening-page :is(button, input, select, textarea, a):focus-visible, .up-radio-shelf :is(button, a):focus-visible { outline: 3px solid var(--up-blue); outline-offset: 3px; }
+.up-listening-page :is(input:not([type=checkbox]), textarea, select) { display: block; width: 100%; border: 1px solid #88867e; border-radius: 6px; background: #fffdf7; color: var(--up-ink); padding: 11px; margin-top: 7px; min-height: 44px; }
+.up-listening-page textarea { min-height: 85px; resize: vertical; }
+.up-listening-page label { font-size: 14px; font-weight: 650; }
+.up-listening-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 20px 0; }
+.up-listening-actions h2 { margin: 0 auto 0 0; }
+.up-back-link { display: inline-flex; align-items: center; gap: 8px; }
+.up-radio-programs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 24px 0; border-block: 1px solid var(--up-line); }
+.up-radio-programs article { padding: 28px 22px; }
+.up-radio-programs article + article { border-left: 1px solid var(--up-line); }
+.up-radio-programs h3 { margin: 18px 0 12px; font-size: 1.3rem; }
+.up-radio-programs p { min-height: 3em; margin-bottom: 22px; }
+.up-exhibition-links { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.up-exhibition-links h3 { margin-right: auto; }
+.up-exhibition-links a { display: flex; gap: 8px; align-items: center; padding: 10px 0; }
+.up-release-layout { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 48px; margin-top: 28px; }
+.up-release-art img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 12px; }
+.up-release-artist { font-size: 1.2rem; color: var(--up-blue); }
+.up-liner-note { white-space: pre-wrap; }
+.up-release-metadata { margin: 28px 0; }
+.up-release-metadata > div { display: grid; grid-template-columns: 100px 1fr; gap: 20px; padding: 10px 0; border-bottom: 1px solid var(--up-line); }
+.up-release-metadata dt { color: #55534e; }.up-release-metadata dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.up-playlist-add { display: grid; grid-template-columns: 1fr auto; gap: 10px; margin-top: 32px; }.up-playlist-add label { grid-column: 1/-1; }.up-playlist-add select { margin: 0; }.up-playlist-add a { grid-column: 1/-1; font-size: 14px; }
+.up-release-lyrics { border-top: 1px solid var(--up-line); margin-top: 48px; }.up-release-lyrics p { white-space: pre-wrap; }
+.up-journey-stage { display: grid; grid-template-columns: 60px 1fr; border-top: 1px solid var(--up-line); padding: 28px 0; margin-top: 24px; }.up-journey-stage > span { color: var(--up-blue); font-size: 1.4rem; }.up-journey-stage h2 { margin-top: 0; }.up-journey-stage article { display: flex; gap: 16px; margin: 18px 0; }.up-journey-stage article p { margin: 6px 0 0; color: #55534e; }
+.up-library-tabs { display: flex; flex-wrap: wrap; gap: 5px; border-bottom: 1px solid var(--up-line); padding-bottom: 12px; margin: 30px 0; }.up-library-tabs button[aria-selected=true] { color: white; background: var(--up-blue); border-color: transparent; }
+.up-library-empty { padding: 38px 0; color: #55534e; }.up-field-note { color: #55534e; font-size: 13px; line-height: 1.6; }
+.up-feedback-toast { position: fixed; z-index: 1200; top: 100px; right: 24px; display: flex; align-items: center; gap: 10px; max-width: min(440px, calc(100vw - 32px)); padding: 16px 20px; border-radius: 12px; background: #004aad; color: #fff; font-size: 14px; font-weight: 650; line-height: 1.5; box-shadow: 0 12px 30px #11110f25; overflow-wrap: anywhere; }
+.up-feedback-toast > svg { flex-shrink: 0; }
+@media (max-width: 900px) { .up-feedback-toast { top: 78px; right: 16px; } }
+.up-playlist-editor { padding: 24px; border: 1px solid var(--up-line); border-radius: 12px; margin: 24px 0; }.up-playlist-editor > label { display: block; margin: 18px 0; }
+.up-check { display: flex !important; gap: 10px; align-items: flex-start; margin: 22px 0 10px; }.up-check input { accent-color: var(--up-blue); width: 18px; height: 18px; flex-shrink: 0; margin-top: 2px; }
+.up-selected-tracks { padding: 0; list-style: none; }.up-selected-tracks li { display: flex; align-items: center; gap: 6px; margin: 7px 0; }.up-selected-tracks span { margin-right: auto; overflow-wrap: anywhere; }.up-selected-tracks button { padding: 8px; min-width: 36px; }
+.up-track-picker { max-height: 280px; overflow: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin: 18px 0; }.up-track-picker button { text-align: left; justify-content: flex-start; }.up-track-picker small { display: block; font-weight: 400; margin-top: 5px; }
+.up-personal-playlists article, .up-follow-row { border-bottom: 1px solid var(--up-line); padding: 22px 0; display: flex; align-items: center; justify-content: space-between; gap: 16px; }.up-personal-playlists h3 { font-size: 1.2rem; margin-bottom: 8px; }.up-personal-playlists p { margin: 0 0 10px; }.up-personal-playlists small { display: flex; align-items: center; gap: 5px; }.up-personal-playlists .up-listening-actions { flex-shrink: 0; }
+.up-listening-receipt { max-width: 530px; padding: 32px; margin: 28px auto; background: #fffdf7; box-shadow: 0 12px 30px #11110f0c; border-radius: 12px; }.up-listening-receipt dl { padding: 20px 0; border-block: 1px dashed #88867e; margin: 24px 0; }.up-listening-receipt dl div, .up-listening-receipt > p { display: flex; justify-content: space-between; gap: 16px; }.up-listening-receipt dd { margin: 0; font-weight: 700; }.up-listening-receipt h4 { margin-top: 28px; }.up-shared-track-list { padding: 24px; }.up-shared-track-list li { padding: 10px 0; }
+@media (max-width: 760px) { .up-listening-page { padding: 24px 20px 165px; }.up-release-layout { grid-template-columns: 1fr; gap: 20px; }.up-release-art { max-width: 450px; }.up-radio-programs { grid-template-columns: 1fr; }.up-radio-programs article { padding: 22px 0; }.up-radio-programs article + article { border-left: 0; border-top: 1px solid var(--up-line); }.up-radio-programs p { min-height: auto; }.up-personal-playlists article { display: block; }.up-track-picker { grid-template-columns: 1fr; }.up-playlist-editor { padding: 16px; }.up-library-tabs { gap: 6px; }.up-library-tabs button { font-size: 13px; padding: 8px; }.up-listening-receipt { padding: 22px; }.up-journey-stage { grid-template-columns: 42px 1fr; } }
+
 html { scroll-behavior: smooth; }
 body { background: var(--up-paper); color: var(--up-ink); }
 button, a { -webkit-tap-highlight-color: transparent; }
@@ -105,7 +153,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .up-mobile-nav {
     position: fixed; z-index: 80; left: 50%; bottom: max(8px, env(safe-area-inset-bottom)); transform: translateX(-50%);
     width: calc(100% - 20px); max-width: 420px; height: 58px; padding: 6px;
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px;
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px;
     background: rgba(17,17,15,.93); border: 1px solid rgba(255,255,255,.16); border-radius: 22px;
     backdrop-filter: blur(20px); box-shadow: 0 20px 50px rgba(0,0,0,.25);
   }
