@@ -185,6 +185,7 @@ export default function Home({
   const scrollContainerRef = useRef(null);
   const deepLinkHandled = useRef(false);
   const rankingRef = useRef(null);
+  const catalogRef = useRef(null);
 
   const rankingCandidates = useMemo(
     () => (Array.isArray(allUsers) ? allUsers : []).filter((user) => !shouldExcludeRankingUser(user)),
@@ -684,7 +685,14 @@ export default function Home({
               type="button"
               key={mood.id}
               className={`up-mood up-mood--${mood.tone} ${activeMood === mood.id ? "is-active" : ""}`}
-              onClick={() => setActiveMood((current) => current === mood.id ? null : mood.id)}
+              aria-pressed={activeMood === mood.id}
+              onClick={() => {
+                if (activeMood === mood.id) { setActiveMood(null); return; }
+                setActiveMood(mood.id);
+                if (mood.items.length) safePlay(0, mood.items);
+                const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+                requestAnimationFrame(() => catalogRef.current?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" }));
+              }}
             >
               <span>0{index + 1}</span><strong>{mood.label}</strong><small>{mood.copy}</small><ArrowUpRight />
             </button>
@@ -759,7 +767,7 @@ export default function Home({
 
       <RadioShelf tracks={tracks} playTrack={playTrack} />
       <section className="up-section up-discovery">
-        <div className="up-catalog">
+        <div className="up-catalog" ref={catalogRef}>
           <div className="up-section__head up-section__head--stack">
             <div><p className="up-kicker">Open catalog</p><h2>{activeMoodCard?.label || "Every track"}</h2></div>
             <label className="up-search">

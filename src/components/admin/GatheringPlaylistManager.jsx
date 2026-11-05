@@ -35,12 +35,14 @@ export default function GatheringPlaylistManager({
   handleEdit,
 }) {
   const [searchTerm, setSearchTerm] = useState("");
+  const [showTrash, setShowTrash] = useState(false);
   const playlistId = extractYouTubePlaylistId(draft.youtubeUrl || draft.youtubePlaylistId);
   const embedUrl = buildYouTubePlaylistEmbedUrl(playlistId);
 
   const visiblePlaylists = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     return [...(gatheringPlaylists || [])]
+      .filter((playlist) => showTrash ? playlist?.trashedAt : !playlist?.trashedAt)
       .filter((playlist) => {
         if (!term) return true;
         return [playlist?.title, playlist?.location, playlist?.eventDate]
@@ -50,7 +52,7 @@ export default function GatheringPlaylistManager({
           .includes(term);
       })
       .sort((a, b) => getGatheringSortTime(b) - getGatheringSortTime(a));
-  }, [gatheringPlaylists, searchTerm]);
+  }, [gatheringPlaylists, searchTerm, showTrash]);
 
   const startNew = () => {
     setEditingId(null);
@@ -76,6 +78,7 @@ export default function GatheringPlaylistManager({
           <Search className="w-4 h-4 text-zinc-500" />
           <input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search gathering..." className="w-full bg-transparent py-4 outline-none text-sm" />
         </label>
+        <label className="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" checked={showTrash} onChange={(event) => setShowTrash(event.target.checked)} /> 휴지통 보기 (복원은 항목을 열어 변경 이력에서)</label>
 
         <div className="space-y-3 max-h-[58vh] overflow-y-auto no-scrollbar">
           {visiblePlaylists.length ? visiblePlaylists.map((playlist) => (

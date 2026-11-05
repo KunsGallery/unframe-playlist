@@ -56,6 +56,8 @@ export default function PlaylistManager({
   const [trackSearch, setTrackSearch] = useState("");
   const [sortMode, setSortMode] = useState("newest");
 
+  const [showTrash, setShowTrash] = useState(false);
+
   const selectedPlaylist = useMemo(() => {
     if (!editingPlaylistId) return null;
     return playlists.find((playlist) => playlist.id === editingPlaylistId) || null;
@@ -64,7 +66,7 @@ export default function PlaylistManager({
   const sortedPlaylists = useMemo(() => {
     const term = playlistSearch.trim().toLowerCase();
 
-    let list = [...(playlists || [])].filter(Boolean);
+    let list = [...(playlists || [])].filter(Boolean).filter((playlist) => showTrash ? playlist.trashedAt : !playlist.trashedAt);
 
     if (term) {
       list = list.filter((playlist) => {
@@ -84,7 +86,7 @@ export default function PlaylistManager({
     });
 
     return list;
-  }, [playlists, playlistSearch, sortMode]);
+  }, [playlists, playlistSearch, sortMode, showTrash]);
 
   const filteredTracks = useMemo(() => {
     const term = trackSearch.trim().toLowerCase();
@@ -179,6 +181,7 @@ export default function PlaylistManager({
             <option value="title">Title A-Z</option>
             <option value="tracks">Most Tracks</option>
           </select>
+          <label className="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" checked={showTrash} onChange={(e) => setShowTrash(e.target.checked)} /> 휴지통 보기 (복원은 항목을 열어 변경 이력에서)</label>
         </div>
 
         <div className="space-y-3 max-h-[68vh] overflow-y-auto no-scrollbar pr-1">

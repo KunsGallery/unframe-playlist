@@ -907,7 +907,7 @@ export default function App() {
         {shareItem && <ShareCard
           shareItem={shareItem}
           shareCardRef={shareCardRef}
-          user={user}
+          displayName={(userProfile?.nickname || '').trim()}
           formatDateTime={formatDateTime}
         />}
 

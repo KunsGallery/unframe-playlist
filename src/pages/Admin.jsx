@@ -22,7 +22,7 @@ import UserRewardManager from "../components/admin/UserRewardManager";
 import PublicationTools from '../components/admin/PublicationTools';
 import { saveContent } from '../utils/contentHistory';
 import { settleRewards, normalizeRewards } from '../utils/rewardState';
-import { trackUsage } from '../utils/catalog';
+import { isPublishedTrack, trackUsage } from '../utils/catalog';
 import {
   createEmptyGatheringPlaylist,
   extractYouTubePlaylistId,
@@ -209,7 +209,8 @@ export default function Admin({
     try { await action(); } finally { savingRef.current = false; setIsSaving(false); }
   };
   const activeSection = ADMIN_SECTIONS[activeTab] || ADMIN_SECTIONS.tracks;
-  const activeTrackCount = tracks.filter((track) => track?.isActive !== false).length;
+  const liveTrackCount = tracks.filter((track) => !track?.trashedAt).length;
+  const activeTrackCount = tracks.filter((track) => isPublishedTrack(track) && !track?.trashedAt).length;
   const adminCounts = {
     tracks: tracks.length,
     playlists: playlists.length,
@@ -767,7 +768,7 @@ export default function Admin({
             <p>페이지와 음악을 한 흐름 안에서 발행하고 관리합니다.</p>
           </div>
           <div className="up-admin-metrics" aria-label="Content summary">
-            <div><span>Tracks</span><strong>{tracks.length}</strong><small>{activeTrackCount} published</small></div>
+            <div><span>Tracks</span><strong>{liveTrackCount}</strong><small>{activeTrackCount} published</small></div>
             <div><span>Playlists</span><strong>{playlists.length}</strong><small>public collections</small></div>
             <div><span>Gatherings</span><strong>{gatheringPlaylists.length}</strong><small>offline archives</small></div>
             <div><span>Hero</span><strong>{adminCounts.config}</strong><small>page slides</small></div>

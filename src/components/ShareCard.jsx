@@ -4,7 +4,7 @@ import { Music, Heart } from "lucide-react"
 export default function ShareCard({
   shareItem,
   shareCardRef,
-  user,
+  displayName,
   formatDateTime
 }) {
 
@@ -58,7 +58,7 @@ export default function ShareCard({
         {/* user + desc */}
         <div style={{ textAlign: 'center', zIndex: 10, width: '80%' }}>
           <p style={{ fontSize: '26px', fontWeight: 400, color: '#ffffff', margin: 0 }}>
-            <span style={{ fontWeight: 800, color: '#7dd3fc' }}>{user?.displayName || 'Collector'}</span> 님,
+            <span style={{ fontWeight: 800, color: '#7dd3fc' }}>{displayName || 'Collector'}</span> 님,
           </p>
           <p style={{ fontSize: '20px', fontWeight: 300, color: '#ffffff', marginTop: '12px', opacity: 0.9, wordBreak: 'keep-all', lineHeight: 1.4 }}>
             {shareItem.desc || "당신의 취향을 기록합니다."}
