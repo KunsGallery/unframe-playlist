@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import {
   Edit2,
   Loader2,
@@ -21,6 +21,7 @@ import {
   formatCommaSeparatedValues,
   parseCommaSeparatedValues,
 } from "../../constants/trackCuration";
+import { prepareLyrics } from "../../utils/lyricAlign";
 
 const glass =
   "bg-white/[0.03] backdrop-blur-[40px] border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]";
@@ -57,6 +58,8 @@ const getCreatedTime = (track) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const LyricSyncPanel = lazy(() => import("./LyricSyncPanel"));
+
 export default function TrackManager({
   tracks,
   newTrack,
@@ -78,6 +81,16 @@ export default function TrackManager({
     if (!editingId) return null;
     return tracks.find((track) => track.id === editingId) || null;
   }, [tracks, editingId]);
+
+  const [isLyricSyncOpen, setIsLyricSyncOpen] = useState(false);
+  const lyricSyncBlocker = !newTrack.audioUrl ? "음원 주소를 먼저 입력해 주세요."
+    : !prepareLyrics(newTrack.lyrics).length ? "가사를 먼저 입력해 주세요."
+    : newTrack.instrumental || newTrack.language === "instrumental" ? "연주곡은 가사를 맞출 수 없습니다."
+    : "";
+  const openLyricSync = () => {
+    if (/\[\d{1,3}:\d{1,2}/.test(newTrack.lyrics) && !window.confirm("이미 맞춘 시간값이 있습니다. 적용하면 기존 시간값을 덮어씁니다. 계속할까요?")) return;
+    setIsLyricSyncOpen(true);
+  };
 
   const sortedTracks = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -473,6 +486,28 @@ export default function TrackManager({
             placeholder="Lyrics"
             className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none h-44 resize-none"
           />
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              disabled={Boolean(lyricSyncBlocker)}
+              onClick={openLyricSync}
+              className="px-4 py-3 rounded-full bg-[#004aad] text-white text-[11px] font-black disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              가사 자동 맞춤
+            </button>
+            {lyricSyncBlocker && <span className="text-xs text-zinc-400">{lyricSyncBlocker}</span>}
+          </div>
+          {isLyricSyncOpen && (
+            <Suspense fallback={null}>
+              <LyricSyncPanel
+                audioUrl={newTrack.audioUrl}
+                lyrics={newTrack.lyrics}
+                language={newTrack.language}
+                onApply={(lyrics) => setNewTrack((prev) => ({ ...prev, lyrics }))}
+                onClose={() => setIsLyricSyncOpen(false)}
+              />
+            </Suspense>
+          )}
         </div>
 
         <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] backdrop-blur-[24px] p-5 lg:p-6 space-y-6">
