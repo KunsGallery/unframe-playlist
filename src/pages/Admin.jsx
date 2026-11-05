@@ -667,6 +667,7 @@ export default function Admin({
     if (!selectedUserForSticker) return;
     const payload = {
       nickname: nicknameDraft,
+      nicknameConfirmed: true,
       levelOverrideName,
       levelOverrideColor,
     };

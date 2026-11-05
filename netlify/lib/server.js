@@ -30,8 +30,9 @@ export async function identity(event) {
   console.info(JSON.stringify({ metric: 'app_check', status: attestation }));
   return user;
 }
+export const limitRef = (key) => root().collection('server_limits').doc(createHash('sha256').update(key).digest('hex'));
 export async function rateLimit(key, limit = 60, period = 60000) {
-  const ref = root().collection('server_limits').doc(createHash('sha256').update(key).digest('hex'));
+  const ref = limitRef(key);
   const now = Date.now();
   await services().db.runTransaction(async (tx) => {
     const snap = await tx.get(ref), old = snap.data();
@@ -76,6 +77,9 @@ export function jsonBody(event) {
   try { const data = JSON.parse(event.body || '{}'); if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error(); return data; }
   catch { throw error(400, '요청 형식을 확인해 주세요.'); }
 }
+export const DEFAULT_NICKNAME = 'Listener';
+// Older profiles were seeded with the Google name, so only a nickname someone actually chose may go public.
+export const publicNickname = (profile) => (Number(profile.nicknameUpdatedCount) >= 1 || profile.nicknameChanged || profile.nicknameConfirmed) && profile.nickname ? profile.nickname : DEFAULT_NICKNAME;
 export const PROJECTION_INTERVAL_MS = 10 * 60 * 1000;
 // force: settings changes (including opt-out) must apply immediately. Routine listening events
 // refresh the projection at most once per interval to avoid two extra writes per event.
@@ -91,6 +95,7 @@ export async function projectRanking(uid, { force = false } = {}) {
     const profile = p.data() || {}, lv = getLevelInfo(profile.xp || 0);
     const projection = { displayName: profile.nickname || 'Listener', nickname: profile.nickname || 'Listener', profileImg: profile.profileImg || '', listenCount: profile.listenCount || 0, shareCount: profile.shareCount || 0, likedCount: profile.likedCount || 0, xp: profile.xp || 0, level: lv.level, levelKey: lv.key, levelName: profile.levelOverrideName || lv.name, levelColor: profile.levelOverrideColor || lv.color };
     tx.set(indexRef, { ...projection, projectedAt: Date.now() }, { merge: true });
-    if (profile.rankingOptIn !== true || profile.isRankingHidden || legacy.data()?.isRankingHidden) tx.delete(ref); else tx.set(ref, projection);
+    const name = publicNickname(profile);
+    if (profile.rankingOptIn !== true || profile.isRankingHidden || legacy.data()?.isRankingHidden) tx.delete(ref); else tx.set(ref, { ...projection, displayName: name, nickname: name });
   });
 }

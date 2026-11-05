@@ -9,6 +9,7 @@
   },
   "scripts": {
     "test": "node --test --test-concurrency=1 tests/*.test.js",
+    "test:emulator": "npx --yes firebase-tools@14 emulators:exec --project demo-up --only firestore,auth \"npm test\"",
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",

@@ -1,4 +1,4 @@
-import { guard, services, root, privateProfile, response, failure, error, safeId, projectRanking, jsonBody } from '../lib/server.js';
+import { guard, services, root, privateProfile, response, failure, error, safeId, projectRanking, jsonBody, DEFAULT_NICKNAME } from '../lib/server.js';
 import { reduceRewardEvent, dateKey } from '../../src/utils/rewardState.js';
 
 const TYPES = new Set(['daily_active', 'track_play_start', 'track_complete', 'listening_pulse', 'like_added', 'like_removed', 'share_card', 'playlist_play']);
@@ -51,7 +51,7 @@ export async function handler(event) {
         return { unlockedRewards: [], skipProjection: true };
       }
       const snap = await tx.get(ref);
-      const previous = snap.data() || { xp: 0, rewards: [], firstJoin: now, nickname: (user.name || 'Listener').slice(0, 16) };
+      const previous = snap.data() || { xp: 0, rewards: [], firstJoin: now, nickname: DEFAULT_NICKNAME };
       if (previous.counters?.recentEventIds?.includes(input.eventId)) return { profile: previous, unlockedRewards: [], duplicate: true, skipProjection: true };
       if (input.type === 'daily_active' && snap.exists && previous.streak?.lastActive === dateKey(new Date(now)) && !state.pendingSeconds) return { profile: previous, unlockedRewards: [], skipProjection: true };
       const playlistKey = typeof (input.playlistKey || input.playlistId) === 'string' ? (input.playlistKey || input.playlistId).slice(0, 140) : null;

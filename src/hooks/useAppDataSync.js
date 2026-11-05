@@ -24,15 +24,15 @@ async function fetchCatalog() {
 
 export function useAppDataSync({ user, isAuthReady, db, appId, setUserProfile, setNickInput, setNickError, setIsNickModalOpen, setTracks, setCurrentQueue, setPlaylists, setGatheringPlaylists, setUserLikes, setSiteConfig, setStudioContent, engineRef, setDataError, retryToken = 0, onRewards, setDataLoading }) {
   useEffect(() => {
-    if (!isAuthReady || !user) return;
+    if (!isAuthReady) return;
     setDataError?.(''); setDataLoading?.(true);
     const onError = () => { setDataLoading?.(false); setDataError?.('콘텐츠를 불러오지 못했습니다. 연결을 확인하고 다시 시도해 주세요.'); };
-    const anonymous = !!user.isAnonymous, unsubs = [];
-    const isAdmin = ADMIN_EMAILS.includes(user.email?.toLowerCase());
-    const engine = createAchievementEngine({ disabled: anonymous });
+    const unsubs = [];
+    const isAdmin = ADMIN_EMAILS.includes(user?.email?.toLowerCase());
+    const engine = createAchievementEngine({ disabled: !user });
     let cancelled = false;
     engineRef.current = engine;
-    if (anonymous) { setUserProfile({ xp: 0, rewards: [] }); setNickInput(''); setNickError(''); setIsNickModalOpen(false); }
+    if (!user) { setUserProfile({ xp: 0, rewards: [] }); setUserLikes([]); setNickInput(''); setNickError(''); setIsNickModalOpen(false); }
     else {
       if (!dailyVisitAlreadySent(user.uid)) engine.processEvent({ type: 'daily_active' }).then((r) => { rememberDailyVisit(user.uid); if (r.unlockedRewards?.length) onRewards?.(r.unlockedRewards); }).catch(() => setDataError?.('감상 기록 서버에 연결하지 못했습니다. 재생은 계속 이용할 수 있습니다.'));
       const profileRef = doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'stats');
@@ -40,7 +40,8 @@ export function useAppDataSync({ user, isAuthReady, db, appId, setUserProfile, s
         if (!snap.exists()) return;
         const data = snap.data(); setUserProfile({ ...data, _uid: user.uid });
         if (!data.nicknamePrompted) {
-          setNickInput((data.nickname || user.displayName || '').trim()); setNickError(''); setIsNickModalOpen(true);
+          // Never prefill the Google name: saving it would make a real name the public nickname.
+          setNickInput(data.nicknameUpdatedCount ? (data.nickname || '').trim() : ''); setNickError(''); setIsNickModalOpen(true);
           setDoc(profileRef, { nicknamePrompted: true }, { merge: true }).catch(() => {});
         }
       }, onError));
@@ -85,7 +86,7 @@ export function useAppDataSync({ user, isAuthReady, db, appId, setUserProfile, s
       document.addEventListener('visibilitychange', refreshWhenVisible);
       unsubs.push(() => document.removeEventListener('visibilitychange', refreshWhenVisible));
     }
-    unsubs.push(onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'likes'), (snap) => setUserLikes(snap.docs.map((d) => d.id)), onError));
+    if (user) unsubs.push(onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'likes'), (snap) => setUserLikes(snap.docs.map((d) => d.id)), onError));
     return () => { cancelled = true; unsubs.forEach((unsub) => unsub()); if (engineRef.current === engine) engineRef.current = null; };
   }, [user, isAuthReady, db, appId, setUserProfile, setNickInput, setNickError, setIsNickModalOpen, setTracks, setCurrentQueue, setPlaylists, setGatheringPlaylists, setUserLikes, setSiteConfig, setStudioContent, engineRef, setDataError, retryToken, onRewards, setDataLoading]);
 }

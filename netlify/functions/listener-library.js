@@ -1,5 +1,5 @@
 import { randomUUID, createHash } from 'node:crypto';
-import { guard, rateLimit, root, privateProfile, services, response, failure, error, safeId, projectRanking, jsonBody } from '../lib/server.js';
+import { guard, rateLimit, limitRef, root, privateProfile, services, response, failure, error, safeId, projectRanking, jsonBody } from '../lib/server.js';
 const text = (v, max) => typeof v === 'string' ? v.trim().slice(0, max) : '';
 export async function handler(event) {
   try {
@@ -74,6 +74,16 @@ export async function handler(event) {
     if (data.action === 'export') {
       const [profile, p, f, likes] = await Promise.all([profileRef.get(), lists.get(), follows.get(), userRef.collection('likes').get()]);
       return response(200, { exportedAt: new Date().toISOString(), profile: profile.data(), playlists: p.docs.map((d) => ({ id: d.id, ...d.data() })), follows: f.docs.map((d) => d.data()), likes: likes.docs.map((d) => d.id) });
+    }
+    if (data.action === 'delete-account') {
+      if (data.confirm !== 'DELETE') throw error(400, '탈퇴 확인이 필요합니다.');
+      const owned = await lists.get(), { db } = services(), writer = db.batch();
+      for (const list of owned.docs) if (list.data().publicId) writer.delete(root().collection('shared_playlists').doc(list.data().publicId));
+      for (const collection of ['leaderboard', 'public_stats', 'server_state']) writer.delete(root().collection(collection).doc(user.uid));
+      for (const key of [`library:${user.uid}`, `user:${user.uid}:${event.path || ''}`, `user:${user.uid}:/.netlify/functions/upload-image`]) writer.delete(limitRef(key));
+      await writer.commit();
+      await db.recursiveDelete(userRef);
+      return response(200, { ok: true });
     }
     throw error(400, '지원하지 않는 요청입니다.');
   } catch (err) { return failure(err); }

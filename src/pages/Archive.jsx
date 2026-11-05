@@ -155,7 +155,7 @@ export default function Archive({
   allUsers = [],
   loadRanking,
 }) {
-  useEffect(() => { if (user && !user.isAnonymous) loadRanking?.(); }, [user, loadRanking]);
+  useEffect(() => { if (user) loadRanking?.(); }, [user, loadRanking]);
 
   const [activeTab, setActiveTab] = useState('hearts');
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
@@ -177,15 +177,15 @@ export default function Archive({
   const displayName = useMemo(() => {
     const nick = (userProfile?.nickname || "").trim();
     if (nick) return nick;
-    return user?.displayName || (user?.isAnonymous ? "Guest" : "Collector");
+    return user?.displayName || (user ? "Collector" : "Guest");
   }, [userProfile?.nickname, user]);
 
   const openNickModal = useCallback(() => {
-    if (!user || user?.isAnonymous) return;
+    if (!user) return;
     setNickError("");
-    setNickDraft((userProfile?.nickname || user?.displayName || "").trim());
+    setNickDraft(nicknameUpdatedCount ? (userProfile?.nickname || "").trim() : "");
     setIsNickModalOpen(true);
-  }, [user, userProfile?.nickname]);
+  }, [user, userProfile?.nickname, nicknameUpdatedCount]);
 
   // ✅ rewards(object[]) -> id Set
   const rewardIds = useMemo(() => {
@@ -280,8 +280,6 @@ export default function Archive({
   // ✅ 닉네임 저장(1회)
   const saveNicknameOnce = useCallback(async () => {
     if (!user || !db || !appId) return;
-    if (user?.isAnonymous) return;
-
     setNickError("");
 
     if (nicknameLocked) {
@@ -538,7 +536,7 @@ export default function Archive({
                     : <User className="w-10 h-10 lg:w-14 lg:h-14 text-white/10" />
                   }
 
-                  {!user?.isAnonymous && (
+                  {user && (
                     <label className="absolute inset-0 bg-black/60 opacity-0 group-hover/profile:opacity-100 flex flex-col items-center justify-center cursor-pointer transition-opacity z-20">
                       <Camera className="w-5 h-5 mb-1" />
                       <input type="file" accept="image/*" className="hidden" onChange={handleProfileImageUpload} disabled={isUploadingProfile} />
@@ -592,7 +590,7 @@ export default function Archive({
             )}
 
             <div className="space-y-4">
-              {user?.isAnonymous ? (
+              {!user ? (
                 <div className="space-y-4">
                   <h2 className="text-xl font-bold uppercase tracking-tighter italic">Guest Collector</h2>
                   <button onClick={handleGoogleLogin} className="flex items-center justify-center gap-2 bg-white text-black px-6 py-3 rounded-full font-black uppercase text-[10px] tracking-widest hover:bg-[#004aad] hover:text-white transition-all shadow-xl mx-auto">

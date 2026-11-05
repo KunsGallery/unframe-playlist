@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { callApi } from '../utils/api';
 import { auth } from '../firebase';
+const EMPTY_LIBRARY = { playlists: [], follows: [], notifications: [], settings: {} };
 export function useListenerLibrary(user, tracks = []) {
   const releaseRevision = tracks.filter((t) => t.status !== 'draft').map((t) => `${t.id}:${t.publishedAt?.seconds || t.publishedAt || ''}`).sort().join('|');
   const [data, setData] = useState({ playlists: [], follows: [], notifications: [], settings: {} });
@@ -16,6 +17,9 @@ export function useListenerLibrary(user, tracks = []) {
     if (body.action === 'settings') setData((prev) => ({ ...prev, settings: { ...prev.settings, ...Object.fromEntries(Object.entries(body).filter(([k]) => ['rankingOptIn', 'releaseNotifications'].includes(k))) } }));
     try { const result = await callApi('listener-library', body); await refresh(); return result; } catch (e) { await refresh(); throw e; }
   }, [refresh, user?.uid]);
-  const visible = data._uid === user?.uid ? data : { playlists: [], follows: [], notifications: [], settings: {} };
-  return { ...visible, loading, error, refresh, mutate };
+  // A stable object keeps the memoized routes from re-rendering on every playback tick.
+  return useMemo(() => {
+    const visible = data._uid === user?.uid ? data : EMPTY_LIBRARY;
+    return { ...visible, loading, error, refresh, mutate };
+  }, [data, user?.uid, loading, error, refresh, mutate]);
 }

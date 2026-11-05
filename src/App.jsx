@@ -1,13 +1,12 @@
 // src/App.jsx
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo, lazy, Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { auth, db, appId, ADMIN_EMAILS } from './firebase';
 import confetti from 'canvas-confetti';
 import {
   signOut,
   signInWithPopup,
   GoogleAuthProvider,
-  signInAnonymously,
 } from 'firebase/auth';
 import {
   doc,
@@ -32,6 +31,8 @@ import Archive from './pages/Archive';
 const Admin = lazy(() => import('./pages/Admin'));
 import About from './pages/About';
 import TrackShareLanding from './pages/TrackShareLanding';
+import NotFound from './pages/NotFound';
+import ErrorBoundary from './components/ErrorBoundary';
 import ScrollToTop from './components/ScrollToTop';
 import ShareCard from './components/ShareCard';
 import AchievementPopup from "./components/AchievementPopup";
@@ -99,6 +100,12 @@ const INITIAL_USER_PROFILE = {
   nicknameUpdatedCount: 0,
   nicknamePrompted: false,
 };
+
+// A failed page keeps the player running, and moving to another page clears the error.
+function RouteBoundary({ children }) {
+  const { pathname } = useLocation();
+  return <ErrorBoundary key={pathname}>{children}</ErrorBoundary>;
+}
 
 // ---------------------
 // 라우트 렌더 격리
@@ -213,6 +220,7 @@ const AppRoutes = memo(function AppRoutes({
           />
         }
       />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 });
@@ -334,12 +342,12 @@ export default function App() {
   const displayName = useMemo(() => {
     const nick = (userProfile?.nickname || "").trim();
     if (nick) return nick;
-    return user?.displayName || (user?.isAnonymous ? "Guest" : "Collector");
+    return user?.displayName || (user ? "Collector" : "Guest");
   }, [userProfile?.nickname, user]);
 
   const emit = useCallback(async (event) => {
     const engine = engineRef.current;
-    if (!engine || !user || user.isAnonymous) return null;
+    if (!engine || !user) return null;
 
     let res;
     try { res = await engine.processEvent({ ...event, at: event.at || new Date() }); }
@@ -360,7 +368,7 @@ export default function App() {
   }, [newAchievement, achievementQueue]);
 
   useEffect(() => {
-    if (!user?.isAnonymous) return;
+    if (user) return;
 
     setUserProfile(INITIAL_USER_PROFILE);
     setNewAchievement(null);
@@ -389,7 +397,8 @@ export default function App() {
 
   const handleToggleLike = useCallback(async (e, trackId) => {
     if (e) e.stopPropagation();
-    if (!user || !trackId) return;
+    if (!trackId) return;
+    if (!user) { setToastMessage('Google 로그인 후 좋아요를 저장할 수 있습니다. Archive에서 로그인해 주세요.'); return; }
     if (likePendingRef.current.has(trackId)) return;
     likePendingRef.current.add(trackId);
     try {
@@ -553,7 +562,6 @@ export default function App() {
     setIsAdmin,
     setLoading,
     setScrolled,
-    setDataError,
   });
 
   useToastTimer({
@@ -792,7 +800,8 @@ export default function App() {
       <div className={`relative overflow-x-hidden ${isPlayerExpanded ? 'h-screen overflow-hidden' : ''}`}>
         <AppShell user={user} userProfile={userProfile} membership={membership} isAdmin={isAdmin} playerOpen={isPlayerExpanded}>
         {dataLoading && <p className="up-notice" role="status">사운드 아카이브를 불러오고 있습니다.</p>}
-        {dataError && <div className="up-notice" role="alert">{dataError}<button onClick={async () => { if (!user) await signInAnonymously(auth).catch(() => setDataError('접속하지 못했습니다. 네트워크를 확인해 주세요.')); setRetryToken((n) => n + 1); }}>다시 불러오기</button></div>}
+        {dataError && <div className="up-notice" role="alert">{dataError}<button onClick={() => setRetryToken((n) => n + 1)}>다시 불러오기</button></div>}
+        <RouteBoundary>
         <Suspense fallback={<p className="up-notice" role="status">페이지를 준비하고 있습니다.</p>}>
         <AppRoutes
           publicTracks={publicTracks}
@@ -824,6 +833,7 @@ export default function App() {
           library={library}
         />
         </Suspense>
+        </RouteBoundary>
         </AppShell>
 
         {playbackError && <div className="up-playback-error" role="alert"><span>{playbackError}</span><button onClick={retryPlayback}>다시 재생</button><button onClick={playNext}>다음 곡</button><button aria-label="오류 안내 닫기" onClick={() => setPlaybackError('')}>닫기</button></div>}
@@ -883,7 +893,7 @@ export default function App() {
           saveNicknameOnce={saveNicknameOnce}
         />
 
-        {!user?.isAnonymous && (
+        {user && (
           <AchievementPopup
             newAchievement={newAchievement}
             popupMeta={popupMeta}

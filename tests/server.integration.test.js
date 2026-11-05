@@ -64,6 +64,21 @@ test('trusted server integration: session validation, idempotency, private shari
   assert.equal((await root().collection('leaderboard').doc(uid).get()).exists, false);
   assert.equal((await invoke(library, { action: 'delete-playlist', id: listRef.id })).status, 200);
   assert.equal((await root().collection('shared_playlists').doc(privateList.publicId).get()).exists, false);
+  // Only a nickname the listener chose reaches the public board; the Google name stays private.
+  await privateProfile(uid).set({ nickname: 'Real Google Name', nicknameUpdatedCount: 0 }, { merge: true });
+  assert.equal((await invoke(library, { action: 'settings', rankingOptIn: true })).status, 200);
+  assert.equal((await root().collection('leaderboard').doc(uid).get()).data().nickname, 'Listener');
+  await privateProfile(uid).set({ nickname: 'Chosen', nicknameUpdatedCount: 1 }, { merge: true });
+  assert.equal((await invoke(library, { action: 'settings', rankingOptIn: true })).status, 200);
+  assert.equal((await root().collection('leaderboard').doc(uid).get()).data().nickname, 'Chosen');
+  // Account deletion removes private data, projections and shared links.
+  saved = await invoke(library, { action: 'save-playlist', title: 'Shared before leaving', trackIds: [start.trackId], isPublic: true });
+  const leaving = (await root().collection('users').doc(uid).collection('playlists').doc(saved.id).get()).data();
+  await root().collection('users').doc(uid).collection('likes').doc(start.trackId).set({ likedAt: 1 });
+  assert.equal((await invoke(library, { action: 'delete-account' })).status, 400);
+  assert.equal((await privateProfile(uid).get()).exists, true);
+  assert.equal((await invoke(library, { action: 'delete-account', confirm: 'DELETE' })).status, 200);
+  for (const ref of [privateProfile(uid), root().collection('users').doc(uid).collection('likes').doc(start.trackId), root().collection('users').doc(uid).collection('playlists').doc(saved.id), root().collection('shared_playlists').doc(leaving.publicId), root().collection('leaderboard').doc(uid), root().collection('public_stats').doc(uid), root().collection('server_state').doc(uid)]) assert.equal((await ref.get()).exists, false, ref.path);
   const draftRef = root().collection('public').doc('data').collection('tracks').doc('integration-draft');
   await draftRef.set({ title: 'Private synthetic draft', status: 'draft', audioUrl: 'https://example.test/draft.mp3', revisionHistory: [{ secret: 'editor-only' }] });
   const dryRun = await migrateSecurity(db);
