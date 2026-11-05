@@ -340,6 +340,21 @@ export const REWARD_CATALOG = {
 
 export const STICKER_SLOT_COUNT = 30;
 
+// Long-haul milestones earn the LP sleeve card, as do all collectibles. Everything else is a ticket.
+const SPOTLIGHT_ACHIEVEMENTS = new Set(["streak_100", "listen_500", "complete_100", "all_tracks_liked"]);
+export const isSpotlightReward = (id) => SPOTLIGHT_ACHIEVEMENTS.has(id) || Boolean(COLLECTIVE_CATALOG[id]);
+
+export function achievementCardProps(item, displayName, formatDateTime) {
+  const position = Object.keys(REWARD_CATALOG).indexOf(item.id);
+  return {
+    variant: isSpotlightReward(item.id) ? "sleeve" : "ticket",
+    item,
+    name: displayName || "LISTENER",
+    dateText: item.unlockedAt ? formatDateTime(item.unlockedAt).slice(0, 10) : "",
+    serial: position >= 0 ? String(position + 1).padStart(3, "0") : "",
+  };
+}
+
 export const getAchievementMeta = (id) =>
   ACHIEVEMENT_CATALOG[id] || {
     id,

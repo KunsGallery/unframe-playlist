@@ -339,11 +339,7 @@ export default function App() {
     };
   }, [levelInfo, userProfile]);
 
-  const displayName = useMemo(() => {
-    const nick = (userProfile?.nickname || "").trim();
-    if (nick) return nick;
-    return user?.displayName || (user ? "Collector" : "Guest");
-  }, [userProfile?.nickname, user]);
+  const displayName = (userProfile?.nickname || "").trim();
 
   const emit = useCallback(async (event) => {
     const engine = engineRef.current;
@@ -907,7 +903,7 @@ export default function App() {
         {shareItem && <ShareCard
           shareItem={shareItem}
           shareCardRef={shareCardRef}
-          displayName={(userProfile?.nickname || '').trim()}
+          displayName={displayName}
           formatDateTime={formatDateTime}
         />}
 

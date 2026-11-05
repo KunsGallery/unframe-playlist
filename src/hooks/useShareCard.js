@@ -66,7 +66,7 @@ export function useShareCard({
         const { domToPng } = await import('modern-screenshot');
 
         const dataUrl = await domToPng(shareCardRef.current, {
-          backgroundColor: "#1a1a1a",
+          backgroundColor: "#f1efe7",
           scale: 3,
         });
 
