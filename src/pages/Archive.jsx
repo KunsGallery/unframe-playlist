@@ -1,5 +1,5 @@
 // src/pages/Archive.jsx
-import React, { useState, useMemo, useId, memo, useCallback } from 'react';
+import React, { useState, useMemo, useId, memo, useCallback, useEffect } from 'react';
 import { motion as Motion, AnimatePresence } from 'framer-motion';
 import {
   User, Camera, Music, Heart, Share2, Zap,
@@ -153,7 +153,10 @@ export default function Archive({
   appId,
   handleGoogleLogin,
   allUsers = [],
+  loadRanking,
 }) {
+  useEffect(() => { if (user && !user.isAnonymous) loadRanking?.(); }, [user, loadRanking]);
+
   const [activeTab, setActiveTab] = useState('hearts');
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
   const [hoveredSticker, setHoveredSticker] = useState(null);

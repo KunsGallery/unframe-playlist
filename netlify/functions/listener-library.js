@@ -1,16 +1,20 @@
 import { randomUUID, createHash } from 'node:crypto';
-import { guard, root, privateProfile, services, response, failure, error, safeId, projectRanking, jsonBody } from '../lib/server.js';
+import { guard, rateLimit, root, privateProfile, services, response, failure, error, safeId, projectRanking, jsonBody } from '../lib/server.js';
 const text = (v, max) => typeof v === 'string' ? v.trim().slice(0, max) : '';
 export async function handler(event) {
   try {
-    const user = await guard(event, 30), data = jsonBody(event);
+    const user = await guard(event, 30, 60000, { durable: false }), data = jsonBody(event);
+    // Every page load calls "get"; only mutations and exports spend a durable limit write.
+    if (data.action !== 'get') await rateLimit(`library:${user.uid}`, 30);
     const userRef = root().collection('users').doc(user.uid);
     const lists = userRef.collection('playlists'), follows = userRef.collection('follows');
     const profileRef = privateProfile(user.uid);
     if (data.action === 'get') {
-      const [p, f, profile, releases] = await Promise.all([lists.get(), follows.get(), profileRef.get(), root().collection('public').doc('data').collection('tracks').get()]);
+      const [p, f, profile] = await Promise.all([lists.get(), follows.get(), profileRef.get()]);
       const settings = profile.data() || {}, followed = f.docs.map((d) => ({ id: d.id, ...d.data() }));
-      const notifications = settings.releaseNotifications === true ? releases.docs.filter((d) => followed.some((follow) => {
+      const wantsNotices = settings.releaseNotifications === true && followed.length > 0;
+      const releases = wantsNotices ? await root().collection('public').doc('data').collection('tracks').get() : null;
+      const notifications = wantsNotices ? releases.docs.filter((d) => followed.some((follow) => {
         const track = d.data(), at = track.publishedAt?.toMillis?.() || track.createdAt?.toMillis?.() || Date.parse(track.publishedAt || track.createdAt || '') || 0;
         return at > Math.max(follow.followedAt, settings.notificationsSeenAt || 0) && track[follow.kind] === follow.name;
       })).map((d) => ({ id: d.id, title: d.data().title, artist: d.data().artist })) : [];
@@ -64,7 +68,7 @@ export async function handler(event) {
       for (const key of ['rankingOptIn', 'releaseNotifications']) if (typeof data[key] === 'boolean') payload[key] = data[key];
       if (data.markRead === true) payload.notificationsSeenAt = Date.now();
       await profileRef.set(payload, { merge: true });
-      await projectRanking(user.uid);
+      await projectRanking(user.uid, { force: true });
       return response(200, { ok: true });
     }
     if (data.action === 'export') {

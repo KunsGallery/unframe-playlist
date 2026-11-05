@@ -28,6 +28,30 @@ test('trusted server integration: session validation, idempotency, private shari
   await root().collection('server_state').doc(uid).set({ session: { id: start.sessionId, trackId: start.trackId, startedAt: Date.now() - 60000, lastPulse: Date.now() - 12000, heard: 50, duration: 60, completed: false } });
   assert.equal((await invoke(reward, { ...complete, seconds: 10 })).status, 200);
   assert.equal((await privateProfile(uid).get()).data().counters.completes, 1);
+  // Pulses write only the state document; their seconds reach the receipt with the next profile event.
+  const before = await privateProfile(uid).get();
+  await root().collection('server_state').doc(uid).set({ session: { id: 'pulse-session', trackId: start.trackId, startedAt: Date.now() - 120000, lastPulse: Date.now() - 60000, heard: 60, duration: 60, completed: false } });
+  assert.equal((await invoke(reward, { type: 'listening_pulse', trackId: start.trackId, sessionId: 'pulse-session', eventId: 'pulse-1', seconds: 60 })).status, 200);
+  const afterPulse = await privateProfile(uid).get();
+  assert.equal(afterPulse.updateTime.isEqual(before.updateTime), true, 'a pulse must not write the profile');
+  const pulseState = (await root().collection('server_state').doc(uid).get()).data();
+  assert.ok(pulseState.pendingSeconds >= 59 && pulseState.pendingSeconds <= 61); assert.ok(pulseState.session.heard >= 119);
+  // A quick skip moves the session without counting a play; the previous tail folds into the receipt on the next counted start.
+  const listens = afterPulse.data().listenCount;
+  await root().collection('server_state').doc(uid).update({ 'session.startedAt': Date.now() - 1000 });
+  assert.equal((await invoke(reward, { type: 'track_play_start', trackId: start.trackId, sessionId: 'skip-session', eventId: 'skip-start' })).status, 200);
+  assert.equal((await privateProfile(uid).get()).data().listenCount, listens);
+  assert.equal((await root().collection('server_state').doc(uid).get()).data().session.id, 'skip-session');
+  const month = Object.keys(afterPulse.data().receipts).sort().pop(), secondsBefore = afterPulse.data().receipts[month].seconds;
+  await root().collection('server_state').doc(uid).update({ 'session.startedAt': Date.now() - 10000 });
+  assert.equal((await invoke(reward, { type: 'track_play_start', trackId: start.trackId, sessionId: 'next-session', eventId: 'next-start' })).status, 200);
+  const folded = (await privateProfile(uid).get()).data();
+  assert.equal(folded.listenCount, listens + 1); assert.ok(folded.receipts[month].seconds >= secondsBefore + 59);
+  // A repeat visit on the same day writes nothing.
+  const visited = await invoke(reward, { type: 'daily_active', eventId: 'visit-1' }); assert.equal(visited.status, 200);
+  const stable = await privateProfile(uid).get();
+  assert.equal((await invoke(reward, { type: 'daily_active', eventId: 'visit-2' })).status, 200);
+  assert.equal((await privateProfile(uid).get()).updateTime.isEqual(stable.updateTime), true, 'a repeat visit must not write the profile');
   let saved = await invoke(library, { action: 'save-playlist', title: 'Synthetic private playlist', trackIds: [start.trackId] }); assert.equal(saved.status, 200);
   const listRef = root().collection('users').doc(uid).collection('playlists').doc(saved.id), privateList = (await listRef.get()).data();
   assert.equal(privateList.isPublic, false); assert.equal((await root().collection('shared_playlists').doc(privateList.publicId).get()).exists, false);

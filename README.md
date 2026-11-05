@@ -38,6 +38,15 @@ Firebase 설정은 현재 `src/firebase.js`에 포함되어 있습니다.
 - `public/_redirects`가 배포 환경에서 SPA 라우팅을 처리하는지 확인합니다.
 - PWA 아이콘과 `public/manifest.json`이 최신 브랜딩과 맞는지 확인합니다.
 - iOS Safari와 iOS 홈 화면 설치(PWA) 환경에서 오디오 재생을 각각 점검합니다.
+- 새 이미지를 올렸다면 `npm run media:mirror`를 실행해 `public/media`와 `src/constants/mediaMirror.js`를 함께 커밋합니다.
+
+**이미지 미러**
+ImgBB 장애 안내 그림은 정상 이미지로 응답하기 때문에 `onError`로 걸러지지 않습니다. 그래서 발행된 ImgBB 이미지는 `public/media`에 복사해 Netlify에서 제공합니다. 공개 화면은 저장된 URL을 표시할 때만 이 복사본으로 바꾸고, Firestore 문서와 관리자 화면의 값은 그대로 둡니다. 복사 전의 새 이미지는 ImgBB에서 표시되므로 위 명령을 실행하기 전까지는 장애 영향을 받습니다.
+
+**Firestore 사용량**
+- 방문자의 곡 목록과 랭킹은 `/api/catalog`, `/api/ranking`의 CDN 캐시(최대 10분 지연)로 제공합니다. 실패하면 Firestore 직접 읽기로 전환합니다. 관리자는 실시간 구독을 유지합니다.
+- 청취 기록은 60초마다 `server_state` 문서 1건만 씁니다. 누적 시간은 다음 재생·완주 등의 이벤트 때 월간 영수증에 합쳐집니다.
+- 공개 랭킹 문서는 최대 10분 간격으로 갱신됩니다. 랭킹 공개 설정 변경과 업적 달성은 문서에 바로 반영되지만, 화면에는 CDN 캐시 때문에 최대 10분 늦게 보일 수 있습니다.
 
 **주요 폴더/파일 구조**
 - `src/App.jsx`: 앱 셸, 라우팅, 전역 상태, 플레이어, 토스트, 업적 팝업 조립

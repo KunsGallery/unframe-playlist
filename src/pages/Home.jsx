@@ -167,6 +167,7 @@ export default function Home({
   siteConfig,
   rankingTheme,
   allUsers = [],
+  loadRanking,
   pauseForExternalPlayback,
 }) {
   const [featuredData, setFeaturedData] = useState(null);
@@ -183,6 +184,7 @@ export default function Home({
 
   const scrollContainerRef = useRef(null);
   const deepLinkHandled = useRef(false);
+  const rankingRef = useRef(null);
 
   const rankingCandidates = useMemo(
     () => (Array.isArray(allUsers) ? allUsers : []).filter((user) => !shouldExcludeRankingUser(user)),
@@ -338,9 +340,27 @@ export default function Home({
   }, [playTrack]);
 
   useEffect(() => {
-    if (!db || !appId) return;
+    const target = rankingRef.current;
+    if (!target || !loadRanking) return;
+    if (typeof IntersectionObserver === "undefined") { loadRanking(); return; }
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) { observer.disconnect(); loadRanking(); }
+    }, { rootMargin: "400px" });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [loadRanking]);
+
+  useEffect(() => {
+    if (!db || !appId || !siteConfig?.contentReady) return;
 
     const fetchFeatured = async () => {
+      // The catalog feed already carries this document for visitors.
+      if (siteConfig.featured !== undefined) {
+        setFeaturedData(siteConfig.featured);
+        const linked = tracks.find((t) => t?.id === siteConfig.featured?.linkedTrackId);
+        if (linked) setFeaturedTrack(linked);
+        return;
+      }
       try {
         const docRef = doc(db, "artifacts", appId, "public", "data", "featured", "directors_pick");
         const snap = await getDoc(docRef);
@@ -359,7 +379,7 @@ export default function Home({
     };
 
     fetchFeatured();
-  }, [db, appId, tracks]);
+  }, [db, appId, tracks, siteConfig?.contentReady, siteConfig?.featured]);
 
   const displayTracks = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -638,7 +658,8 @@ export default function Home({
           </div>
         </div>
 
-        <div className="up-hero__art" style={heroImage ? { backgroundImage: `url(${heroImage})` } : undefined}>
+        <div className="up-hero__art">
+          {heroImage && <img key={heroImage} className="up-hero__image" src={heroImage} alt="" fetchPriority="high" onError={hideBrokenImage} />}
           <div className="up-hero__stamp">NEW<br />ISSUE</div>
           <div className="up-hero__label"><Disc3 aria-hidden="true" /><span>UNFRAME<br />PLAYLIST</span></div>
         </div>
@@ -791,7 +812,7 @@ export default function Home({
             {featuredTrack && <button type="button" onClick={() => safePlay(tracks.indexOf(featuredTrack), tracks)}><Play /> Listen to the note</button>}
           </article>
 
-          <article className="up-note up-note--ranking">
+          <article className="up-note up-note--ranking" ref={rankingRef}>
             <div className="up-note__nav">
               <p className="up-kicker">Listener signal</p>
               <span><button type="button" onClick={goPrevRanking}><ArrowLeft /></button><button type="button" onClick={goNextRanking}><ArrowRight /></button></span>

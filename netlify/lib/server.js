@@ -40,7 +40,20 @@ export async function rateLimit(key, limit = 60, period = 60000) {
     tx.set(ref, { count: active ? old.count + 1 : 1, until: active ? old.until : now + period, expiresAt: new Date(now + 86400000) });
   });
 }
-export async function guard(event, limit = 60, period = 60000) {
+// Best-effort limit per function instance. It costs no Firestore writes, so it suits frequent
+// requests. Use rateLimit (durable) for uploads and other mutations that must hold across instances.
+const localHits = new Map();
+export function localLimit(key, limit = 60, period = 60000, now = Date.now()) {
+  const hit = localHits.get(key);
+  if (hit && now < hit.until) {
+    if (hit.count >= limit) throw error(429, '요청이 많습니다. 잠시 후 다시 시도해 주세요.');
+    hit.count += 1;
+    return;
+  }
+  if (localHits.size > 5000) for (const [k, v] of localHits) if (now >= v.until) localHits.delete(k);
+  localHits.set(key, { count: 1, until: now + period });
+}
+export async function guard(event, limit = 60, period = 60000, { durable = true } = {}) {
   if (event.httpMethod !== 'POST') throw error(405, 'POST 요청만 지원합니다.');
   const origin = event.headers.origin;
   const allowed = ['https://up.unframe.kr', process.env.URL, process.env.DEPLOY_PRIME_URL].filter(Boolean);
@@ -48,8 +61,9 @@ export async function guard(event, limit = 60, period = 60000) {
   if ((event.body || '').length > 4_000_000) throw error(413, '요청 용량이 너무 큽니다.');
   const user = await identity(event);
   const ip = event.headers['x-nf-client-connection-ip'];
-  if (ip) await rateLimit(`ip:${ip}`, 240);
-  await rateLimit(`user:${user.uid}:${event.path || ''}`, limit, period);
+  if (ip) localLimit(`ip:${ip}`, 240);
+  const userKey = `user:${user.uid}:${event.path || ''}`;
+  if (durable) await rateLimit(userKey, limit, period); else localLimit(userKey, limit, period);
   return user;
 }
 export const response = (statusCode, body) => ({ statusCode, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...(statusCode === 429 ? { 'Retry-After': '60' } : {}) }, body: JSON.stringify(body) });
@@ -62,14 +76,21 @@ export function jsonBody(event) {
   try { const data = JSON.parse(event.body || '{}'); if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error(); return data; }
   catch { throw error(400, '요청 형식을 확인해 주세요.'); }
 }
-export async function projectRanking(uid) {
+export const PROJECTION_INTERVAL_MS = 10 * 60 * 1000;
+// force: settings changes (including opt-out) must apply immediately. Routine listening events
+// refresh the projection at most once per interval to avoid two extra writes per event.
+export async function projectRanking(uid, { force = false } = {}) {
   const { getLevelInfo } = await import('../../src/levels.js');
+  const indexRef = root().collection('public_stats').doc(uid), ref = root().collection('leaderboard').doc(uid);
+  if (!force) {
+    const last = (await indexRef.get()).data()?.projectedAt || 0;
+    if (Date.now() - last < PROJECTION_INTERVAL_MS) return;
+  }
   await services().db.runTransaction(async (tx) => {
-    const indexRef = root().collection('public_stats').doc(uid), ref = root().collection('leaderboard').doc(uid);
     const [p, legacy] = await Promise.all([tx.get(privateProfile(uid)), tx.get(indexRef)]);
     const profile = p.data() || {}, lv = getLevelInfo(profile.xp || 0);
     const projection = { displayName: profile.nickname || 'Listener', nickname: profile.nickname || 'Listener', profileImg: profile.profileImg || '', listenCount: profile.listenCount || 0, shareCount: profile.shareCount || 0, likedCount: profile.likedCount || 0, xp: profile.xp || 0, level: lv.level, levelKey: lv.key, levelName: profile.levelOverrideName || lv.name, levelColor: profile.levelOverrideColor || lv.color };
-    tx.set(indexRef, projection, { merge: true });
+    tx.set(indexRef, { ...projection, projectedAt: Date.now() }, { merge: true });
     if (profile.rankingOptIn !== true || profile.isRankingHidden || legacy.data()?.isRankingHidden) tx.delete(ref); else tx.set(ref, projection);
   });
 }

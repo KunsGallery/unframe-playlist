@@ -213,6 +213,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .up-button--ink { color: white; background: var(--up-ink); box-shadow: 4px 4px 0 var(--up-blue); }
 .up-button--ink:hover { transform: translate(2px,2px); box-shadow: 2px 2px 0 var(--up-blue); }
 .up-hero__art { position: relative; margin: 22px; min-height: 430px; border: 1px solid var(--up-ink); border-radius: 22px; background-color: var(--up-blue); background-size: cover; background-position: center; isolation: isolate; overflow: hidden; }
+.up-hero__image { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; object-fit: cover; }
 .up-hero__art::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(145deg, rgba(20,60,255,.08), rgba(17,17,15,.72)); mix-blend-mode: multiply; }
 .up-hero__stamp { position: absolute; top: 18px; right: 18px; width: 74px; height: 74px; display: grid; place-items: center; text-align: center; border-radius: 50%; background: var(--up-orange); color: var(--up-ink); font: 950 13px/.88 ui-monospace, monospace; transform: rotate(11deg); border: 1px solid var(--up-ink); }
 .up-hero__label { position: absolute; left: 24px; bottom: 24px; display: flex; align-items: center; gap: 12px; color: white; font: 900 12px/1.05 ui-monospace, monospace; letter-spacing: .08em; }

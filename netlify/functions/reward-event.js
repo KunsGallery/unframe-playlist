@@ -8,9 +8,24 @@ export const durationSeconds = (track) => {
   if (typeof v === 'string' && /^\d{1,3}:\d{2}$/.test(v)) { const [m, s] = v.split(':').map(Number); return m * 60 + s; }
   return null;
 };
+// A background tab or lock screen can report minutes at once. Server wall-clock time since the
+// last report still bounds the credit, so this cap only limits a single claim.
+export const MAX_CREDIT_SECONDS = 600;
+export const creditSeconds = (session, claimed, now) => Math.max(0, Math.min(MAX_CREDIT_SECONDS, (now - session.lastPulse) / 1000, Number(claimed) || 0));
+const USER_LIMIT_PER_MINUTE = 60;
+// Kept in the listener's own state document, so the limit adds no write of its own.
+export function consumeUserQuota(state, now) {
+  const active = state.rate && now < state.rate.until;
+  if (active && state.rate.count >= USER_LIMIT_PER_MINUTE) throw error(429, '요청이 많습니다. 잠시 후 다시 시도해 주세요.');
+  state.rate = { count: active ? state.rate.count + 1 : 1, until: active ? state.rate.until : now + 60000 };
+}
+const liveSession = (session, input, now) => {
+  if (!session || session.id !== input.sessionId || session.trackId !== input.trackId || now - session.startedAt > Math.max(1800000, (session.duration || 600) * 3000)) throw error(409, '청취 세션이 만료되었습니다. 다음 재생부터 다시 기록합니다.');
+  return session;
+};
 export async function handler(event) {
   try {
-    const user = await guard(event), input = jsonBody(event);
+    const user = await guard(event, USER_LIMIT_PER_MINUTE, 60000, { durable: false }), input = jsonBody(event);
     if (!TYPES.has(input.type) || !safeId(input.eventId)) throw error(400, '유효하지 않은 이벤트입니다.');
     if (input.trackId && !safeId(input.trackId)) throw error(400, '곡 정보를 확인해 주세요.');
     const trackSnap = input.trackId && ['track_play_start', 'like_added'].includes(input.type) ? await root().collection('public').doc('data').collection('tracks').doc(input.trackId).get() : null;
@@ -24,11 +39,21 @@ export async function handler(event) {
     }
     const ref = privateProfile(user.uid), stateRef = root().collection('server_state').doc(user.uid), now = Date.now();
     const result = await services().db.runTransaction(async (tx) => {
-      const [snap, stateSnap] = await Promise.all([tx.get(ref), tx.get(stateRef)]);
-      const previous = snap.data() || { xp: 0, rewards: [], firstJoin: now, nickname: (user.name || 'Listener').slice(0, 16) };
-      const state = stateSnap.data() || {};
-      if (previous.counters?.recentEventIds?.includes(input.eventId)) return { profile: previous, unlockedRewards: [], duplicate: true };
+      const state = (await tx.get(stateRef)).data() || {};
       const session = state.session;
+      consumeUserQuota(state, now);
+      // Pulses touch only the state document: one write. Seconds reach the receipt with the next profile event.
+      if (input.type === 'listening_pulse') {
+        const live = liveSession(session, input, now), heard = creditSeconds(live, input.seconds, now);
+        live.heard += heard; live.lastPulse = now;
+        state.pendingSeconds = (state.pendingSeconds || 0) + heard;
+        tx.set(stateRef, state);
+        return { unlockedRewards: [], skipProjection: true };
+      }
+      const snap = await tx.get(ref);
+      const previous = snap.data() || { xp: 0, rewards: [], firstJoin: now, nickname: (user.name || 'Listener').slice(0, 16) };
+      if (previous.counters?.recentEventIds?.includes(input.eventId)) return { profile: previous, unlockedRewards: [], duplicate: true, skipProjection: true };
+      if (input.type === 'daily_active' && snap.exists && previous.streak?.lastActive === dateKey(new Date(now)) && !state.pendingSeconds) return { profile: previous, unlockedRewards: [], skipProjection: true };
       const playlistKey = typeof (input.playlistKey || input.playlistId) === 'string' ? (input.playlistKey || input.playlistId).slice(0, 140) : null;
       if (input.type === 'share_card') { if (now - (state.lastShare || 0) < 30000) throw error(429, '공유 기록은 30초마다 반영합니다.'); state.lastShare = now; }
       if (input.type === 'playlist_play') {
@@ -52,26 +77,29 @@ export async function handler(event) {
         state.lastPlaylist = now;
       }
       if (input.type === 'track_play_start') {
-        if (!safeId(input.sessionId) || (session && now - session.startedAt < 5000)) throw error(429, '곡 전환이 너무 빠릅니다.');
+        if (!safeId(input.sessionId)) throw error(400, '청취 세션을 확인해 주세요.');
+        if (session) state.pendingSeconds = (state.pendingSeconds || 0) + creditSeconds(session, input.previousSeconds, now);
+        const skippedQuickly = session && now - session.startedAt < 5000;
         state.session = { id: input.sessionId, trackId: input.trackId, startedAt: now, lastPulse: now, heard: 0, completed: false, duration: durationSeconds(track), genre: track.genre || track.tag || 'Ambient', exhibition: track.exhibition || '' };
+        // Fast skips still move the session so later reports match, but earn no play count or XP.
+        if (skippedQuickly) { tx.set(stateRef, state); return { unlockedRewards: [], skipProjection: true }; }
       }
       let heard = 0;
-      if (['track_complete', 'listening_pulse'].includes(input.type)) {
-        if (!session || session.id !== input.sessionId || session.trackId !== input.trackId || now - session.startedAt > Math.max(1800000, (session.duration || 600) * 3000)) throw error(409, '청취 세션이 만료되었습니다. 다음 재생부터 다시 기록합니다.');
-        heard = Math.max(0, Math.min(30, (now - session.lastPulse) / 1000, Number(input.seconds) || 0));
-        session.heard += heard; session.lastPulse = now;
-        if (input.type === 'track_complete') {
-          if (!session.duration) throw error(409, '음원 길이 확인이 필요한 곡입니다. 완주 보상은 확인 후 기록됩니다.');
-          if (session.completed || session.heard < session.duration * .9 || now - session.startedAt < session.duration * 900) throw error(409, '청취 시간이 충분하지 않습니다.');
-          session.completed = true;
-        }
+      if (input.type === 'track_complete') {
+        const live = liveSession(session, input, now);
+        heard = creditSeconds(live, input.seconds, now);
+        live.heard += heard; live.lastPulse = now;
+        if (!live.duration) throw error(409, '음원 길이 확인이 필요한 곡입니다. 완주 보상은 확인 후 기록됩니다.');
+        if (live.completed || live.heard < live.duration * .9 || now - live.startedAt < live.duration * 900) throw error(409, '청취 시간이 충분하지 않습니다.');
+        live.completed = true;
       }
       const stable = { type: input.type, trackId: input.trackId || null, playlistKey, eventId: input.eventId, likedCount: likedCount ?? previous.likedCount ?? 0, totalTracks };
-      const next = ['listening_pulse', 'like_removed'].includes(input.type) ? { profile: { ...previous, counters: { ...previous.counters, recentEventIds: [...(previous.counters?.recentEventIds || []).slice(-99), input.eventId] } }, unlockedRewards: [] } : reduceRewardEvent(previous, stable, new Date(now));
+      const next = input.type === 'like_removed' ? { profile: { ...previous, counters: { ...previous.counters, recentEventIds: [...(previous.counters?.recentEventIds || []).slice(-99), input.eventId] } }, unlockedRewards: [] } : reduceRewardEvent(previous, stable, new Date(now));
       if (likedCount !== null) next.profile.likedCount = likedCount;
       const month = dateKey(new Date(now)).slice(0, 7), receipts = { ...previous.receipts };
       const receipt = receipts[month] || { since: now, seconds: 0, plays: {}, exhibitions: {}, completed: 0 };
-      receipt.seconds += heard;
+      receipt.seconds += heard + (state.pendingSeconds || 0);
+      state.pendingSeconds = 0;
       if (input.type === 'track_play_start') { receipt.plays[input.trackId] = (receipt.plays[input.trackId] || 0) + 1; if (track.exhibition) receipt.exhibitions[track.exhibition] = (receipt.exhibitions[track.exhibition] || 0) + 1; }
       if (input.type === 'track_complete') receipt.completed++;
       receipts[month] = receipt;
@@ -79,7 +107,7 @@ export async function handler(event) {
       tx.set(ref, next.profile); tx.set(stateRef, state);
       return next;
     });
-    if (input.type !== 'listening_pulse') await projectRanking(user.uid);
+    if (!result.skipProjection) await projectRanking(user.uid, { force: result.unlockedRewards?.length > 0 });
     return response(200, { unlockedRewards: result.unlockedRewards, duplicate: !!result.duplicate });
   } catch (err) { return failure(err); }
 }

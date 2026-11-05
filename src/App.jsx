@@ -52,6 +52,7 @@ import { getLevelInfo } from './levels';
 import { isPublishedTrack, resolvePlaylist, nextQueueIndex } from './utils/catalog';
 import { useListeningMemory } from './hooks/useListeningMemory';
 import { useListenerLibrary } from './hooks/useListenerLibrary';
+import { fetchRanking } from './utils/ranking';
 const ListenerLibrary = lazy(() => import('./pages/ListenerLibrary'));
 const ReleaseDetail = lazy(() => import('./pages/ReleaseDetail'));
 const ExhibitionJourney = lazy(() => import('./pages/ExhibitionJourney'));
@@ -71,6 +72,14 @@ const formatDateTime = (input) => {
   const week = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}.(${week[d.getDay()]}) ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
+
+// Playback bookkeeping: a failed report must never interrupt the music with a message.
+const BACKGROUND_EVENTS = new Set(['listening_pulse', 'track_complete', 'track_play_start', 'playlist_play']);
+const PULSE_SECONDS = 60;
+// The server credits a little less than the client measures because request latency varies,
+// so reports go out above its 90% rule. The second attempt covers a rejected first one.
+const COMPLETE_ATTEMPTS = [0.95, 0.995];
+const RANKING_REFRESH_MS = 10 * 60 * 1000;
 
 const INITIAL_USER_PROFILE = {
   listenCount: 0,
@@ -97,7 +106,8 @@ const INITIAL_USER_PROFILE = {
 const AppRoutes = memo(function AppRoutes({
   publicTracks,
   playlists,
-  adminPlaylists,
+  studioContent,
+  loadRanking,
   gatheringPlaylists,
   isPlaying,
   currentTrack,
@@ -146,6 +156,7 @@ const AppRoutes = memo(function AppRoutes({
             appId={appId}
             siteConfig={siteConfig}
             allUsers={allUsers}
+            loadRanking={loadRanking}
             rankingTheme={rankingTheme}
             pauseForExternalPlayback={pauseForExternalPlayback}
           />
@@ -168,6 +179,7 @@ const AppRoutes = memo(function AppRoutes({
             setSelectedTrack={setSelectedTrack}
             rankingTheme={rankingTheme}
             allUsers={allUsers}
+            loadRanking={loadRanking}
           />
         }
       />
@@ -190,9 +202,9 @@ const AppRoutes = memo(function AppRoutes({
         element={
           <Admin
             isAdmin={isAdmin}
-            tracks={tracks}
-            playlists={adminPlaylists || playlists}
-            gatheringPlaylists={gatheringPlaylists}
+            tracks={studioContent.tracks}
+            playlists={studioContent.playlists}
+            gatheringPlaylists={studioContent.gathering_playlists}
             db={db}
             appId={appId}
             setToastMessage={setToastMessage}
@@ -241,6 +253,12 @@ export default function App() {
 
   const [shareItem, setShareItem] = useState(null);
   const [allUsers, setAllUsers] = useState([]);
+  const [studioContent, setStudioContent] = useState({ tracks: [], playlists: [], gathering_playlists: [] });
+  const loadRanking = useCallback(() => {
+    if (Date.now() - rankingLoadedAtRef.current < RANKING_REFRESH_MS) return;
+    rankingLoadedAtRef.current = Date.now();
+    fetchRanking(db, appId).then(setAllUsers).catch(() => { rankingLoadedAtRef.current = 0; });
+  }, []);
 
   const [rankingTheme] = useState({
     id: 'night_owl',
@@ -267,7 +285,7 @@ export default function App() {
 
   const shareCardRef = useRef(null);
   const engineRef = useRef(null);
-  const completedOnceRef = useRef(new Set());
+  const rankingLoadedAtRef = useRef(0);
   const [playbackError, setPlaybackError] = useState('');
   const [dataError, setDataError] = useState('');
   const [dataLoading, setDataLoading] = useState(true);
@@ -325,7 +343,7 @@ export default function App() {
 
     let res;
     try { res = await engine.processEvent({ ...event, at: event.at || new Date() }); }
-    catch (error) { if (event.type !== 'listening_pulse') setToastMessage(error.message || '기록을 저장하지 못했습니다. 네트워크 연결을 확인해 주세요.'); return null; }
+    catch (error) { if (!BACKGROUND_EVENTS.has(event.type)) setToastMessage(error.message || '기록을 저장하지 못했습니다. 네트워크 연결을 확인해 주세요.'); return null; }
 
     if (res?.unlockedRewards?.length) {
       setAchievementQueue((queue) => [...queue, ...res.unlockedRewards]);
@@ -501,18 +519,18 @@ export default function App() {
       session.lastPosition = cur; session.lastTick = now;
       const pct = Math.min(1, (session.heardSeconds || 0) / dur);
       const unreported = Math.max(0, (session.heardSeconds || 0) - (session.reportedSeconds || 0));
-      if (unreported >= 20 && pct < .9) {
+      const attempts = session.completeAttempts || 0;
+      if (!session.completeSent && attempts < COMPLETE_ATTEMPTS.length && pct >= COMPLETE_ATTEMPTS[attempts]) {
+        session.completeAttempts = attempts + 1;
+        session.completeSent = true;
+        void emit({ type: "track_complete", trackId: tid, seconds: unreported }).then((result) => {
+          // On success the seconds are credited. On rejection the server keeps nothing, so they stay unreported.
+          if (result) session.reportedSeconds = session.heardSeconds;
+          else session.completeSent = false;
+        });
+      } else if (unreported >= PULSE_SECONDS && !session.completeSent) {
         session.reportedSeconds = session.heardSeconds;
         void emit({ type: 'listening_pulse', trackId: tid, seconds: unreported });
-      }
-      if (pct >= 0.9) {
-        const key = `${tid}:${playSessionRef.current.startedAt}`;
-        if (!completedOnceRef.current.has(key)) {
-          completedOnceRef.current.add(key);
-          if (completedOnceRef.current.size > 100) completedOnceRef.current.clear();
-          session.reportedSeconds = session.heardSeconds;
-          emit({ type: "track_complete", trackId: tid, seconds: unreported, progress: pct, eventId: `complete:${key}` });
-        }
       }
     };
 
@@ -554,7 +572,7 @@ export default function App() {
     setNickError,
     setIsNickModalOpen,
 
-    setAllUsers,
+    setStudioContent,
     setTracks,
     setCurrentQueue,
     setPlaylists,
@@ -779,7 +797,8 @@ export default function App() {
         <AppRoutes
           publicTracks={publicTracks}
           playlists={publicPlaylists}
-          adminPlaylists={playlists}
+          studioContent={studioContent}
+          loadRanking={loadRanking}
           gatheringPlaylists={gatheringPlaylists}
           isPlaying={isPlaying}
           currentTrack={currentTrack}

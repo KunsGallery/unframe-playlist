@@ -107,6 +107,9 @@ export function usePlayerEngine({
           setCurrentTrackIdx(targetIdx);
         }
 
+        const outgoing = playSessionRef.current;
+        const previousSeconds = Math.max(0, (outgoing?.heardSeconds || 0) - (outgoing?.reportedSeconds || 0));
+
         playSessionRef.current = {
           startedAt: Date.now(),
           trackId: targetTrack.id,
@@ -131,6 +134,7 @@ export function usePlayerEngine({
                 void emit({
                   type: "track_play_start",
                   trackId: targetTrack.id,
+                  previousSeconds,
                 });
 
                 if (!context?.continuation && (context?.playlistKey || context?.playlistId)) {

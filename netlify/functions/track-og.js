@@ -1,3 +1,5 @@
+import mediaMirror from "../../src/constants/mediaMirror.js";
+
 const FALLBACK_ORIGIN = "https://unframe.kr";
 
 const escapeHtml = (value = "") =>
@@ -37,9 +39,10 @@ const truncateText = (value, maxLength = 120) => {
   return `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
 };
 
-const normalizeImageUrl = (value, fallbackImage) => {
+const normalizeImageUrl = (value, fallbackImage, origin) => {
   const raw = typeof value === "string" ? value.trim() : "";
   if (!raw) return fallbackImage;
+  if (mediaMirror[raw]) return `${origin}${mediaMirror[raw]}`;
 
   try {
     const url = new URL(raw);
@@ -143,7 +146,8 @@ export async function handler(event) {
     );
     const image = normalizeImageUrl(
       getFirestoreString(fields, "image", ""),
-      fallbackImage
+      fallbackImage,
+      origin
     );
 
     const ogUrl = `${origin}/og/track/${encodeURIComponent(trackId)}`;

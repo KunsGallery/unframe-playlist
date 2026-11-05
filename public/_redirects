@@ -1,3 +1,5 @@
 /og/track/:id /.netlify/functions/track-og?id=:id 200
+/api/catalog /.netlify/functions/catalog 200
+/api/ranking /.netlify/functions/ranking 200
 /share/track/:id /index.html 200
 /* /index.html 200
