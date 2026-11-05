@@ -24,6 +24,7 @@ export default defineConfig({
     open: false,
     proxy: process.env.UP_API_TARGET ? { '/.netlify/functions': { target: process.env.UP_API_TARGET, changeOrigin: true } } : undefined,
   },
+  worker: { format: 'es' },
   build: {
     outDir: 'dist',
     assetsDir: 'assets',

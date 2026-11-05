@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8" />
+<title>Lyric accuracy</title>
+<body style="font: 14px/1.5 ui-monospace, monospace; padding: 20px">
+<p>Run with <code>npm run dev</code>, open <code>/scripts/lyric-accuracy.html</code>. Add <code>?device=wasm</code> to skip WebGPU, <code>&amp;only=제목</code> for one track.</p>
+<pre id="out"></pre>
+<script type="module">
+  // Compares auto-sync against the hand-timed lyrics of published tracks. Reads only public data.
+  import { prepareLyrics, detectLanguage, alignLyrics } from '/src/utils/lyricAlign.js';
+  import { decodeForSpeech } from '/src/utils/lyricAudio.js';
+  import { transcribeLyrics } from '/src/utils/lyricSyncClient.js';
+
+  const API = 'https://firestore.googleapis.com/v1/projects/unframe-playlist/databases/(default)/documents/artifacts/unframe-playlist-v1/public/data/tracks?pageSize=100';
+  const params = new URLSearchParams(location.search);
+  const out = document.getElementById('out');
+  const log = (line) => { out.textContent += `${line}\n`; };
+  // Hand-made times keyed by line text, used in order. Lines without one are aligned but not scored.
+  const handTimes = (text, lines) => {
+    const timed = text.split(/\r?\n/).map((raw) => /^\s*\[(\d+):(\d+(?:\.\d+)?)\]\s*(.*)$/.exec(raw)).filter(Boolean).map((m) => ({ time: Number(m[1]) * 60 + Number(m[2]), text: m[3].trim() }));
+    let next = 0;
+    return lines.map((line) => {
+      const found = timed.findIndex((t, i) => i >= next && t.text === line.text);
+      if (found < 0) return null;
+      next = found + 1;
+      return timed[found].time;
+    });
+  };
+  const share = (values, limit) => Math.round(values.filter((v) => v <= limit).length / values.length * 100);
+
+  const docs = (await (await fetch(API)).json()).documents || [];
+  const tracks = docs.map((d) => ({ title: d.fields.title?.stringValue || '', audio: d.fields.audioUrl?.stringValue || '', lyrics: d.fields.lyrics?.stringValue || '' }))
+    .filter((t) => /\[\d+:\d+/.test(t.lyrics) && (!params.get('only') || t.title.includes(params.get('only'))));
+
+  window.__results = [];
+  window.__done = false;
+  for (const track of tracks) {
+    try {
+      const started = performance.now();
+      const audio = await decodeForSpeech(track.audio);
+      const audioSeconds = Math.round(audio.length / 16000);
+      const { language, certain } = detectLanguage(track.lyrics);
+      let device = '';
+      const words = await transcribeLyrics({ audio, language, device: params.get('device') || undefined, onProgress: (p) => { device = p.device || device; } }).promise;
+      const lines = prepareLyrics(track.lyrics), truth = handTimes(track.lyrics, lines);
+      const result = alignLyrics(lines, words);
+      const errors = result.lines.flatMap((line, i) => truth[i] === null ? [] : [Math.abs(line.time - truth[i])]);
+      const row = { title: track.title, language, certain, device, audioSeconds, seconds: Math.round((performance.now() - started) / 1000), lines: lines.length, scored: errors.length, matchRate: Math.round(result.matchRate * 100), within1: share(errors, 1), within2: share(errors, 2), flagged: result.lines.filter((l) => l.needsReview).length, errors };
+      window.__results.push(row);
+      log(`${row.title.slice(0, 22).padEnd(24)} ${language}${certain ? '' : '?'} ${device} match ${row.matchRate}% <=1s ${row.within1}% <=2s ${row.within2}% flagged ${row.flagged} ${row.seconds}s/${audioSeconds}s`);
+    } catch (error) {
+      window.__results.push({ title: track.title, error: error.message });
+      log(`${track.title}: ERROR ${error.message}`);
+    }
+  }
+  const all = window.__results.flatMap((r) => r.errors || []);
+  if (all.length) log(`TOTAL ${all.length} lines <=1s ${share(all, 1)}% <=2s ${share(all, 2)}%`);
+  window.__done = true;
+  if (params.get('report')) await fetch(params.get('report'), { method: 'POST', body: out.textContent }).catch(() => {});
+</script>
+</body>
+</html>

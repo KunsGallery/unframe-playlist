@@ -1,5 +1,7 @@
 const TIME_TAG = /\[\d{1,3}:\d{1,2}(?:\.\d{1,3})?\]/g;
-const SECTION_MARKER = /^\[[^\]]*\]$/;
+const SECTION_MARKER = /^\[[^\]]*\](\s*\(.*\))?$/;
+const PARENTHESIZED = /^[(（].*[)）]$/;
+const STAGE_DIRECTION = /instrumental|\binst\b|\bsolo\b|\bbreath\b|\boutro\b|\bintro\b|피아노|간주|연주|전주|후주/i;
 const MIN_LINE_MATCH = 0.3;
 const SECONDS_PER_CHAR = 0.2;
 const FALLBACK_LINE_GAP = 3;
@@ -17,25 +19,47 @@ const COMMON_WORD_SETS = Object.fromEntries(Object.entries(COMMON_WORDS).map(([l
 const normalize = (text) => text.toLowerCase().normalize('NFKC').replace(/[^\p{L}\p{N}]/gu, '');
 const countMatches = (text, pattern) => (text.match(pattern) || []).length;
 
-export function prepareLyrics(text) {
+function dominantScript(text) {
+  const counts = {
+    hangul: countMatches(text, /\p{Script=Hangul}/gu),
+    kana: countMatches(text, /[\p{Script=Hiragana}\p{Script=Katakana}]/gu),
+    latin: countMatches(text, /\p{Script=Latin}/gu),
+  };
+  // A little kana marks Japanese even when kanji carry most of the line.
+  if (counts.kana > 0 && counts.kana >= counts.hangul && counts.kana >= counts.latin / 2) return 'kana';
+  if (counts.hangul > 0 && counts.hangul >= counts.latin) return 'hangul';
+  return counts.latin > 0 ? 'latin' : null;
+}
+
+function cleanLines(text) {
   return String(text || '')
     .split(/\r?\n/)
-    .map((raw) => {
-      const trimmed = raw.trim();
-      return SECTION_MARKER.test(trimmed) && !trimmed.match(TIME_TAG) ? '' : trimmed.replace(TIME_TAG, '').trim();
-    })
-    .filter((line) => normalize(line))
-    .map((line) => ({ text: line }));
+    .map((raw) => raw.trim())
+    .filter((line) => !SECTION_MARKER.test(line) || line.match(/^\[\d{1,3}:\d{1,2}(?:\.\d{1,3})?\]/))
+    .map((line) => line.replace(TIME_TAG, '').trim())
+    .filter((line) => normalize(line) && !(PARENTHESIZED.test(line) && STAGE_DIRECTION.test(line)));
+}
+
+// A parenthesized line in another script is a translation nobody sings. It rides along with the
+// line above so saving keeps it, while the player, which skips untimed lines, never shows it.
+export function prepareLyrics(text) {
+  const cleaned = cleanLines(text);
+  const mainScript = dominantScript(cleaned.filter((line) => !PARENTHESIZED.test(line)).join(''));
+  const lines = [];
+  for (const line of cleaned) {
+    const isTranslation = PARENTHESIZED.test(line) && mainScript && dominantScript(line) !== mainScript && lines.length > 0;
+    if (!isTranslation) lines.push({ text: line });
+    else lines[lines.length - 1].note = [lines[lines.length - 1].note, line].filter(Boolean).join('\n');
+  }
+  return lines;
 }
 
 export function detectLanguage(text, fallback) {
   if (fallback) return { language: fallback, certain: true };
-  const source = String(text || '');
-  const hangul = countMatches(source, /\p{Script=Hangul}/gu);
-  const kana = countMatches(source, /[\p{Script=Hiragana}\p{Script=Katakana}]/gu);
-  const latin = countMatches(source, /\p{Script=Latin}/gu);
-  if (hangul >= kana && hangul >= latin && hangul > 0) return { language: 'korean', certain: true };
-  if (kana > 0 && kana >= latin / 2) return { language: 'japanese', certain: true };
+  const source = prepareLyrics(text).map((line) => line.text).join('\n');
+  const script = dominantScript(source);
+  if (script === 'hangul') return { language: 'korean', certain: true };
+  if (script === 'kana') return { language: 'japanese', certain: true };
 
   const words = source.toLowerCase().split(/[^\p{L}]+/u).filter(Boolean);
   const scores = Object.entries(COMMON_WORD_SETS)
@@ -118,7 +142,7 @@ export function alignLyrics(lines, words) {
   return {
     lines: lines.map((line, i) => {
       latest = Math.max(latest, times[i]);
-      return { text: line.text, time: latest, matchRate: stats[i].total ? stats[i].matched / stats[i].total : 0, needsReview: !trusted[i] };
+      return { ...line, time: latest, matchRate: stats[i].total ? stats[i].matched / stats[i].total : 0, needsReview: !trusted[i] };
     }),
     matchRate: lyric.length ? matchedTotal / lyric.length : 0,
   };
@@ -131,7 +155,7 @@ export function formatLrcTime(seconds) {
   return `${String(minutes).padStart(2, '0')}:${String(Math.floor(rest / 100)).padStart(2, '0')}.${String(rest % 100).padStart(2, '0')}`;
 }
 
-export const toLrc = (lines) => lines.map((line) => `[${formatLrcTime(line.time)}] ${line.text}`).join('\n');
+export const toLrc = (lines) => lines.map((line) => `[${formatLrcTime(line.time)}] ${line.text}${line.note ? `\n${line.note}` : ''}`).join('\n');
 
 // A line someone has placed by hand no longer needs review, and it stays between its neighbours.
 function placeLine(lines, index, time) {
@@ -142,3 +166,13 @@ function placeLine(lines, index, time) {
 }
 
 export const nudgeLine = (lines, index, delta) => placeLine(lines, index, lines[index].time + delta);
+
+// Tap mode follows the music, so a tap past the next line carries that line forward.
+export function stampLine(lines, index, seconds) {
+  const earliest = index > 0 ? lines[index - 1].time : 0;
+  const placed = Math.round(Math.max(earliest, seconds) * 100) / 100;
+  return lines.map((line, i) => {
+    if (i === index) return { ...line, time: placed, needsReview: false };
+    return i > index && line.time < placed ? { ...line, time: placed } : line;
+  });
+}

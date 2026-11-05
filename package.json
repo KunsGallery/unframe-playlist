@@ -17,6 +17,7 @@
     "media:mirror": "node scripts/mirror-images.mjs"
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.3.2",
     "canvas-confetti": "^1.9.4",
     "firebase": "^12.9.0",
     "firebase-admin": "^13.10.0",
