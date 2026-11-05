@@ -164,6 +164,7 @@ const AppRoutes = memo(function AppRoutes({
             siteConfig={siteConfig}
             allUsers={allUsers}
             loadRanking={loadRanking}
+            newReleaseCount={library.notifications.length}
             rankingTheme={rankingTheme}
             pauseForExternalPlayback={pauseForExternalPlayback}
           />

@@ -258,6 +258,27 @@ export default function HeroSlideManager({
                 </select>
               </div>
 
+              <div className="grid grid-cols-2 gap-3">
+                <label className="space-y-2">
+                  <span className="block text-[10px] text-zinc-500 uppercase font-black tracking-widest ml-1">호수 (비우면 숨김)</span>
+                  <input
+                    value={selectedSlide.issueNumber || ""}
+                    onChange={(e) => updateHeroSlide(selectedSlide.id, { issueNumber: e.target.value })}
+                    placeholder="07"
+                    className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none"
+                  />
+                </label>
+                <label className="space-y-2">
+                  <span className="block text-[10px] text-zinc-500 uppercase font-black tracking-widest ml-1">발행 월 (비우면 숨김)</span>
+                  <input
+                    value={selectedSlide.issueMonth || ""}
+                    onChange={(e) => updateHeroSlide(selectedSlide.id, { issueMonth: e.target.value })}
+                    placeholder="2026년 11월"
+                    className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none"
+                  />
+                </label>
+              </div>
+
               <div className="space-y-2">
                 <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest ml-1">
                   Eyebrow

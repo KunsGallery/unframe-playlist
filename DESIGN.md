@@ -191,6 +191,10 @@ Listening fields use Field Paper, Ink, a `#88867e` border, the field radius, 11p
 
 Desktop items pair an icon with uppercase title/subtitle, a quiet default state, outlined hover, and an Ink/White active state with lime icon and 4px horizontal shift. The mobile dock has a dark translucent surface; its active destination becomes Lime/Ink. Floor, Archive, Library, and About stay the four shared destinations. Preserve native links, accessible labels, visible focus, and the skip link.
 
+### Magazine cover hero
+
+The home hero is a magazine cover: a masthead (UP, issue, month), a full-bleed cover story with a lime play button and an orange stamp, and a contents column of recent releases, the latest gathering, and the director's line. Issue and month come from the studio and hide when blank; the contents fill themselves from published data. The cover keeps the ink border and hard offset of the earlier lime panel.
+
 ### Persistent LP player
 
 The mini player is a dark rounded fixed bar with cover, lime progress, metadata, and circular controls. Expanding opens the existing cover/lyrics/queue dialog. Above 900px its 1180px-maximum sheet is split into a blue LP-art panel and paper controls, with a 32px corner and lime hard shadow. The sleeve, grooved disc, center label, and spindle remain intact; the disc rotates over 12 seconds only while playing and not buffering. Mobile keeps the existing full-screen paper player rather than forcing the desktop LP composition into a small screen.

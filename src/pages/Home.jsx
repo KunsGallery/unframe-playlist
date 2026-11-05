@@ -31,6 +31,19 @@ const hideBrokenImage = (event) => {
   event.currentTarget.parentElement?.classList.add("is-fallback");
 };
 
+// Older documents store createdAt as milliseconds, newer ones as a Firestore timestamp.
+const releaseTime = (track) => {
+  const value = track?.publishedAt || track?.createdAt;
+  if (value?.seconds) return value.seconds * 1000;
+  if (typeof value === "number") return value;
+  return Date.parse(value || "") || 0;
+};
+const releaseDateLabel = (track) => {
+  const time = releaseTime(track);
+  if (!time) return "";
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(time).replaceAll("-", ".");
+};
+
 const GENRE_OPTIONS = [
   "All",
   "Ambient",
@@ -168,6 +181,7 @@ export default function Home({
   rankingTheme,
   allUsers = [],
   loadRanking,
+  newReleaseCount = 0,
   pauseForExternalPlayback,
 }) {
   const [featuredData, setFeaturedData] = useState(null);
@@ -308,9 +322,7 @@ export default function Home({
     return [...(tracks || [])]
       .filter(Boolean)
       .sort((a, b) => {
-        const aTime = a?.createdAt?.seconds ? a.createdAt.seconds : (a?.createdAt || 0);
-        const bTime = b?.createdAt?.seconds ? b.createdAt.seconds : (b?.createdAt || 0);
-        return bTime - aTime;
+        return releaseTime(b) - releaseTime(a);
       });
   }, [tracks]);
 
@@ -456,6 +468,8 @@ export default function Home({
             subtitle: slide?.subtitle || "",
             description: slide?.description || "",
             buttonLabel: slide?.buttonLabel || "Open",
+            issueNumber: slide?.issueNumber || "",
+            issueMonth: slide?.issueMonth || "",
             backgroundImage: safeSrc(slide?.backgroundImage) || fallbackImage,
             coverImage: safeSrc(slide?.coverImage) || fallbackImage,
             items,
@@ -632,6 +646,10 @@ export default function Home({
       .slice(0, 12);
   }, [gatheringPlaylists]);
 
+  const issueTracks = useMemo(() => latestTracks.slice(0, 3), [latestTracks]);
+  const issueDate = releaseDateLabel(issueTracks[0]);
+  const latestGathering = publishedGatheringPlaylists[0] || null;
+  const directorLine = (featuredData?.quote || "").trim();
   const heroImage = currentHero?.coverImage || currentHero?.backgroundImage || currentHero?.items?.[0]?.image || "";
 
   return (
@@ -646,32 +664,82 @@ export default function Home({
         onClose={() => setSelectedGatheringPlaylist(null)}
       />
 
-      <section className="up-hero" aria-labelledby="up-hero-title">
-        <div className="up-hero__copy">
-          <p className="up-kicker">{currentHero?.eyebrow || "Currently on view"} · 00{safeHeroIndex + 1}</p>
-          <h1 id="up-hero-title">{currentHero?.title || "Sound belongs in the room."}</h1>
-          <p>{currentHero?.description || "언프레임이 발행한 음악을 전시처럼 걷고, 발견하고, 소장하세요."}</p>
-          <div className="up-hero__actions">
-            <button type="button" className="up-button up-button--ink" onClick={() => openHeroSlide(currentHero)}>
-              <Play aria-hidden="true" /> {currentHero?.buttonLabel || "Start listening"}
-            </button>
-            <span>{currentHero?.subtitle || "Curated by UNFRAME"}</span>
-          </div>
-        </div>
+      <section className="up-cover" aria-labelledby="up-hero-title">
+        <header className="up-cover__masthead">
+          <strong>UP</strong>
+          <span>{currentHero?.issueNumber ? `Issue № ${currentHero.issueNumber}` : "Unframe Playlist"}</span>
+          {currentHero?.issueMonth && <span>{currentHero.issueMonth}</span>}
+        </header>
 
-        <div className="up-hero__art">
-          {heroImage && <img key={heroImage} className="up-hero__image" src={heroImage} alt="" fetchPriority="high" onError={hideBrokenImage} />}
-          <div className="up-hero__stamp">NEW<br />ISSUE</div>
-          <div className="up-hero__label"><Disc3 aria-hidden="true" /><span>UNFRAME<br />PLAYLIST</span></div>
-        </div>
-
-        {heroSlides.length > 1 && (
-          <div className="up-hero__pager">
-            <button type="button" onClick={goPrevHero} aria-label="Previous feature"><ArrowLeft /></button>
-            <span>{String(safeHeroIndex + 1).padStart(2, "0")} / {String(heroSlides.length).padStart(2, "0")}</span>
-            <button type="button" onClick={goNextHero} aria-label="Next feature"><ArrowRight /></button>
+        <div className="up-cover__grid">
+          <div className="up-cover__story">
+            {heroImage && <img key={heroImage} className="up-cover__image" src={heroImage} alt="" fetchPriority="high" onError={hideBrokenImage} />}
+            <div className="up-cover__stamp">표지<br />이야기</div>
+            <div className="up-cover__copy">
+              <p className="up-kicker">{currentHero?.eyebrow || "Currently on view"}</p>
+              <h1 id="up-hero-title">{currentHero?.title || "Sound belongs in the room."}</h1>
+              <p>{currentHero?.description || currentHero?.subtitle || "언프레임이 발행한 음악을 전시처럼 걷고, 발견하고, 소장하세요."}</p>
+              <div className="up-cover__actions">
+                <button type="button" className="up-cover__play" onClick={() => openHeroSlide(currentHero)}>
+                  <Play aria-hidden="true" /> {currentHero?.buttonLabel || "Start listening"}
+                </button>
+                {heroSlides.length > 1 && (
+                  <div className="up-cover__pager">
+                    <button type="button" onClick={goPrevHero} aria-label="이전 표지"><ArrowLeft aria-hidden="true" /></button>
+                    <span>{String(safeHeroIndex + 1).padStart(2, "0")} / {String(heroSlides.length).padStart(2, "0")}</span>
+                    <button type="button" onClick={goNextHero} aria-label="다음 표지"><ArrowRight aria-hidden="true" /></button>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
-        )}
+
+          <aside className="up-cover__contents" aria-label="이번 호 목차">
+            <p className="up-cover__contents-title">이번 호 목차</p>
+
+            {issueTracks.length > 0 && (
+              <section>
+                <h2>최근 발행</h2>
+                <ul className="up-cover__tracks">
+                  {issueTracks.map((track, index) => (
+                    <li key={track.id}>
+                      <button type="button" onClick={() => safePlay(index, issueTracks)} aria-label={`${track.title} 재생`}>
+                        <span className={`up-cover__thumb ${track.image ? "" : "is-fallback"}`}>{track.image && <img src={track.image} alt="" loading="lazy" onError={hideBrokenImage} />}</span>
+                        <span><strong>{track.title}</strong><small>{track.artist}</small></span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                {issueDate && <small className="up-cover__meta">{issueDate} 발행</small>}
+              </section>
+            )}
+
+            {latestGathering && (
+              <section>
+                <h2>모임</h2>
+                <button
+                  type="button"
+                  className="up-cover__link"
+                  onClick={() => { pauseForExternalPlayback?.(); setSelectedGatheringPlaylist(latestGathering); }}
+                >
+                  <strong>{latestGathering.title}</strong>
+                  <small className="up-cover__meta">{[formatGatheringDate(latestGathering.eventDate), latestGathering.location].filter(Boolean).join(" · ")}</small>
+                </button>
+              </section>
+            )}
+
+            {directorLine && (
+              <section>
+                <h2>디렉터의 말</h2>
+                <blockquote>{directorLine}</blockquote>
+              </section>
+            )}
+
+            {newReleaseCount > 0 && (
+              <Link to="/library" className="up-cover__notice">팔로우한 소식 {newReleaseCount}곡 <ArrowUpRight aria-hidden="true" /></Link>
+            )}
+          </aside>
+        </div>
       </section>
 
       <section id="moods" className="up-section">
