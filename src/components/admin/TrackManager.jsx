@@ -83,6 +83,7 @@ export default function TrackManager({
   }, [tracks, editingId]);
 
   const [isLyricSyncOpen, setIsLyricSyncOpen] = useState(false);
+  const [lyricsBeforeSync, setLyricsBeforeSync] = useState(null);
   const lyricSyncBlocker = !newTrack.audioUrl ? "음원 주소를 먼저 입력해 주세요."
     : !prepareLyrics(newTrack.lyrics).length ? "가사를 먼저 입력해 주세요."
     : newTrack.instrumental || newTrack.language === "instrumental" ? "연주곡은 가사를 맞출 수 없습니다."
@@ -496,6 +497,15 @@ export default function TrackManager({
               가사 자동 맞춤
             </button>
             {lyricSyncBlocker && <span className="text-xs text-zinc-400">{lyricSyncBlocker}</span>}
+            {lyricsBeforeSync !== null && (
+              <button
+                type="button"
+                onClick={() => { setNewTrack((prev) => ({ ...prev, lyrics: lyricsBeforeSync })); setLyricsBeforeSync(null); }}
+                className="px-4 py-3 rounded-full border border-white/20 text-[11px] font-black"
+              >
+                적용 전 가사로 되돌리기
+              </button>
+            )}
           </div>
           {isLyricSyncOpen && (
             <Suspense fallback={null}>
@@ -503,7 +513,7 @@ export default function TrackManager({
                 audioUrl={newTrack.audioUrl}
                 lyrics={newTrack.lyrics}
                 language={newTrack.language}
-                onApply={(lyrics) => setNewTrack((prev) => ({ ...prev, lyrics }))}
+                onApply={(lyrics) => { setLyricsBeforeSync(newTrack.lyrics); setNewTrack((prev) => ({ ...prev, lyrics })); }}
                 onClose={() => setIsLyricSyncOpen(false)}
               />
             </Suspense>

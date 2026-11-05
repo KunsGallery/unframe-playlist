@@ -231,6 +231,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .up-lyric-sync__lines time { font: 700 12px ui-monospace, monospace; color: var(--up-ink); }
 .up-lyric-sync__text { min-width: 0; font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; color: var(--up-ink); }
 .up-lyric-sync__text em { display: inline-block; margin-left: 8px; color: #a23a12; font-size: 11px; font-style: normal; font-weight: 800; }
+.up-lyric-sync__note { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px; }
+.up-lyric-sync__lines .up-lyric-sync__note button { width: auto; min-height: 28px; padding: 2px 10px; font-size: 11px; }
 .up-lyric-sync__nudge { display: flex; gap: 4px; }
 .up-lyric-sync__lines button { width: 34px; min-height: 34px; padding: 0; }
 @media (prefers-reduced-motion: reduce) { .up-lyric-sync__spinner { animation-duration: 3s; } }

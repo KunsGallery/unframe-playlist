@@ -5,7 +5,9 @@
   "type": "module",
   "overrides": {
     "@grpc/grpc-js": "^1.13.6",
-    "uuid": "^11.1.1"
+    "uuid": "^11.1.1",
+    "onnxruntime-node": "npm:empty-npm-package@1.0.0",
+    "sharp": "npm:empty-npm-package@1.0.0"
   },
   "scripts": {
     "test": "node --test --test-concurrency=1 tests/*.test.js",
@@ -25,6 +27,7 @@
     "html2canvas": "^1.4.1",
     "lucide-react": "^0.563.0",
     "modern-screenshot": "^4.6.8",
+    "onnxruntime-common": "1.31.0-dev.20260911-2a43ec07e",
     "qrcode": "^1.5.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

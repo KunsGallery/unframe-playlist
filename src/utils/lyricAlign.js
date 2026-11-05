@@ -1,7 +1,10 @@
 const TIME_TAG = /\[\d{1,3}:\d{1,2}(?:\.\d{1,3})?\]/g;
 const SECTION_MARKER = /^\[[^\]]*\](\s*\(.*\))?$/;
 const PARENTHESIZED = /^[(（].*[)）]$/;
-const STAGE_DIRECTION = /instrumental|\binst\b|\bsolo\b|\bbreath\b|\boutro\b|\bintro\b|피아노|간주|연주|전주|후주/i;
+const STAGE_DIRECTION = /^[(（]\s*(?:(?:instrumental|inst\.?)(?:\s+\S+)?|solo|breath|intro|outro|피아노(?:\s*(?:숨|솔로|연주))?|간주(?:\s*\S+)?|연주|전주|후주)\s*[)）]$/i;
+const PRODUCTION_NOTE = /^[(（].*(?:\b\d+(?:\s*[–-]\s*\d+)?\s*bars\b|lyric-free|무가사|no vocals).*[)）]$/i;
+const SHORT_BREAK = /^[(（]\s*\S+\s+간주\s*[)）]$/;
+const LEADING_TIME_TAG = /^\[\d{1,3}:\d{1,2}(?:\.\d{1,3})?\]/;
 const MIN_LINE_MATCH = 0.3;
 const SECONDS_PER_CHAR = 0.2;
 const FALLBACK_LINE_GAP = 3;
@@ -31,26 +34,34 @@ function dominantScript(text) {
   return counts.latin > 0 ? 'latin' : null;
 }
 
-function cleanLines(text) {
-  return String(text || '')
-    .split(/\r?\n/)
-    .map((raw) => raw.trim())
-    .filter((line) => !SECTION_MARKER.test(line) || line.match(/^\[\d{1,3}:\d{1,2}(?:\.\d{1,3})?\]/))
-    .map((line) => line.replace(TIME_TAG, '').trim())
-    .filter((line) => normalize(line) && !(PARENTHESIZED.test(line) && STAGE_DIRECTION.test(line)));
-}
+const isNotLyric = (body) => !normalize(body) || SECTION_MARKER.test(body) || STAGE_DIRECTION.test(body) || PRODUCTION_NOTE.test(body) || SHORT_BREAK.test(body);
 
-// A parenthesized line in another script is a translation nobody sings. It rides along with the
-// line above so saving keeps it, while the player, which skips untimed lines, never shows it.
+// Only sung lines get a time. Everything else stays where it was so saving loses nothing: markers,
+// blank lines and directions travel with the next sung line, and a parenthesized line in another
+// script travels with the line above as a translation. The player skips all of these because they
+// have no time tag, and the release page still shows them.
 export function prepareLyrics(text) {
-  const cleaned = cleanLines(text);
-  const mainScript = dominantScript(cleaned.filter((line) => !PARENTHESIZED.test(line)).join(''));
+  const rows = String(text || '').split(/\r?\n/).map((raw) => {
+    const trimmed = raw.trim();
+    const body = trimmed.replace(TIME_TAG, '').trim();
+    return { body, timed: LEADING_TIME_TAG.test(trimmed) };
+  });
+  const mainScript = dominantScript(rows.filter((row) => !isNotLyric(row.body) && !PARENTHESIZED.test(row.body)).map((row) => row.body).join(''));
   const lines = [];
-  for (const line of cleaned) {
-    const isTranslation = PARENTHESIZED.test(line) && mainScript && dominantScript(line) !== mainScript && lines.length > 0;
-    if (!isTranslation) lines.push({ text: line });
-    else lines[lines.length - 1].note = [lines[lines.length - 1].note, line].filter(Boolean).join('\n');
+  let pending = [];
+  for (const { body, timed } of rows) {
+    if (isNotLyric(body)) { pending.push(body); continue; }
+    const script = dominantScript(body);
+    const isTranslation = !timed && PARENTHESIZED.test(body) && mainScript && script && script !== mainScript && lines.length > 0;
+    if (isTranslation) {
+      const last = lines[lines.length - 1];
+      last.note = [last.note, body].filter(Boolean).join('\n');
+      continue;
+    }
+    lines.push({ text: body, ...(pending.length ? { before: pending } : {}) });
+    pending = [];
   }
+  if (pending.length && lines.length) lines[lines.length - 1].after = pending;
   return lines;
 }
 
@@ -155,14 +166,19 @@ export function formatLrcTime(seconds) {
   return `${String(minutes).padStart(2, '0')}:${String(Math.floor(rest / 100)).padStart(2, '0')}.${String(rest % 100).padStart(2, '0')}`;
 }
 
-export const toLrc = (lines) => lines.map((line) => `[${formatLrcTime(line.time)}] ${line.text}${line.note ? `\n${line.note}` : ''}`).join('\n');
+export const toLrc = (lines) => lines.flatMap((line) => [
+  ...(line.before || []),
+  `[${formatLrcTime(line.time)}] ${line.text}`,
+  ...(line.note ? [line.note] : []),
+  ...(line.after || []),
+]).join('\n');
 
 // A line someone has placed by hand no longer needs review, and it stays between its neighbours.
 function placeLine(lines, index, time) {
   const earliest = index > 0 ? lines[index - 1].time : 0;
   const latest = index < lines.length - 1 ? lines[index + 1].time : Infinity;
   const placed = Math.round(Math.min(latest, Math.max(earliest, time)) * 100) / 100;
-  return lines.map((line, i) => (i === index ? { ...line, time: placed, needsReview: false } : line));
+  return lines.map((line, i) => (i === index ? { ...line, time: placed, needsReview: line.needsReview && placed === line.time } : line));
 }
 
 export const nudgeLine = (lines, index, delta) => placeLine(lines, index, lines[index].time + delta);
@@ -175,4 +191,16 @@ export function stampLine(lines, index, seconds) {
     if (i === index) return { ...line, time: placed, needsReview: false };
     return i > index && line.time < placed ? { ...line, time: placed } : line;
   });
+}
+
+// For a line first read as a translation that is actually sung.
+export function promoteNote(lines, index) {
+  const line = lines[index];
+  const [first, ...rest] = (line.note || '').split('\n');
+  if (!first) return lines;
+  const { note, ...kept } = line;
+  void note;
+  const updated = rest.length ? { ...kept, note: rest.join('\n') } : kept;
+  const sung = { text: first, time: line.time, matchRate: 0, needsReview: true };
+  return [...lines.slice(0, index), updated, sung, ...lines.slice(index + 1)];
 }

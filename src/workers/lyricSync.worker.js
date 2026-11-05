@@ -1,4 +1,5 @@
 import { env, pipeline } from '@huggingface/transformers';
+import { describeSyncError, runWithDeviceFallback } from '../utils/lyricDevice';
 import ortModule from '../../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.asyncify.mjs?url';
 import ortWasm from '../../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.asyncify.wasm?url';
 
@@ -8,12 +9,12 @@ const DTYPE = { encoder_model: 'q8', decoder_model_merged: 'q8' };
 env.allowLocalModels = false;
 env.backends.onnx.wasm.wasmPaths = { mjs: ortModule, wasm: ortWasm };
 
-let recognizer = null;
+const recognizers = new Map();
 
 async function loadRecognizer(device) {
-  if (recognizer) return recognizer;
+  if (recognizers.has(device)) return recognizers.get(device);
   const files = new Map();
-  recognizer = await pipeline('automatic-speech-recognition', MODEL, {
+  const recognizer = await pipeline('automatic-speech-recognition', MODEL, {
     device,
     dtype: DTYPE,
     progress_callback: (event) => {
@@ -24,24 +25,27 @@ async function loadRecognizer(device) {
       self.postMessage({ type: 'progress', stage: 'model', percent });
     },
   });
+  recognizers.set(device, recognizer);
   return recognizer;
 }
 
 self.onmessage = async ({ data }) => {
   try {
     const adapter = data.device === 'wasm' ? null : await navigator.gpu?.requestAdapter?.();
-    const device = adapter ? 'webgpu' : 'wasm';
-    const transcribe = await loadRecognizer(device);
-    self.postMessage({ type: 'progress', stage: 'transcribe', device });
-    const output = await transcribe(data.audio, {
-      return_timestamps: 'word',
-      chunk_length_s: 30,
-      stride_length_s: 5,
-      task: 'transcribe',
-      language: data.language,
+    const { value: output, device } = await runWithDeviceFallback(adapter ? 'webgpu' : 'wasm', async (candidate) => {
+      const transcribe = await loadRecognizer(candidate);
+      self.postMessage({ type: 'progress', stage: 'transcribe', device: candidate });
+      return transcribe(data.audio, {
+        return_timestamps: 'word',
+        chunk_length_s: 30,
+        stride_length_s: 5,
+        task: 'transcribe',
+        language: data.language,
+      });
     });
     self.postMessage({ type: 'done', words: output.chunks || [], device });
   } catch (error) {
-    self.postMessage({ type: 'error', message: error?.message || String(error) });
+    console.error(error);
+    self.postMessage({ type: 'error', message: describeSyncError(error) });
   }
 };
