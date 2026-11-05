@@ -213,7 +213,7 @@ const FullPlayer = ({
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 20 }}
-              className="w-full h-[60vh] flex flex-col overflow-y-auto no-scrollbar relative scroll-smooth px-6 lg:px-12"
+              className="up-lyrics w-full h-[60vh] flex flex-col overflow-y-auto overflow-x-hidden no-scrollbar relative scroll-smooth px-6 lg:px-12"
               onClick={() => setPlayerView('cover')}
             >
               {parsedLyrics.length > 0 ? (
@@ -225,7 +225,7 @@ const FullPlayer = ({
                       return (
                         <p
                           key={idx}
-                          className="text-xl lg:text-4xl text-center font-bold text-zinc-300 leading-loose whitespace-pre-wrap"
+                          className="up-lyrics__plain text-xl lg:text-3xl text-center font-bold leading-loose whitespace-pre-wrap"
                         >
                           {lyric.text}
                         </p>
@@ -236,19 +236,9 @@ const FullPlayer = ({
                       <div
                         key={idx}
                         id={`lyric-${idx}`}
-                        className={`transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] py-3 ${
-                          isActive
-                            ? 'scale-[1.08] opacity-100 blur-0 translate-y-0'
-                            : 'opacity-20 blur-[3px] scale-[0.98] translate-y-1'
-                        }`}
+                        className={`up-lyrics__line py-3 ${isActive ? 'is-active' : ''}`}
                       >
-                        <p
-                          className={`text-xl lg:text-3xl font-black tracking-tight leading-tight transition-all duration-700 ${
-                            isActive
-                              ? 'text-[#5297ff] drop-shadow-[0_0_16px_rgba(0,74,173,0.7)]'
-                              : 'text-zinc-300'
-                          }`}
-                        >
+                        <p className="text-xl lg:text-3xl font-black tracking-tight leading-tight">
                           {lyric.text || '🎵'}
                         </p>
                       </div>
