@@ -1,3 +1,9 @@
+// Firefox 159 was still working on a 277s song after 20 minutes on WebGPU, against 218s on WASM.
+// Nothing fails, so the fallback below never fires.
+export function shouldTryWebGPU(requested, userAgent) {
+  return requested !== 'wasm' && !/Firefox\//.test(userAgent);
+}
+
 // WebGPU can pass the adapter check and still fail on a given model or driver.
 export async function runWithDeviceFallback(device, run) {
   try {

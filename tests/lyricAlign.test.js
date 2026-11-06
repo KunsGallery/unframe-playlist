@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { prepareLyrics, detectLanguage, alignLyrics, toLrc, formatLrcTime, nudgeLine, stampLine, promoteNote } from '../src/utils/lyricAlign.js';
-import { runWithDeviceFallback, describeSyncError } from '../src/utils/lyricDevice.js';
+import { runWithDeviceFallback, describeSyncError, shouldTryWebGPU } from '../src/utils/lyricDevice.js';
 
 test('prepareLyrics removes timestamps and section markers', () => {
   assert.deepEqual(prepareLyrics('[Verse 1]\n[00:38.15] 조용한 밤\n\n[00:40.78] 심장이 뛰어').map((l) => l.text), ['조용한 밤', '심장이 뛰어']);
@@ -140,4 +140,12 @@ test('engine errors become readable causes', () => {
   assert.match(describeSyncError(new Error('Failed to fetch model file')), /모델/);
   assert.match(describeSyncError(new RangeError('Array buffer allocation failed')), /메모리/);
   assert.match(describeSyncError(new Error('unknown thing')), /분석/);
+});
+
+test('Firefox skips WebGPU because it is far slower there and never fails over', () => {
+  const firefox = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:159.0) Gecko/20100101 Firefox/159.0';
+  const chrome = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
+  assert.equal(shouldTryWebGPU(undefined, firefox), false);
+  assert.equal(shouldTryWebGPU(undefined, chrome), true);
+  assert.equal(shouldTryWebGPU('wasm', chrome), false);
 });

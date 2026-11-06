@@ -1,5 +1,5 @@
 import { env, pipeline } from '@huggingface/transformers';
-import { describeSyncError, runWithDeviceFallback } from '../utils/lyricDevice';
+import { describeSyncError, runWithDeviceFallback, shouldTryWebGPU } from '../utils/lyricDevice';
 import ortModule from '../../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.asyncify.mjs?url';
 import ortWasm from '../../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.asyncify.wasm?url';
 
@@ -31,7 +31,7 @@ async function loadRecognizer(device) {
 
 self.onmessage = async ({ data }) => {
   try {
-    const adapter = data.device === 'wasm' ? null : await navigator.gpu?.requestAdapter?.();
+    const adapter = shouldTryWebGPU(data.device, navigator.userAgent) ? await navigator.gpu?.requestAdapter?.() : null;
     const { value: output, device } = await runWithDeviceFallback(adapter ? 'webgpu' : 'wasm', async (candidate) => {
       const transcribe = await loadRecognizer(candidate);
       self.postMessage({ type: 'progress', stage: 'transcribe', device: candidate });
