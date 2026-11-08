@@ -605,6 +605,19 @@ export default function TrackManager({
               />
             </div>
 
+            <div className="space-y-2">
+              <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest ml-1">
+                Canvas Video URL
+              </p>
+              <input
+                type="url"
+                value={newTrack.canvasUrl || ""}
+                onChange={(e) => setNewTrack((prev) => ({ ...prev, canvasUrl: e.target.value }))}
+                placeholder="https://… .mp4 (3–8초 반복 영상 · 비우면 표지가 천천히 움직입니다)"
+                className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none"
+              />
+            </div>
+
             <div className="space-y-2 lg:col-span-2">
               <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest ml-1">
                 Moods

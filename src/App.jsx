@@ -21,7 +21,11 @@ import {
 } from "lucide-react";
 import {
   getDirectLink,
-  toDataUrl
+  toDataUrl,
+  loadTrackSource,
+  fallbackToOriginal,
+  setPlaybackState,
+  syncPositionState,
 } from "./utils/PlayerUtils";
 import { motion as Motion, AnimatePresence } from 'framer-motion';
 
@@ -46,6 +50,9 @@ import { useShareCard } from "./hooks/useShareCard";
 import { useAppDataSync } from "./hooks/useAppDataSync";
 import { useAppBoot } from "./hooks/useAppBoot";
 import { useToastTimer } from "./hooks/useToastTimer";
+import { useSleepTimer } from "./hooks/useSleepTimer";
+import { useJam } from "./hooks/useJam";
+import { JamBanner } from "./components/JamPanel";
 
 import { getAchievementMeta } from "./constants/achievements";
 
@@ -58,6 +65,8 @@ const ListenerLibrary = lazy(() => import('./pages/ListenerLibrary'));
 const ReleaseDetail = lazy(() => import('./pages/ReleaseDetail'));
 const ExhibitionJourney = lazy(() => import('./pages/ExhibitionJourney'));
 const SharedPlaylist = lazy(() => import('./pages/SharedPlaylist'));
+const JamJoin = lazy(() => import('./pages/JamJoin'));
+const Recap = lazy(() => import('./pages/Recap'));
 
 // ---------------------
 // 날짜 포맷
@@ -138,9 +147,12 @@ const AppRoutes = memo(function AppRoutes({
   pauseForExternalPlayback,
   appId,
   library,
+  jam,
 }) {
   return (
     <Routes>
+      <Route path="/jam/:id" element={<JamJoin jam={jam} tracks={publicTracks} />} />
+      <Route path="/recap" element={<Recap user={user} profile={userProfile} tracks={publicTracks} isAdmin={isAdmin} notify={setToastMessage} onLogin={() => signInWithPopup(auth, new GoogleAuthProvider()).catch(() => setToastMessage('로그인을 완료하지 못했습니다. 다시 시도해 주세요.'))} />} />
       <Route path="/library" element={<ListenerLibrary user={user} profile={userProfile} tracks={publicTracks} playTrack={playTrack} library={library} notify={setToastMessage} login={() => signInWithPopup(auth, new GoogleAuthProvider()).catch(() => setToastMessage('로그인을 완료하지 못했습니다. 다시 시도해 주세요.'))} />} />
       <Route path="/tracks/:trackId" element={<ReleaseDetail tracks={publicTracks} playTrack={playTrack} handleToggleLike={handleToggleLike} userLikes={userLikes} library={library} notify={setToastMessage} />} />
       <Route path="/exhibitions/:name" element={<ExhibitionJourney tracks={publicTracks} playTrack={playTrack} library={library} notify={setToastMessage} />} />
@@ -390,6 +402,11 @@ export default function App() {
     setPlaybackError,
   });
 
+  const sleepTimer = useSleepTimer({ audioRef, setIsPlaying, notify: setToastMessage });
+  const consumeSleepAtTrackEnd = sleepTimer.consumeTrackEnd;
+  const jamHostName = Number(userProfile?.nicknameUpdatedCount) >= 1 && userProfile?.nickname ? userProfile.nickname : 'Listener';
+  const jam = useJam({ db, appId, audioRef, currentTrack, currentQueue, publicTracks, playTrack, user, hostName: jamHostName, notify: setToastMessage });
+
   useListeningMemory({ audioRef, currentQueue, currentTrackIdx, currentTrack, publicTracks, setCurrentQueue, setCurrentTrackIdx, setCurrentTime, loopMode, isShuffle });
 
   const handleToggleLike = useCallback(async (e, trackId) => {
@@ -625,11 +642,9 @@ export default function App() {
       setIsBuffering(false);
 
       try {
-        const url = getDirectLink(track.audioUrl);
-        if (audioRef.current && url) {
+        if (audioRef.current && track.audioUrl) {
           audioRef.current.pause();
-          audioRef.current.src = url;
-          audioRef.current.load();
+          loadTrackSource(audioRef.current, track.audioUrl);
         }
       } catch { /* Optional browser capability. */ }
 
@@ -729,6 +744,7 @@ export default function App() {
   }, [isBuffering, setIsBuffering]);
 
   const handleNaturalTrackEnd = useCallback(() => {
+    if (consumeSleepAtTrackEnd()) return;
     const q = currentQueue || [];
     if (!q.length) return;
 
@@ -738,11 +754,8 @@ export default function App() {
       setIsPlaying(false);
       setIsBuffering(false);
 
-      try {
-        if ("mediaSession" in navigator) {
-          navigator.mediaSession.playbackState = "none";
-        }
-      } catch { /* Optional browser capability. */ }
+      // "paused", not "none": "none" removes the lock-screen controls, so the listener could not resume from there.
+      setPlaybackState("paused");
 
       return;
     }
@@ -771,6 +784,7 @@ export default function App() {
     loopMode,
     getNextTrackIndex,
     playTrack,
+    consumeSleepAtTrackEnd,
   ]);
 
   if (loading) {
@@ -828,10 +842,13 @@ export default function App() {
           pauseForExternalPlayback={pauseForExternalPlayback}
           appId={appId}
           library={library}
+          jam={jam}
         />
         </Suspense>
         </RouteBoundary>
         </AppShell>
+
+        {!isPlayerExpanded && <JamBanner jam={jam} currentTrack={currentTrack} />}
 
         {playbackError && <div className="up-playback-error" role="alert"><span>{playbackError}</span><button onClick={retryPlayback}>다시 재생</button><button onClick={playNext}>다음 곡</button><button aria-label="오류 안내 닫기" onClick={() => setPlaybackError('')}>닫기</button></div>}
 
@@ -867,6 +884,12 @@ export default function App() {
           toggleLoop={toggleLoop}
           isShuffle={isShuffle}
           toggleShuffle={toggleShuffle}
+          sleepTimer={sleepTimer}
+          user={user}
+          isAdmin={isAdmin}
+          onLogin={() => signInWithPopup(auth, new GoogleAuthProvider()).catch(() => setToastMessage('로그인을 완료하지 못했습니다. 다시 시도해 주세요.'))}
+          notify={setToastMessage}
+          jam={jam}
           onMoveQueue={(from, to) => {
             if (to < 0 || to >= currentQueue.length) return;
             const next = [...currentQueue]; const [item] = next.splice(from, 1); next.splice(to, 0, item);
@@ -948,17 +971,28 @@ export default function App() {
           onCanPlay={() => {
             setIsBuffering(false);
           }}
-          onPlaying={() => {
+          onPlaying={(e) => {
+            delete e.currentTarget.dataset.switching;
             setIsBuffering(false);
             setIsPlaying(true);
             setPlaybackError('');
-            try { if (navigator.mediaSession) navigator.mediaSession.playbackState = 'playing'; } catch { /* Optional capability. */ }
+            setPlaybackState('playing');
+            syncPositionState(e.currentTarget);
           }}
-          onPause={() => {
+          onPause={(e) => {
+            const a = e.currentTarget;
+            // A track ending or handing over to the next is not a pause the lock screen should show.
+            if (a.ended || a.dataset.switching === '1') return;
             setIsPlaying(false);
-            try { if (navigator.mediaSession) navigator.mediaSession.playbackState = 'paused'; } catch { /* Optional capability. */ }
+            setPlaybackState('paused');
+            syncPositionState(a);
           }}
-          onError={() => {
+          onSeeked={(e) => syncPositionState(e.currentTarget)}
+          onRateChange={(e) => syncPositionState(e.currentTarget)}
+          onError={(e) => {
+            // The light MP3 copy may not exist yet for a fresh upload: fall back to the original file once.
+            if (fallbackToOriginal(e.currentTarget)) return;
+            delete e.currentTarget.dataset.switching;
             setIsBuffering(false);
             setIsPlaying(false);
             setPlaybackError('음원을 불러오지 못했습니다. 연결을 확인한 뒤 다시 재생해 주세요.');
@@ -966,17 +1000,7 @@ export default function App() {
           onLoadedMetadata={(e) => {
             const a = e.currentTarget;
             setDuration(a.duration || 0);
-
-            try {
-              const ms = navigator.mediaSession;
-              if (ms && typeof ms.setPositionState === 'function') {
-                ms.setPositionState({
-                  duration: a.duration || 0,
-                  playbackRate: a.playbackRate || 1,
-                  position: a.currentTime || 0,
-                });
-              }
-            } catch { /* Optional browser capability. */ }
+            syncPositionState(a);
           }}
           onLoadedData={(e) => {
             const a = e.currentTarget;
@@ -986,16 +1010,6 @@ export default function App() {
           onTimeUpdate={(e) => {
             const a = e.currentTarget;
             setCurrentTime(a.currentTime);
-
-            try {
-              if ('mediaSession' in navigator && navigator.mediaSession.setPositionState) {
-                navigator.mediaSession.setPositionState({
-                  duration: a.duration || 0,
-                  playbackRate: a.playbackRate || 1,
-                  position: a.currentTime || 0,
-                });
-              }
-            } catch { /* Optional browser capability. */ }
           }}
           onEnded={handleNaturalTrackEnd}
           preload="metadata"

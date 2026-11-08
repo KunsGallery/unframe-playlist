@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { getDirectLink } from '../utils/PlayerUtils';
+import { loadTrackSource } from '../utils/PlayerUtils';
 
 export function useListeningMemory({ audioRef, currentQueue, currentTrackIdx, currentTrack, publicTracks, setCurrentQueue, setCurrentTrackIdx, setCurrentTime, loopMode, isShuffle }) {
   const restored = useRef(false);
@@ -19,7 +19,7 @@ export function useListeningMemory({ audioRef, currentQueue, currentTrackIdx, cu
       const position = Math.max(0, Number(saved.position) || 0);
       const restorePosition = () => { const time = Math.min(position, Number.isFinite(audio.duration) ? audio.duration : position); audio.currentTime = time; setCurrentTime(time); };
       audio.addEventListener('loadedmetadata', restorePosition, { once: true });
-      audio.src = getDirectLink(queue[index].audioUrl); audio.load();
+      loadTrackSource(audio, queue[index].audioUrl);
       return () => audio.removeEventListener('loadedmetadata', restorePosition);
     } catch { /* Storage is optional in private browsing. */ }
   }, [publicTracks, currentQueue.length, audioRef, setCurrentQueue, setCurrentTrackIdx, setCurrentTime]);

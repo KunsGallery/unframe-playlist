@@ -8,7 +8,7 @@ service cloud.firestore {
     function editable() { return ['nickname', 'nicknameUpdatedCount', 'nicknamePrompted', 'profileImg']; }
     function publicKeys(kind) {
       let base = ['title', 'desc', 'description', 'image', 'createdAt', 'publishedAt', 'status', 'isPublished'];
-      let track = ['artist', 'tag', 'genre', 'audioUrl', 'lyrics', 'moods', 'timeSlots', 'useCases', 'energy', 'instrumental', 'language', 'tags', 'priority', 'isActive', 'curatorNote', 'album', 'exhibition', 'artworkTitle', 'coverUrl', 'releaseNumber', 'releasedAt', 'producedAt', 'credits', 'version', 'duration', 'durationSeconds', 'journeyStage', 'journeyNote'];
+      let track = ['artist', 'tag', 'genre', 'audioUrl', 'lyrics', 'moods', 'timeSlots', 'useCases', 'energy', 'instrumental', 'language', 'tags', 'priority', 'isActive', 'curatorNote', 'album', 'exhibition', 'artworkTitle', 'coverUrl', 'releaseNumber', 'releasedAt', 'producedAt', 'credits', 'version', 'duration', 'durationSeconds', 'journeyStage', 'journeyNote', 'canvasUrl'];
       let playlist = ['trackIds', 'exhibitionTitle', 'curatorNote', 'journeySteps'];
       let gathering = ['youtubeUrl', 'youtubePlaylistId', 'location', 'eventDate', 'memoryPhoto', 'memoryNote'];
       return kind == 'tracks' ? base.concat(track) : kind == 'playlists' ? base.concat(playlist) : base.concat(gathering);
@@ -23,6 +23,23 @@ service cloud.firestore {
       allow read: if collection in ['tracks', 'playlists', 'gathering_playlists', 'featured', 'site_config'];
       allow create, update: if admin() && ((collection in ['featured', 'site_config'] && !request.resource.data.keys().hasAny(['revisionHistory', 'updatedBy'])) || (collection in ['tracks', 'playlists', 'gathering_playlists'] && request.resource.data.keys().hasOnly(publicKeys(collection)) && request.resource.data.status == 'published' && request.resource.data.isPublished == true));
       allow delete: if admin();
+    }
+    // Timed comments: written only by the track-comment function. Hidden (reported) ones are not readable.
+    match /artifacts/{appId}/track_comments/{id} { allow get, list: if resource.data.hidden == false; }
+    // Jam (listen-along): the host writes a small playback state; anyone with the link may read it.
+    function validJam() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['hostUid', 'hostName', 'trackId', 'queueIds', 'positionSec', 'playing', 'updatedAt', 'startedAt', 'expiresAt'])
+        && d.hostUid == request.auth.uid && d.hostName is string && d.hostName.size() <= 40
+        && d.trackId is string && d.trackId.size() <= 140 && d.queueIds is list && d.queueIds.size() <= 200
+        && d.positionSec is number && d.positionSec >= 0 && d.playing is bool && d.updatedAt == request.time
+        && d.startedAt is number && d.expiresAt is timestamp && d.expiresAt < request.time + duration.value(3, 'd');
+    }
+    match /artifacts/{appId}/jams/{jamId} {
+      allow get: if jamId.matches('^[A-Za-z0-9]{10,24}$');
+      allow create: if signedIn() && request.auth.token.firebase.sign_in_provider == 'google.com' && jamId.matches('^[A-Za-z0-9]{10,24}$') && validJam();
+      allow update: if signedIn() && resource.data.hostUid == request.auth.uid && validJam() && request.resource.data.startedAt == resource.data.startedAt;
+      allow delete: if (signedIn() && resource.data.hostUid == request.auth.uid) || admin();
     }
     match /artifacts/{appId}/editorial/{document=**} { allow read, write: if admin(); }
     match /artifacts/{appId}/users/{uid} { allow read, write: if admin(); }

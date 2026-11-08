@@ -1,6 +1,6 @@
 // Explicit public projection: editor history and future private fields never leak.
 export const PUBLIC_CONTENT_FIELDS = {
-  tracks: 'title artist image description desc tag genre audioUrl lyrics moods timeSlots useCases energy instrumental language tags priority isActive curatorNote album exhibition artworkTitle coverUrl releaseNumber releasedAt producedAt credits version duration durationSeconds createdAt publishedAt journeyStage journeyNote',
+  tracks: 'title artist image description desc tag genre audioUrl lyrics moods timeSlots useCases energy instrumental language tags priority isActive curatorNote album exhibition artworkTitle coverUrl releaseNumber releasedAt producedAt credits version duration durationSeconds createdAt publishedAt journeyStage journeyNote canvasUrl',
   playlists: 'title desc description image trackIds exhibitionTitle curatorNote journeySteps createdAt publishedAt',
   gathering_playlists: 'title desc image youtubeUrl youtubePlaylistId location eventDate memoryPhoto memoryNote createdAt publishedAt',
 };

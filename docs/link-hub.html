@@ -1,0 +1,575 @@
+<!--
+  UNFRAME 링크 허브 (인스타그램 프로필 링크용 · 아임웹 코드 위젯에 이 파일 전체를 붙여 넣으세요)
+  - "지금 언프레임에서" 카드는 자동입니다: 현재·예정 전시 + 관리자 화면 "프로젝트 소식"에 공개한 이벤트와 소식.
+    소식을 등록하면 여기에도 바로 뜹니다. 카드는 화면에 들어올 때 액자가 벗겨지며 열립니다.
+  - 운영 상태(전시 기간에는 매일 운영)도 자동입니다.
+  - UP 음악은 잠금화면·알림창에서도 재생/일시정지/이전 곡/다음 곡/구간 이동이 됩니다. 한 곡이 끝나면 다음 곡으로 넘어갑니다.
+  - 바로가기, 프로젝트, 운영 시간, 주소는 아래 <script> 맨 위 SETTINGS 한 곳에서 고칩니다.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;500&display=swap" rel="stylesheet">
+<style>
+.uf-hub{--ink:#151413;--soft:#6b6760;--line:#e3ded3;--paper:#f6f3ec;--card:#fffdf8;--key:#004aad;--open:#1f8a4c;--ease-out:cubic-bezier(0.23,1,0.32,1);background:var(--paper);color:var(--ink);min-height:100svh;padding:calc(18px + env(safe-area-inset-top,0px)) 0 calc(32px + env(safe-area-inset-bottom,0px));font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;overflow-x:hidden}
+.uf-hub *{box-sizing:border-box;margin:0;padding:0}
+.uf-hub a{color:inherit;text-decoration:none}
+.uf-hub button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.uf-hub a:focus-visible,.uf-hub button:focus-visible{outline:2px solid var(--key);outline-offset:2px}
+.uf-wrap{max-width:480px;margin:0 auto;padding:0 16px}
+
+/* 누르는 것들: 눌렀을 때 살짝 작아지고, 탭이 바로 반응합니다 */
+.uf-press{touch-action:manipulation;user-select:none;-webkit-user-select:none;transition:transform 160ms var(--ease-out),background-color 200ms ease,border-color 200ms ease}
+.uf-press:active{transform:scale(0.98)}
+
+/* 머리 */
+.uf-top{display:flex;align-items:center;gap:12px;padding-bottom:14px}
+.uf-logo{font-weight:900;font-size:20px;letter-spacing:-.02em;line-height:1}
+.uf-logo span{display:block;font-size:7px;font-weight:700;letter-spacing:.18em;margin-top:5px}
+.uf-status{margin-left:auto;display:flex;align-items:center;gap:7px;font-size:12px;line-height:1.3;text-align:right;min-height:32px}
+.uf-status small{display:block;color:var(--soft);font-size:11px}
+.uf-dot{width:7px;height:7px;border-radius:50%;flex:none;background:#a19c92}
+.uf-status.is-open .uf-dot{background:var(--open);box-shadow:0 0 0 3px #1f8a4c22}
+.uf-share{width:34px;height:34px;flex:none;display:grid;place-items:center;border:1px solid var(--line);border-radius:50%;background:var(--card)}
+.uf-share svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+
+.uf-head{display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid var(--ink);padding-top:12px;margin-bottom:12px}
+.uf-head h2{font-size:11px;font-weight:700;letter-spacing:.2em;text-transform:uppercase}
+.uf-head span{font-size:11px;color:var(--soft)}
+
+/* "지금 언프레임에서" 카드: 옆으로 넘기는 기본 스크롤 + 자석처럼 멈춤 */
+.uf-feed{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-padding:0 16px;padding:0 16px 4px;margin:0 auto;max-width:480px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.uf-feed::-webkit-scrollbar{display:none}
+.uf-hub .uf-card{flex:0 0 78%;scroll-snap-align:start;background:var(--ink);color:#fff;display:flex;flex-direction:column}
+.uf-card:only-child{flex-basis:100%}
+.uf-media{position:relative;aspect-ratio:1/1;overflow:hidden;background:#24221f}
+.uf-media img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity 300ms ease}
+.uf-media img.is-ready{opacity:1}
+.uf-edge{position:absolute;background:#fff;pointer-events:none}
+.uf-edge.is-top,.uf-edge.is-bottom{height:1px}
+.uf-edge.is-left,.uf-edge.is-right{width:1px}
+.uf-tag{position:absolute;left:12px;top:12px;z-index:1;font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;background:#fff;color:var(--ink);padding:5px 8px}
+.uf-tag.is-key{background:var(--key);color:#fff}
+.uf-body{padding:14px 16px 16px;display:flex;flex-direction:column;gap:4px;flex:1}
+.uf-when{font-size:11px;letter-spacing:.06em;color:#ffffffb3;display:flex;gap:8px;align-items:center}
+.uf-dday{font-weight:700;color:#fff;background:#ffffff1f;padding:2px 6px}
+.uf-title{font-family:"EB Garamond",Georgia,serif;font-weight:400;font-size:24px;line-height:1.12;word-break:keep-all;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.uf-summary{font-size:12px;line-height:1.5;color:#ffffffb3;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+.uf-go{margin-top:auto;padding-top:10px;font-size:12px;font-weight:600;display:flex;justify-content:space-between}
+.uf-dots{display:flex;justify-content:center;gap:6px;margin:12px 0 0}
+.uf-dots i{width:5px;height:5px;border-radius:50%;background:#c9c3b7;transition:background-color 200ms ease,transform 200ms var(--ease-out)}
+.uf-dots i.is-on{background:var(--ink);transform:scale(1.3)}
+.uf-feed-empty{padding:28px 16px;color:var(--soft);font-size:13px;flex:1 0 100%}
+
+/* 바로가기: 한 줄에 하나씩 */
+.uf-tiles{display:grid;grid-template-columns:1fr;gap:8px;margin-top:22px}
+.uf-tile{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:56px;padding:12px 14px;background:var(--card);border:1px solid var(--line);font-size:14px;font-weight:600;line-height:1.25}
+.uf-tile small{display:block;font-size:11px;font-weight:400;color:var(--soft);margin-top:2px}
+.uf-tile i{font-style:normal;color:var(--soft);font-size:13px}
+.uf-tile.is-key{background:var(--key);border-color:var(--key);color:#fff}
+.uf-tile.is-key small,.uf-tile.is-key i{color:#ffffffcc}
+
+/* 프로젝트 소식: U.A.U 작가 · UP 음악 · 음 팟캐스트 */
+.uf-artist{display:block;background:var(--ink);color:#fff}
+.uf-hub .uf-artist{color:#fff}
+.uf-artist .uf-media{aspect-ratio:4/3}
+.uf-artist-body{display:flex;gap:12px;align-items:center;padding:14px 16px}
+.uf-avatar{width:40px;height:40px;border-radius:50%;object-fit:cover;flex:none;background:#2c2a27}
+.uf-artist-body b{display:block;font-size:15px}
+.uf-artist-body small{display:block;font-size:12px;color:#ffffffb3;margin-top:2px;line-height:1.4}
+.uf-artist-body i{margin-left:auto;font-style:normal;color:#ffffffb3}
+.uf-tracks{list-style:none;border-top:1px solid var(--line)}
+.uf-track{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.uf-track img{width:48px;height:48px;object-fit:cover;flex:none;background:#e9e4d9}
+.uf-track b{display:block;font-size:14px;line-height:1.3}
+.uf-track small{display:block;font-size:11px;color:var(--soft);margin-top:2px}
+.uf-play{margin-left:auto;width:40px;height:40px;flex:none;border-radius:50%;border:1px solid var(--ink);display:grid;place-items:center;position:relative}
+.uf-play svg{width:14px;height:14px;fill:currentColor}
+.uf-play .is-pause{display:none}
+.uf-play[aria-pressed=true]{background:var(--ink);color:#fff}
+.uf-play[aria-pressed=true] .is-play{display:none}
+.uf-play[aria-pressed=true] .is-pause{display:block}
+.uf-play-ring{position:absolute;inset:-1px;border-radius:50%;background:conic-gradient(var(--key) calc(var(--p,0)*1turn),transparent 0);-webkit-mask:radial-gradient(circle,transparent 18px,#000 19px);mask:radial-gradient(circle,transparent 18px,#000 19px);pointer-events:none}
+.uf-more{display:flex;justify-content:space-between;font-size:12px;font-weight:600;padding:12px 0 0}
+.uf-podcast{display:flex;gap:14px;align-items:center;padding:14px;background:var(--card);border:1px solid var(--line)}
+.uf-podcast-mark{width:56px;height:56px;flex:none;display:grid;place-items:center;background:var(--ink);color:#fff;font-size:22px;font-weight:700}
+.uf-podcast img{width:96px;aspect-ratio:16/9;object-fit:cover;flex:none}
+.uf-podcast b{display:block;font-size:14px;line-height:1.35}
+.uf-podcast small{display:block;font-size:12px;color:var(--soft);margin-top:3px;line-height:1.45}
+.uf-podcast i{margin-left:auto;font-style:normal;color:var(--soft)}
+.uf-section[hidden]{display:none}
+
+/* 프로젝트 */
+.uf-projects{display:grid;grid-template-columns:1fr 1fr;gap:16px 10px}
+.uf-project{display:block}
+.uf-project-img{aspect-ratio:4/3;overflow:hidden;background:#e9e4d9;margin-bottom:8px}
+.uf-project-img img{width:100%;height:100%;object-fit:cover;display:block;transition:transform 400ms var(--ease-out)}
+.uf-project b{display:block;font-size:15px}
+.uf-project small{display:block;font-size:11px;color:var(--soft);margin-top:2px;line-height:1.4}
+.uf-section{margin-top:30px}
+
+/* 방문 */
+.uf-visit p{font-size:14px;line-height:1.65}
+.uf-visit small{color:var(--soft);font-size:12px}
+.uf-hours{color:var(--soft);font-size:13px!important;margin-top:6px}
+.uf-maps{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}
+.uf-maps a,.uf-maps button{display:flex;justify-content:center;align-items:center;min-height:44px;font-size:12px;font-weight:600;border:1px solid var(--line);background:var(--card);text-align:center}
+.uf-social{display:flex;justify-content:center;gap:14px;margin-top:28px}
+.uf-social a{width:44px;height:44px;display:grid;place-items:center;border:1px solid var(--line);border-radius:50%;background:var(--card)}
+.uf-social svg{width:17px;height:17px;fill:currentColor}
+.uf-toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translate(-50%,8px);background:var(--ink);color:#fff;font-size:12px;padding:10px 16px;border-radius:999px;opacity:0;pointer-events:none;transition:opacity 200ms ease,transform 200ms var(--ease-out);z-index:50}
+.uf-toast.is-visible{opacity:1;transform:translate(-50%,0)}
+
+@media (hover:hover) and (pointer:fine){
+  .uf-tile:hover,.uf-maps a:hover,.uf-maps button:hover,.uf-social a:hover,.uf-share:hover{border-color:var(--ink)}
+  .uf-tile.is-key:hover{background:#003a8c}
+  .uf-project:hover .uf-project-img img{transform:scale(1.03)}
+  .uf-play:hover{background:var(--ink);color:#fff}
+  .uf-podcast:hover{border-color:var(--ink)}
+  .uf-feed{scrollbar-width:thin}
+}
+
+/* 처음 열릴 때 덩어리들이 차례로 올라옵니다 (한 번만) */
+.uf-rise{opacity:0;transform:translateY(8px);animation:uf-rise 400ms var(--ease-out) forwards}
+@keyframes uf-rise{to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.uf-rise{transform:none;animation-name:uf-fade}@keyframes uf-fade{to{opacity:1}}.uf-press:active{transform:none}.uf-edge{display:none}}
+</style>
+
+<section class="uf-hub">
+  <div class="uf-wrap">
+    <header class="uf-top uf-rise">
+      <div class="uf-logo">UNFRAME<span>ART WITHOUT A FRAME</span></div>
+      <p class="uf-status" role="status"><span class="uf-dot" aria-hidden="true"></span><span><b class="uf-status-main">확인 중</b><small class="uf-status-sub"></small></span></p>
+      <button type="button" class="uf-share uf-press" aria-label="이 페이지 공유하기"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></button>
+    </header>
+    <div class="uf-head uf-rise"><h2>Now at UNFRAME</h2><span class="uf-count"></span></div>
+  </div>
+
+  <div class="uf-feed uf-rise" aria-label="지금 언프레임에서"><p class="uf-feed-empty">소식을 불러오고 있습니다</p></div>
+  <div class="uf-dots" aria-hidden="true"></div>
+
+  <div class="uf-wrap">
+    <nav class="uf-tiles uf-rise" aria-label="바로가기"></nav>
+
+    <section class="uf-section uf-rise uf-uau" aria-labelledby="uf-uau-title" hidden>
+      <div class="uf-head"><h2 id="uf-uau-title">U.A.U Artist</h2><span>오늘의 작가 · 들어올 때마다 바뀝니다</span></div>
+      <div class="uf-uau-slot"></div>
+    </section>
+
+    <section class="uf-section uf-rise uf-up" aria-labelledby="uf-up-title" hidden>
+      <div class="uf-head"><h2 id="uf-up-title">UP · New Music</h2><span>언프레임 플레이리스트</span></div>
+      <ul class="uf-tracks"></ul>
+      <a class="uf-more uf-up-more" target="_blank" rel="noopener"><span>UP에서 더 듣기</span><span aria-hidden="true">↗</span></a>
+      <audio class="uf-audio" preload="none" playsinline></audio>
+    </section>
+
+    <section class="uf-section uf-rise uf-pod" aria-labelledby="uf-pod-title">
+      <div class="uf-head"><h2 id="uf-pod-title">음 · Podcast</h2><span>들리는 갤러리</span></div>
+      <div class="uf-pod-slot"></div>
+    </section>
+
+    <section class="uf-section uf-rise" aria-labelledby="uf-projects-title">
+      <div class="uf-head"><h2 id="uf-projects-title">Projects</h2><span>전시 너머의 언프레임</span></div>
+      <div class="uf-projects"></div>
+    </section>
+
+    <section class="uf-section uf-visit uf-rise" id="uf-visit" aria-labelledby="uf-visit-title">
+      <div class="uf-head"><h2 id="uf-visit-title">Visit</h2></div>
+      <p class="uf-address"></p>
+      <p class="uf-hours"></p>
+      <div class="uf-maps">
+        <a class="uf-naver uf-press" target="_blank" rel="noopener">네이버 지도</a>
+        <a class="uf-kakao uf-press" target="_blank" rel="noopener">카카오맵</a>
+        <button type="button" class="uf-copy-address uf-press">주소 복사</button>
+      </div>
+    </section>
+
+    <nav class="uf-social uf-rise" aria-label="UNFRAME SNS">
+      <a class="uf-instagram uf-press" target="_blank" rel="noopener" aria-label="UNFRAME 인스타그램"><svg viewBox="0 0 24 24"><path d="M12 2.2c3.2 0 3.6 0 4.8.1 3.3.1 4.8 1.7 4.9 4.9.1 1.3.1 1.6.1 4.8s0 3.6-.1 4.8c-.1 3.2-1.7 4.8-4.9 4.9-1.3.1-1.6.1-4.8.1s-3.6 0-4.8-.1c-3.3-.1-4.8-1.7-4.9-4.9C2.2 15.6 2.2 15.2 2.2 12s0-3.6.1-4.8C2.4 3.9 3.9 2.4 7.2 2.3 8.4 2.2 8.8 2.2 12 2.2zM12 0C8.7 0 8.3 0 7.1.1 2.7.3.3 2.7.1 7.1 0 8.3 0 8.7 0 12s0 3.7.1 4.9c.2 4.4 2.6 6.8 7 7 1.2.1 1.6.1 4.9.1s3.7 0 4.9-.1c4.4-.2 6.8-2.6 7-7 .1-1.2.1-1.6.1-4.9s0-3.7-.1-4.9c-.2-4.4-2.6-6.8-7-7C15.7 0 15.3 0 12 0zm0 5.8a6.2 6.2 0 1 0 0 12.4 6.2 6.2 0 0 0 0-12.4zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.4-11.8a1.4 1.4 0 1 0 0 2.9 1.4 1.4 0 0 0 0-2.9z"/></svg></a>
+      <a class="uf-youtube uf-press" target="_blank" rel="noopener" aria-label="UNFRAME 유튜브"><svg viewBox="0 0 24 24"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8zM9.6 15.6V8.4l6.2 3.6-6.2 3.6z"/></svg></a>
+    </nav>
+
+  </div>
+  <div class="uf-toast" role="status"></div>
+</section>
+
+<script>
+(() => {
+  /* ================================================================
+     SETTINGS — 여기만 고치면 됩니다.
+     ================================================================ */
+  const SETTINGS = {
+    // [UNFRAME 사이트] 도메인을 옮기면 여기만 바꾸세요.
+    siteUrl: "https://main.unframe.kr",
+
+    // [바로가기] 위에서부터 한 줄에 하나씩. key: true 는 파란 버튼으로 강조됩니다. url 이 "#visit" 이면 아래 방문 정보로 내려갑니다.
+    tiles: [
+      { label: "UNFRAME 홈페이지", sub: "전시 아카이브와 프로젝트", url: "{site}/" },
+      { label: "버추얼 갤러리", sub: "언제 어디서나 둘러보는 온라인 전시실", url: "{site}/virtual-gallery", key: true },
+      { label: "SHOP", sub: "", url: "https://unframe.kr/shop" },
+      { label: "JOIN", sub: "", url: "https://join.unframe.kr" },
+      { label: "오시는 길", sub: "인사동 · 네이버 지도 · 카카오맵", url: "#visit" },
+      { label: "대관 · 협업 문의", sub: "0502-5553-6671", url: "tel:050255536671" }
+    ],
+
+    // [프로젝트] 사진은 UNFRAME 사이트의 프로젝트 사진을 씁니다.
+    projects: [
+      { name: "UP", sub: "언프레임 플레이리스트", image: "{site}/assets/projects/up.webp", url: "https://up.unframe.kr" },
+      { name: "음", sub: "언프레임 팟캐스트", image: "{site}/assets/projects/mm.webp", url: "https://www.unframe.kr/podcast" },
+      { name: "U#", sub: "언프레임 독립출판", image: "{site}/assets/projects/print.webp", url: "https://magazine.unframe.kr" },
+      { name: "U.A.U", sub: "언프레임 아티스트 유닛", image: "{site}/assets/projects/uau.webp", url: "https://uau.unframe.kr" }
+    ],
+
+    // [U.A.U 오늘의 작가] U.A.U 사이트에 공개된 작가 중 한 명을 무작위로 보여줍니다. 공개된 작가가 없으면 숨겨집니다.
+    uau: { site: "https://uau.unframe.kr", includeSamples: false },
+    // [UP 새 음악] UP에 공개된 곡 중 최신 몇 곡을 보여주고, 바로 들을 수 있습니다.
+    // hide: 제목에 이 글자가 들어간 곡은 빼고 보여줍니다 (시험 업로드 등).
+    // pick: "daily" = 날마다 바뀜(그날은 모두 같은 곡), "random" = 들어올 때마다 바뀜, "latest" = 최신순
+    up: { site: "https://up.unframe.kr", count: 3, hide: ["test"], pick: "daily" },
+    // [음 팟캐스트] 에피소드가 나오면 맨 위에 추가하세요. 유튜브 주소면 썸네일이 자동으로 붙습니다.
+    // 예: { title: "EP.1 작가의 망설임", url: "https://www.youtube.com/watch?v=XXXXXXXXXXX", date: "2026-11-10" }
+    podcast: { page: "https://www.unframe.kr/podcast", ask: "https://www.instagram.com/unframe.kr", episodes: [] },
+
+    // [소식 카드] 지난 소식은 며칠 전 것까지 보여줄지
+    newsDays: 60,
+    maxCards: 8,
+
+    // [운영 시간] closedDays: 0=일 1=월 2=화 3=수 4=목 5=금 6=토
+    // openDailyDuringExhibition: true 면 전시 기간에는 휴관일에도 운영으로 표시합니다.
+    hours: { open: "10:00", close: "18:00", closedDays: [1], openDailyDuringExhibition: true,
+      text: "화–일 10:00 – 18:00 · 월요일 휴관<br>전시 기간에는 매일 운영합니다" },
+    // [임시 휴관일] "2026-12-25" 처럼 날짜를 넣으면 그날은 휴관으로 표시됩니다.
+    closedDates: [],
+
+    // [주소]
+    address: "서울특별시 종로구 인사동4길 17, 1층 108호",
+    addressNote: "경운동, 건국빌딩(건국관)",
+    mapQuery: "언프레임 인사동4길 17",
+
+    instagram: "https://www.instagram.com/unframe.kr",
+    youtube: "https://www.youtube.com/@unframe_kr"
+  };
+
+  /* 아래는 동작 코드입니다. 고치지 않아도 됩니다. ======================= */
+  const FIRESTORE = project => `https://firestore.googleapis.com/v1/projects/${project}/databases/(default)/documents`;
+  const MEDIA = "https://unframe-media.gallerykuns.workers.dev/media/";
+  const EASE_IN_OUT = "cubic-bezier(0.77, 0, 0.175, 1)";
+  const PAGE = 100, MAX_PAGES = 20;
+  const root = document.querySelector(".uf-hub");
+  if (!root || root.dataset.ready) return;
+  root.dataset.ready = "1";
+  const $ = selector => root.querySelector(selector);
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const site = SETTINGS.siteUrl.replace(/\/$/, "");
+  const withSite = url => (url || "").replace("{site}", site).replace(/^\/(?!\/)/, `${site}/`);
+  const esc = text => String(text ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  const outside = url => /^https?:/.test(url);
+  const target = url => outside(url) ? ' target="_blank" rel="noopener"' : "";
+
+  // ---- 바로가기 · 프로젝트 · 방문 정보 ----
+  $(".uf-tiles").innerHTML = SETTINGS.tiles.map(tile => {
+    const url = tile.url === "#visit" ? "#uf-visit" : withSite(tile.url);
+    return `<a class="uf-tile uf-press${tile.key ? " is-key" : ""}" href="${esc(url)}"${target(url)}><span>${esc(tile.label)}${tile.sub ? `<small>${esc(tile.sub)}</small>` : ""}</span><i aria-hidden="true">${outside(url) ? "↗" : "→"}</i></a>`;
+  }).join("");
+  $(".uf-projects").innerHTML = SETTINGS.projects.map(p => `<a class="uf-project uf-press" href="${esc(withSite(p.url))}"${target(withSite(p.url))}><div class="uf-project-img"><img src="${esc(withSite(p.image))}" alt="" loading="lazy"></div><b>${esc(p.name)}</b><small>${esc(p.sub)}</small></a>`).join("");
+  root.querySelectorAll(".uf-rise").forEach((el, i) => { el.style.animationDelay = `${Math.min(i, 8) * 40}ms`; });
+  $(".uf-instagram").href = SETTINGS.instagram;
+  $(".uf-youtube").href = SETTINGS.youtube;
+  $(".uf-address").innerHTML = `${esc(SETTINGS.address)}<br><small>${esc(SETTINGS.addressNote)}</small>`;
+  $(".uf-hours").innerHTML = SETTINGS.hours.text;
+  $(".uf-naver").href = `https://map.naver.com/p/search/${encodeURIComponent(SETTINGS.mapQuery)}`;
+  $(".uf-kakao").href = `https://map.kakao.com/link/search/${encodeURIComponent(SETTINGS.mapQuery)}`;
+
+  // ---- 복사 · 공유 ----
+  let toastTimer;
+  function toast(message) { const el = $(".uf-toast"); el.textContent = message; el.classList.add("is-visible"); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove("is-visible"), 2000); }
+  async function copy(text, done) {
+    try { await navigator.clipboard.writeText(text); toast(done); }
+    catch { const area = document.createElement("textarea"); area.value = text; area.style.cssText = "position:fixed;opacity:0"; document.body.append(area); area.select(); try { document.execCommand("copy"); toast(done); } catch { toast("복사하지 못했습니다"); } area.remove(); }
+  }
+  $(".uf-copy-address").addEventListener("click", () => copy(SETTINGS.address, "주소를 복사했습니다"));
+  $(".uf-share").addEventListener("click", async () => {
+    if (navigator.share) { try { await navigator.share({ title: "UNFRAME", url: location.href }); return; } catch (error) { if (error.name === "AbortError") return; } }
+    copy(location.href, "링크를 복사했습니다");
+  });
+
+  // ---- 날짜 · 운영 상태 (서울 시간 · 전시 기간에는 매일 운영) ----
+  const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
+  let exhibitions = [];
+  function seoulNow() {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23", weekday: "short" }).formatToParts(new Date()).map(p => [p.type, p.value]));
+    return { date: `${parts.year}-${parts.month}-${parts.day}`, minutes: +parts.hour * 60 + +parts.minute, day: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(parts.weekday) };
+  }
+  const today = seoulNow().date;
+  const dayOf = date => new Date(`${date}T12:00:00+09:00`).getUTCDay();
+  const daysBetween = (a, b) => Math.round((new Date(`${b}T12:00:00Z`) - new Date(`${a}T12:00:00Z`)) / 86400000);
+  function dateAfter(date, days) { const d = new Date(`${date}T12:00:00+09:00`); d.setUTCDate(d.getUTCDate() + days); return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(d); }
+  const short = date => date ? `${+date.slice(5, 7)}.${+date.slice(8, 10)} (${DAYS[dayOf(date)]})` : "";
+  const range = (start, end) => !start ? "" : !end || end === start ? short(start) : `${short(start)} — ${short(end)}`;
+  const toMinutes = text => { const [hh, mm] = text.split(":").map(Number); return hh * 60 + mm; };
+  const clock = minutes => { const hh = Math.floor(minutes / 60), mm = minutes % 60; return `${hh < 12 ? "오전" : "오후"} ${hh % 12 || 12}시${mm ? ` ${mm}분` : ""}`; };
+  const duringExhibition = date => exhibitions.some(x => x.start <= date && (!x.end || date <= x.end));
+  function isOpenDay(date, day) {
+    if (SETTINGS.closedDates.includes(date)) return false;
+    if (!SETTINGS.hours.closedDays.includes(day)) return true;
+    return SETTINGS.hours.openDailyDuringExhibition && duringExhibition(date);
+  }
+  function nextOpening(now) {
+    for (let i = 1; i <= 14; i++) { const date = dateAfter(now.date, i), day = (now.day + i) % 7; if (isOpenDay(date, day)) return i === 1 ? "내일" : `${DAYS[day]}요일`; }
+    return "";
+  }
+  function updateStatus() {
+    const now = seoulNow(), open = toMinutes(SETTINGS.hours.open), close = toMinutes(SETTINGS.hours.close);
+    let main, sub, live = false;
+    if (!isOpenDay(now.date, now.day)) { main = "오늘 휴관"; sub = `${nextOpening(now)} ${clock(open)} 오픈`; }
+    else if (now.minutes < open) { main = "오늘 운영"; sub = `${clock(open)} 오픈`; }
+    else if (now.minutes < close) { main = "지금 관람 가능"; sub = `${clock(close)}까지`; live = true; }
+    else { main = "오늘 운영 종료"; sub = `${nextOpening(now)} ${clock(open)} 오픈`; }
+    $(".uf-status").classList.toggle("is-open", live); $(".uf-status-main").textContent = main; $(".uf-status-sub").textContent = sub.trim();
+  }
+  // 전시 정보를 기다리되, 늦어지거나 실패해도 3초 뒤에는 운영 상태를 띄웁니다.
+  let statusTimer = 0;
+  function startStatus() { updateStatus(); if (!statusTimer) statusTimer = setInterval(updateStatus, 60000); }
+  setTimeout(startStatus, 3000);
+
+  // ---- 데이터: 공개된 전시 + 공개된 프로젝트 소식 ----
+  const value = field => field ? (field.stringValue ?? field.booleanValue ?? field.integerValue ?? field.mapValue ?? "") : "";
+  // 날짜 값은 숫자(밀리초)로도, Firestore 시간 값으로도 저장되어 있을 수 있습니다.
+  const millis = field => !field ? 0 : field.timestampValue ? Date.parse(field.timestampValue) || 0 : Number(field.integerValue ?? field.doubleValue ?? field.stringValue) || 0;
+  const coverURL = (cover, folder) => { const f = cover?.fields || {}, path = value(f.path); return new RegExp(`^${folder}\\/[A-Za-z0-9_-]+\\/[a-f0-9-]{36}\\.(jpeg|png|webp)$`).test(path) ? MEDIA + path : value(f.url); };
+  // 공개된 문서를 끝까지 페이지를 넘기며 모두 가져옵니다 (개수가 늘어도 빠지는 문서가 없도록).
+  async function query(collection, project = "unframe-main") {
+    const rows = [];
+    let last = null;
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const structuredQuery = { from: [{ collectionId: collection }], where: { fieldFilter: { field: { fieldPath: "published" }, op: "EQUAL", value: { booleanValue: true } } }, orderBy: [{ field: { fieldPath: "__name__" }, direction: "ASCENDING" }], limit: PAGE };
+      if (last) structuredQuery.startAt = { values: [{ referenceValue: last }], before: false };
+      const response = await fetch(`${FIRESTORE(project)}:runQuery`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ structuredQuery }) });
+      if (!response.ok) throw new Error("load failed");
+      const docs = (await response.json()).filter(row => row.document).map(row => row.document);
+      rows.push(...docs.map(d => ({ id: d.name.split("/").pop(), f: d.fields || {} })));
+      if (docs.length < PAGE) break;
+      last = docs[docs.length - 1].name;
+    }
+    return rows;
+  }
+  function exhibitionCards(rows) {
+    exhibitions = rows.map(({ id, f }) => ({ id, title: value(f.title), artists: value(f.artists), start: value(f.startDate), end: value(f.endDate), image: coverURL(value(f.cover), "exhibitions") })).filter(x => x.title && x.start);
+    let shown = exhibitions.filter(x => !x.end || x.end >= today);
+    if (!shown.length) shown = exhibitions.filter(x => x.end).sort((a, b) => b.end.localeCompare(a.end)).slice(0, 1);
+    return shown.map(x => {
+      const live = x.start <= today, ends = x.end ? daysBetween(today, x.end) : 99;
+      return { order: live ? 0 : 2, sortDate: x.start, tag: live ? "전시 중" : "전시 예정", key: live, title: x.title, summary: x.artists, when: range(x.start, x.end),
+        dday: live ? (ends <= 3 ? (ends === 0 ? "오늘 마감" : `마감 D-${ends}`) : "") : `D-${daysBetween(today, x.start)}`,
+        image: x.image, url: `${site}/exhibition/${encodeURIComponent(x.id)}`, action: "전시 보기" };
+    });
+  }
+  function highlightCards(rows) {
+    return rows.map(({ id, f }) => ({ id, kind: value(f.kind), project: value(f.project), title: value(f.title), summary: value(f.summary), start: value(f.startDate), end: value(f.endDate) || value(f.startDate), url: value(f.url), image: coverURL(value(f.cover), "homeHighlights") }))
+      .filter(x => x.title && x.url && x.kind !== "virtual")
+      .filter(x => x.kind === "event" ? (!x.end || x.end >= today) : (!x.start || daysBetween(x.start, today) <= SETTINGS.newsDays))
+      .map(x => {
+        const event = x.kind === "event", days = x.start ? daysBetween(today, x.start) : null;
+        return { order: event ? 1 : 3, sortDate: event ? x.start : String(99999999 - +(x.start || "0").replaceAll("-", "")), tag: x.project || (event ? "이벤트" : "소식"),
+          title: x.title, summary: x.summary.replace(/\s+/g, " "), when: range(x.start, x.end),
+          dday: event && days !== null ? (days > 0 ? `D-${days}` : "진행 중") : "", image: x.image, url: withSite(x.url), action: event ? "자세히 보기" : "소식 보기" };
+      });
+  }
+
+  // ---- 카드 그리기 ----
+  const feed = $(".uf-feed"), dots = $(".uf-dots");
+  function render(cards) {
+    if (!cards.length) { feed.innerHTML = `<p class="uf-feed-empty">지금은 소개할 소식이 없습니다. 아래에서 언프레임을 둘러보세요.</p>`; return; }
+    $(".uf-count").textContent = cards.length > 1 ? `${cards.length}개 · 옆으로 넘겨보세요` : "";
+    feed.innerHTML = cards.map((c, i) => `<a class="uf-card uf-press" href="${esc(c.url)}"${target(c.url)}>
+      <div class="uf-media"><span class="uf-tag${c.key ? " is-key" : ""}">${esc(c.tag)}</span>${c.image ? `<img alt="" ${i > 1 ? 'loading="lazy"' : ""} data-src="${esc(c.image)}">` : ""}
+        <span class="uf-edge is-top"></span><span class="uf-edge is-right"></span><span class="uf-edge is-bottom"></span><span class="uf-edge is-left"></span></div>
+      <div class="uf-body"><p class="uf-when">${c.dday ? `<span class="uf-dday">${esc(c.dday)}</span>` : ""}${esc(c.when)}</p><h3 class="uf-title">${esc(c.title)}</h3>${c.summary ? `<p class="uf-summary">${esc(c.summary)}</p>` : ""}<p class="uf-go"><span>${esc(c.action)}</span><span aria-hidden="true">${outside(c.url) ? "↗" : "→"}</span></p></div></a>`).join("");
+    dots.innerHTML = cards.length > 1 ? cards.map(() => "<i></i>").join("") : "";
+    const cardEls = [...feed.children];
+    cardEls.forEach(card => frame(card));
+    if (cards.length > 1) {
+      const sync = () => { const i = Math.round(feed.scrollLeft / (cardEls[0].offsetWidth + 12)); [...dots.children].forEach((d, n) => d.classList.toggle("is-on", n === Math.min(i, cardEls.length - 1))); };
+      feed.addEventListener("scroll", () => requestAnimationFrame(sync), { passive: true }); sync();
+    }
+  }
+
+  // ---- 액자 효과: 카드가 화면에 들어오면 작품을 감싼 액자가 벗겨지며 열립니다 (카드마다 한 번) ----
+  // 작품은 clip-path로 액자 크기만 보이고, 네 변은 같은 곡선으로 카드 밖까지 밀려납니다.
+  const FRAME = { x: 0.2, y: 0.12, hold: 200, open: 750, maxWait: 1500 };
+  function frame(card) {
+    const media = card.querySelector(".uf-media"), image = media.querySelector("img"), edges = [...media.querySelectorAll(".uf-edge")];
+    const start = () => { if (image && image.dataset.src) { image.addEventListener("load", () => image.classList.add("is-ready"), { once: true }); image.src = image.dataset.src; image.removeAttribute("data-src"); } };
+    if (reduced) { start(); edges.forEach(e => e.remove()); return; }
+    const clip = `inset(${FRAME.y * 100}% ${FRAME.x * 100}% ${FRAME.y * 100}% ${FRAME.x * 100}%)`;
+    if (image) image.style.clipPath = clip;
+    const place = () => {
+      const w = media.clientWidth, h = media.clientHeight, l = w * FRAME.x, t = h * FRAME.y, fw = w - 2 * l, fh = h - 2 * t;
+      Object.assign(edges[0].style, { left: `${l}px`, top: `${t}px`, width: `${fw}px` });
+      Object.assign(edges[1].style, { left: `${l + fw}px`, top: `${t}px`, height: `${fh}px` });
+      Object.assign(edges[2].style, { left: `${l}px`, top: `${t + fh}px`, width: `${fw + 1}px` });
+      Object.assign(edges[3].style, { left: `${l}px`, top: `${t}px`, height: `${fh}px` });
+      return { w, h, l, t, fw, fh };
+    };
+    let ready = !image, seen = false, done = false;
+    const open = () => {
+      if (done || !ready || !seen) return; done = true;
+      const { w, h, l, t, fw, fh } = place(), timing = { duration: FRAME.open, delay: FRAME.hold, easing: EASE_IN_OUT, fill: "forwards" };
+      if (image) image.animate([{ clipPath: clip }, { clipPath: "inset(0% 0% 0% 0%)" }], timing).finished.then(() => { image.style.clipPath = ""; }).catch(() => {});
+      const moves = [`translateY(${-t - 2}px) scaleX(${w / fw * 1.2})`, `translateX(${l + 2}px) scaleY(${h / fh * 1.2})`, `translateY(${t + 2}px) scaleX(${w / fw * 1.2})`, `translateX(${-l - 2}px) scaleY(${h / fh * 1.2})`];
+      edges.forEach((edge, i) => edge.animate([{ transform: "none", opacity: 1 }, { transform: moves[i], opacity: 1 }], timing).finished.then(() => edge.remove()).catch(() => {}));
+    };
+    place();
+    if (image) { image.addEventListener("load", () => { ready = true; open(); }, { once: true }); image.addEventListener("error", () => { ready = true; open(); }, { once: true }); }
+    setTimeout(() => { ready = true; open(); }, FRAME.maxWait);
+    // 화면(옆으로 넘기는 영역 포함)에 60% 이상 들어왔을 때 엽니다.
+    const watcher = new IntersectionObserver(entries => { if (entries.some(e => e.isIntersecting)) { if (!seen) start(); seen = true; watcher.disconnect(); open(); } }, { threshold: 0.6 });
+    watcher.observe(card);
+  }
+
+  // ---- U.A.U 오늘의 작가 (unframe-uau 공개 프로필 중 무작위) ----
+  async function loadArtist() {
+    const list = (await query("public_profiles", "unframe-uau")).map(row => row.f)
+      .filter(f => (!value(f.accountType) || value(f.accountType) === "artist") && (SETTINGS.uau.includeSamples || value(f.isDemonstration) !== true) && (value(f.slug) || value(f.publicSlug)));
+    if (!list.length) return;
+    const f = list[Math.floor(Math.random() * list.length)];
+    const works = (f.siteWorks?.arrayValue?.values || []).map(v => v.mapValue?.fields || {}).filter(w => /^https:\/\//.test(value(w.imageUrl)));
+    const work = works[Math.floor(Math.random() * works.length)];
+    const name = value(f.artistName) || value(f.displayName), slug = value(f.publicSlug) || value(f.slug);
+    const image = work ? value(work.imageUrl) : value(f.siteCoverImageUrl) || value(f.profileImageUrl);
+    const about = [value(f.practice), value(f.basedInCity)].filter(Boolean).join(" · ");
+    const caption = work ? [value(work.title), value(work.year)].filter(Boolean).join(", ") : "";
+    $(".uf-uau-slot").innerHTML = `<a class="uf-artist uf-press" href="${esc(`${SETTINGS.uau.site}/artist/${encodeURIComponent(slug)}`)}" target="_blank" rel="noopener">
+      <div class="uf-media">${caption ? `<span class="uf-tag">${esc(caption)}</span>` : ""}${image ? `<img alt="" data-src="${esc(image)}">` : ""}<span class="uf-edge is-top"></span><span class="uf-edge is-right"></span><span class="uf-edge is-bottom"></span><span class="uf-edge is-left"></span></div>
+      <div class="uf-artist-body">${value(f.profileImageUrl) ? `<img class="uf-avatar" src="${esc(value(f.profileImageUrl))}" alt="" loading="lazy">` : ""}<span><b>${esc(name)}</b><small>${esc(about)}</small></span><i aria-hidden="true">↗</i></div></a>`;
+    $(".uf-uau").hidden = false;
+    frame($(".uf-artist"));
+  }
+
+  // ---- UP 새 음악 (unframe-playlist 공개 곡) ----
+  // 곡 목록을 끝까지 넘기며 모두 가져온 뒤 최신순으로 정렬합니다. 가사처럼 큰 필드는 받지 않습니다.
+  const TRACK_FIELDS = ["title", "artist", "tag", "image", "audioUrl", "isPublished", "status", "createdAt", "publishedAt"];
+  // archive.org는 올린 WAV·FLAC 옆에 가벼운 MP3(약 1/9 크기)를 자동으로 만들어 둡니다. 재생은 그 MP3로 합니다.
+  const lightAudio = url => /^https:\/\/([a-z0-9-]+\.)*archive\.org\//i.test(url) ? url.replace(/\.(wav|wave|flac|aiff?)$/i, ".mp3") : url;
+  async function fetchTracks() {
+    const docs = [];
+    let token = "";
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const params = new URLSearchParams({ pageSize: String(PAGE) });
+      TRACK_FIELDS.forEach(field => params.append("mask.fieldPaths", field));
+      if (token) params.set("pageToken", token);
+      const response = await fetch(`${FIRESTORE("unframe-playlist")}/artifacts/unframe-playlist-v1/public/data/tracks?${params}`);
+      if (!response.ok) throw new Error("load failed");
+      const json = await response.json();
+      docs.push(...(json.documents || []).map(d => d.fields || {}));
+      token = json.nextPageToken;
+      if (!token) break;
+    }
+    return docs;
+  }
+  async function loadTracks() {
+    const tracks = (await fetchTracks())
+      .filter(f => value(f.isPublished) === true && (!value(f.status) || value(f.status) === "published") && /^https:\/\//.test(value(f.audioUrl)))
+      .filter(f => !SETTINGS.up.hide.some(word => value(f.title).toLowerCase().includes(word.toLowerCase())))
+      .sort((a, b) => (millis(b.publishedAt) || millis(b.createdAt)) - (millis(a.publishedAt) || millis(a.createdAt)))
+      .map(f => ({ title: value(f.title), artist: value(f.artist), tag: value(f.tag), image: value(f.image), audio: lightAudio(value(f.audioUrl)), original: value(f.audioUrl) }));
+    // 날마다: 서울 날짜로 정해지는 순서로 섞어서, 그날 들어온 사람은 모두 같은 곡을 봅니다.
+    const pick = SETTINGS.up.pick;
+    if (pick === "daily" || pick === "random") {
+      let seed = pick === "daily" ? [...today].reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619), 2166136261) >>> 0 : Math.floor(Math.random() * 2 ** 32);
+      const next = () => { seed = (seed + 0x6d2b79f5) >>> 0; let t = seed; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+      for (let i = tracks.length - 1; i > 0; i--) { const j = Math.floor(next() * (i + 1)); [tracks[i], tracks[j]] = [tracks[j], tracks[i]]; }
+    }
+    tracks.splice(SETTINGS.up.count);
+    $("#uf-up-title").textContent = pick === "latest" ? "UP · New Music" : "UP · Today's Music";
+    if (!tracks.length) return;
+    $(".uf-tracks").innerHTML = tracks.map((t, i) => `<li class="uf-track"><img src="${esc(t.image)}" alt="" loading="lazy"><span><b>${esc(t.title)}</b><small>${esc([t.artist, t.tag].filter(Boolean).join(" · "))}</small></span>
+      <button type="button" class="uf-play uf-press" data-i="${i}" aria-pressed="false" aria-label="${esc(t.title)} 재생"><span class="uf-play-ring"></span><svg class="is-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><svg class="is-pause" viewBox="0 0 24 24"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg></button></li>`).join("");
+    $(".uf-up-more").href = SETTINGS.up.site;
+    player(tracks);
+    $(".uf-up").hidden = false;
+  }
+
+  // ---- 플레이어 · 잠금화면 컨트롤 (Media Session) ----
+  // 하나의 <audio>를 계속 다시 써야 iOS 잠금화면에서 다음 곡으로 넘어가도 재생이 이어집니다.
+  // iOS는 10초 앞뒤 이동 버튼을 등록하면 이전 곡/다음 곡 버튼을 숨기므로, 그 두 개는 일부러 등록하지 않습니다.
+  function player(tracks) {
+    const audio = $(".uf-audio"), buttons = [...root.querySelectorAll(".uf-play")];
+    const session = "mediaSession" in navigator ? navigator.mediaSession : null;
+    const safe = fn => { try { fn(); } catch { /* 브라우저마다 지원 범위가 다릅니다. */ } };
+    let current = -1;
+
+    const paint = () => buttons.forEach((b, i) => { b.setAttribute("aria-pressed", String(i === current && !audio.paused)); if (i !== current) b.style.setProperty("--p", 0); });
+    const describe = () => {
+      const t = tracks[current];
+      if (!session || !t || !("MediaMetadata" in window)) return;
+      // 그림 형식(type)을 적지 않아야 jpg·webp 표지도 브라우저가 그대로 받아 씁니다.
+      const artwork = t.image ? [96, 192, 256, 384, 512].map(size => ({ src: t.image, sizes: `${size}x${size}` })) : [];
+      safe(() => { session.metadata = new MediaMetadata({ title: t.title || "UNFRAME", artist: t.artist || "UNFRAME", album: "UP · UNFRAME PLAYLIST", artwork }); });
+    };
+    const position = () => {
+      if (!session?.setPositionState || !Number.isFinite(audio.duration) || audio.duration <= 0) return;
+      safe(() => session.setPositionState({ duration: audio.duration, playbackRate: audio.playbackRate || 1, position: Math.min(Math.max(audio.currentTime, 0), audio.duration) }));
+    };
+    const state = value => { if (session) safe(() => { session.playbackState = value; }); };
+    const play = () => audio.play().catch(error => { if (error.name !== "AbortError") { toast("재생하지 못했습니다"); paint(); } });
+    const playAt = i => {
+      current = (i + tracks.length) % tracks.length;
+      audio.src = tracks[current].audio;
+      describe(); play(); paint();
+    };
+
+    buttons.forEach((button, i) => button.addEventListener("click", () => {
+      if (i === current) { audio.paused ? play() : audio.pause(); return; }
+      playAt(i);
+    }));
+
+    audio.addEventListener("playing", () => { describe(); state("playing"); position(); paint(); });
+    // 곡이 끝나서 멈춘 순간은 '일시정지'로 알리지 않습니다. 다음 곡이 이어지는 동안 잠금화면이 깜빡이지 않도록.
+    audio.addEventListener("pause", () => { if (!audio.ended) state("paused"); position(); paint(); });
+    ["loadedmetadata", "durationchange", "seeked", "ratechange"].forEach(type => audio.addEventListener(type, position));
+    audio.addEventListener("timeupdate", () => { if (current >= 0 && audio.duration) buttons[current].style.setProperty("--p", audio.currentTime / audio.duration); });
+    // 한 곡이 끝나면 다음 곡으로. 마지막 곡이 끝나면 멈춥니다.
+    audio.addEventListener("ended", () => { if (current < tracks.length - 1) playAt(current + 1); else { state("paused"); paint(); } });
+    audio.addEventListener("error", () => {
+      const t = tracks[current];
+      // 막 올린 곡이라 MP3가 아직 없으면 원본으로 한 번 더 시도합니다.
+      if (t && t.original && audio.getAttribute("src") !== t.original) { audio.src = t.original; play(); return; }
+      if (current >= 0 && audio.getAttribute("src")) { toast("이 곡을 불러오지 못했습니다"); paint(); }
+    });
+
+    if (!session) return;
+    const on = (action, handler) => safe(() => session.setActionHandler(action, handler));
+    on("play", () => play());
+    on("pause", () => audio.pause());
+    on("stop", () => { audio.pause(); audio.currentTime = 0; state("none"); });
+    on("previoustrack", () => { if (audio.currentTime > 3) { audio.currentTime = 0; position(); } else playAt(current - 1); });
+    on("nexttrack", () => playAt(current + 1));
+    on("seekto", details => {
+      if (!Number.isFinite(details.seekTime)) return;
+      if (details.fastSeek && typeof audio.fastSeek === "function") audio.fastSeek(details.seekTime); else audio.currentTime = details.seekTime;
+      position();
+    });
+  }
+
+  // ---- 음 팟캐스트 (SETTINGS.podcast.episodes) ----
+  function showPodcast() {
+    const ep = SETTINGS.podcast.episodes[0], slot = $(".uf-pod-slot");
+    if (!ep) {
+      slot.innerHTML = `<a class="uf-podcast uf-press" href="${esc(SETTINGS.podcast.ask)}" target="_blank" rel="noopener"><span class="uf-podcast-mark">음</span><span><b>곧 첫 번째 에피소드로 찾아옵니다</b><small>아티스트에게 묻고 싶은 질문을 남겨주세요</small></span><i aria-hidden="true">↗</i></a>`;
+      return;
+    }
+    const id = (ep.url.match(/(?:youtu\.be\/|v=|embed\/|shorts\/)([A-Za-z0-9_-]{11})/) || [])[1];
+    slot.innerHTML = `<a class="uf-podcast uf-press" href="${esc(ep.url)}" target="_blank" rel="noopener">${id ? `<img src="https://i.ytimg.com/vi/${id}/hqdefault.jpg" alt="" loading="lazy">` : `<span class="uf-podcast-mark">음</span>`}<span><b>${esc(ep.title)}</b><small>${esc(ep.date ? short(ep.date) : "새 에피소드")} · 지금 듣기</small></span><i aria-hidden="true">↗</i></a>`;
+  }
+
+  // ---- 시작 ----
+  showPodcast();
+  loadArtist().catch(() => {});
+  loadTracks().catch(() => {});
+  Promise.allSettled([query("exhibitions"), query("homeHighlights")]).then(([ex, hl]) => {
+    const cards = [...(ex.status === "fulfilled" ? exhibitionCards(ex.value) : []), ...(hl.status === "fulfilled" ? highlightCards(hl.value) : [])]
+      .sort((a, b) => a.order - b.order || a.sortDate.localeCompare(b.sortDate)).slice(0, SETTINGS.maxCards);
+    render(cards);
+    startStatus();
+  });
+})();
+</script>

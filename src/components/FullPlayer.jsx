@@ -2,6 +2,11 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useDialogFocus } from '../hooks/useDialogFocus';
 import { formatTime } from "../utils/PlayerUtils";
+import SleepTimerMenu from './SleepTimerMenu';
+import CanvasArt from './CanvasArt';
+import TrackComments, { CommentMarks } from './TrackComments';
+import { JamPanel } from './JamPanel';
+import { useTrackComments } from '../hooks/useTrackComments';
 import { motion as Motion, AnimatePresence } from 'framer-motion';
 import {
   Play,
@@ -18,7 +23,9 @@ import {
   Repeat,
   Shuffle,
   Repeat1,
-  ListMusic
+  ListMusic,
+  MessageCircle,
+  Radio,
 } from 'lucide-react';
 
 const MarqueeTitle = ({ title }) => {
@@ -82,15 +89,24 @@ const FullPlayer = ({
   toggleShuffle,
   onMoveQueue,
   onRemoveQueue,
+  sleepTimer,
+  user,
+  isAdmin,
+  onLogin,
+  notify,
+  jam,
 }) => {
   const lyricsContainerRef = useRef(null);
   const listContainerRef = useRef(null);
   const [isVolumeOpen, setIsVolumeOpen] = useState(false);
+  const [isJamOpen, setIsJamOpen] = useState(false);
   const dialogRef = useRef(null);
   const closeDialog = useCallback(() => setIsPlayerExpanded(false), [setIsPlayerExpanded]);
   useDialogFocus(dialogRef, true, closeDialog);
 
   const isLiked = userLikes.includes(currentTrack.id);
+  const notes = useTrackComments(currentTrack.id);
+  const seek = useCallback((time) => { if (audioRef.current) audioRef.current.currentTime = time; }, [audioRef]);
   const artworkSrc = currentTrack.image || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17";
 
   useEffect(() => {
@@ -174,7 +190,19 @@ const FullPlayer = ({
           </p>
         </div>
 
-        <div className="w-8 h-8" />
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setIsJamOpen((v) => !v)}
+            aria-expanded={isJamOpen}
+            aria-label={jam?.role ? 'Jam 진행 중' : 'Jam · 함께 듣기'}
+            className={`up-jam-toggle ${jam?.role ? 'is-live' : ''}`}
+          >
+            <Radio className="w-5 h-5" />
+            <span>JAM</span>
+          </button>
+          {isJamOpen && jam && <JamPanel jam={jam} user={user} onLogin={onLogin} notify={notify} onClose={() => setIsJamOpen(false)} />}
+        </div>
       </div>
 
       <div className="up-full-player__visual flex-1 overflow-hidden flex flex-col items-center justify-center relative w-full max-w-2xl mx-auto">
@@ -200,7 +228,7 @@ const FullPlayer = ({
                 <span className="up-vinyl-spindle" />
               </div>
               <div className="up-vinyl-sleeve">
-                <img src={artworkSrc} loading="lazy" alt={`${currentTrack.title} album cover`} onError={(e) => { if (!e.currentTarget.src.endsWith('/icon.png')) e.currentTarget.src = '/icon.png'; }} />
+                <CanvasArt track={currentTrack} src={artworkSrc} alt={`${currentTrack.title} album cover`} isPlaying={isPlaying && !isBuffering} />
                 <span className="up-vinyl-sleeve__edge">UP · UNFRAME PLAYLIST</span>
               </div>
             </Motion.div>
@@ -252,6 +280,31 @@ const FullPlayer = ({
                   </span>
                 </div>
               )}
+            </Motion.div>
+          )}
+
+          {playerView === 'comments' && (
+            <Motion.div
+              key="comments"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              className="w-full h-[60vh] flex flex-col px-6 lg:px-12"
+            >
+              <TrackComments
+                track={currentTrack}
+                comments={notes.comments}
+                error={notes.error}
+                loading={notes.loading}
+                onAdd={notes.add}
+                onDrop={notes.drop}
+                currentTime={currentTime}
+                seek={seek}
+                user={user}
+                isAdmin={isAdmin}
+                onLogin={onLogin}
+                notify={notify}
+              />
             </Motion.div>
           )}
 
@@ -340,6 +393,7 @@ const FullPlayer = ({
         </div>
 
         <div className="space-y-4 py-3 relative">
+          <CommentMarks comments={notes.comments} duration={duration} currentTime={currentTime} isPlaying={isPlaying} />
           <div className="relative h-2 bg-white/10 rounded-full overflow-hidden">
             <div
               className="absolute inset-y-0 left-0 bg-[#004aad] transition-all duration-150 ease-linear"
@@ -431,7 +485,7 @@ const FullPlayer = ({
           </button>
         </div>
 
-        <div className="flex items-start justify-between pt-6 border-t border-white/5 opacity-90 px-4">
+        <div className="flex items-start justify-between pt-6 border-t border-white/5 px-4">
           <button
             onClick={() => setPlayerView(playerView === 'list' ? 'cover' : 'list')}
             className={`flex flex-col items-center gap-2 transition-colors ${
@@ -450,6 +504,17 @@ const FullPlayer = ({
           >
             <AlignLeft className="w-6 h-6" />
             <span className="text-[9px] font-black uppercase tracking-widest">Lyrics</span>
+          </button>
+
+          <button
+            onClick={() => setPlayerView(playerView === 'comments' ? 'cover' : 'comments')}
+            aria-label={`시점 감상 ${notes.comments.length}개`}
+            className={`flex flex-col items-center gap-2 transition-colors ${
+              playerView === 'comments' ? 'text-[#004aad]' : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            <MessageCircle className="w-6 h-6" />
+            <span className="text-[9px] font-black uppercase tracking-widest tabular-nums">Notes{notes.comments.length ? ` ${notes.comments.length}` : ''}</span>
           </button>
 
           <div className="relative flex flex-col items-center gap-2">
@@ -505,6 +570,8 @@ const FullPlayer = ({
               </div>
             )}
           </div>
+
+          <SleepTimerMenu timer={sleepTimer} />
 
           <button
             onClick={(e) => handleShare(e, currentTrack, 'track')}

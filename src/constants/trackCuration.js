@@ -56,6 +56,7 @@ export const DEFAULT_TRACK_CURATION = {
   exhibition: "",
   artworkTitle: "",
   coverUrl: "",
+  canvasUrl: "",
 };
 
 export const parseCommaSeparatedValues = (value) =>
@@ -122,6 +123,8 @@ export const normalizeTrackCuration = (track = {}) => ({
   exhibition: typeof track.exhibition === "string" ? track.exhibition : "",
   artworkTitle: typeof track.artworkTitle === "string" ? track.artworkTitle : "",
   coverUrl: typeof track.coverUrl === "string" ? track.coverUrl : "",
+  // Canvas: a short looping video shown in the player. Only https links are kept.
+  canvasUrl: typeof track.canvasUrl === "string" && /^https:\/\//.test(track.canvasUrl.trim()) ? track.canvasUrl.trim() : "",
 });
 
 export const normalizeTrackForEditor = (track = {}) => {

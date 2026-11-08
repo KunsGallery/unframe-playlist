@@ -30,6 +30,9 @@ export async function identity(event) {
   console.info(JSON.stringify({ metric: 'app_check', status: attestation }));
   return user;
 }
+// Mirrors the allow-list in firestore.rules (admin()).
+const ADMIN_EMAILS = ['gallerykuns@gmail.com', 'cybog2004@gmail.com', 'sylove887@gmail.com'];
+export const isAdminUser = (user) => user?.firebase?.sign_in_provider === 'google.com' && user.email_verified !== false && ADMIN_EMAILS.includes(user.email);
 export const limitRef = (key) => root().collection('server_limits').doc(createHash('sha256').update(key).digest('hex'));
 export async function rateLimit(key, limit = 60, period = 60000) {
   const ref = limitRef(key);

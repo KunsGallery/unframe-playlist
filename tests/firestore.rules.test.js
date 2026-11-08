@@ -40,3 +40,37 @@ test('server-authoritative rules prevent reward forgery, private draft leaks and
     await assertFails(setDoc(doc(owner, 'artifacts/up/users/listener/likes/draft'), { likedAt: Date.now() }));
   } finally { await env.cleanup(); }
 });
+
+test('Jam state is host-written and link-readable; timed comments are server-written and hide when reported', { skip: !process.env.FIRESTORE_EMULATOR_HOST }, async () => {
+  const { serverTimestamp, Timestamp, query, where, deleteDoc } = await import('firebase/firestore');
+  const env = await initializeTestEnvironment({ projectId: 'demo-up-jam', firestore: { rules: await readFile(new URL('../firestore.rules', import.meta.url), 'utf8') } });
+  try {
+    await env.clearFirestore();
+    const host = env.authenticatedContext('host', { email: 'host@example.com', firebase: { sign_in_provider: 'google.com' } }).firestore();
+    const other = env.authenticatedContext('other', { email: 'other@example.com', firebase: { sign_in_provider: 'google.com' } }).firestore();
+    const guest = env.unauthenticatedContext().firestore();
+    const jam = (extra = {}) => ({ hostUid: 'host', hostName: 'Host', trackId: 't1', queueIds: ['t1'], positionSec: 0, playing: true, updatedAt: serverTimestamp(), startedAt: 1, expiresAt: Timestamp.fromMillis(Date.now() + 86400000), ...extra });
+    const path = 'artifacts/up/jams/Abcdefghij23';
+    await assertFails(setDoc(doc(guest, path), jam()));
+    await assertFails(setDoc(doc(host, path), jam({ hostUid: 'someone-else' })));
+    await assertFails(setDoc(doc(host, path), jam({ secret: 'x' })));
+    await assertFails(setDoc(doc(host, 'artifacts/up/jams/short'), jam()));
+    await assertSucceeds(setDoc(doc(host, path), jam()));
+    await assertSucceeds(getDoc(doc(guest, path)));
+    await assertFails(getDocs(collection(guest, 'artifacts/up/jams')));
+    await assertSucceeds(updateDoc(doc(host, path), { positionSec: 42, playing: false, updatedAt: serverTimestamp() }));
+    await assertFails(updateDoc(doc(other, path), { positionSec: 1, updatedAt: serverTimestamp() }));
+    await assertFails(deleteDoc(doc(other, path)));
+    await assertSucceeds(deleteDoc(doc(host, path)));
+
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'artifacts/up/track_comments/shown'), { trackId: 't1', at: 12, text: 'hi', uid: 'host', hidden: false });
+      await setDoc(doc(ctx.firestore(), 'artifacts/up/track_comments/reported'), { trackId: 't1', at: 20, text: 'bad', uid: 'other', hidden: true });
+    });
+    await assertSucceeds(getDocs(query(collection(guest, 'artifacts/up/track_comments'), where('trackId', '==', 't1'), where('hidden', '==', false))));
+    await assertFails(getDocs(query(collection(guest, 'artifacts/up/track_comments'), where('trackId', '==', 't1'))));
+    await assertFails(getDoc(doc(guest, 'artifacts/up/track_comments/reported')));
+    await assertFails(setDoc(doc(host, 'artifacts/up/track_comments/forged'), { trackId: 't1', at: 1, text: 'x', uid: 'host', hidden: false }));
+    await assertFails(getDoc(doc(host, 'artifacts/up/comment_reports/shown_host')));
+  } finally { await env.cleanup(); }
+});

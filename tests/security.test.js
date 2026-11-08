@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { publicContent } from '../src/utils/publication.js';
 import { radioQueue, RADIO_STATIONS, journeyQueue } from '../src/utils/listening.js';
 import { durationSeconds, handler as reward } from '../netlify/functions/reward-event.js';
+import { handler as trackComment } from '../netlify/functions/track-comment.js';
 import { imageType, handler as upload } from '../netlify/functions/upload-image.js';
 import { handler as library } from '../netlify/functions/listener-library.js';
 import { jsonBody } from '../netlify/lib/server.js';
@@ -27,9 +28,27 @@ test('upload checks file signatures, never accepts SVG/HTML', () => {
 });
 test('completion duration comes from catalog; unknown lengths are never guessed', () => { assert.equal(durationSeconds({ duration: '2:30' }), 150); assert.equal(durationSeconds({ durationSeconds: 120 }), 120); assert.equal(durationSeconds({}), null); });
 test('mutating server endpoints reject unauthenticated calls before touching data', async () => {
-  for (const handler of [reward, upload, library]) {
+  for (const handler of [reward, upload, library, trackComment]) {
     assert.equal((await handler({ httpMethod: 'GET', headers: {}, body: '{}' })).statusCode, 405);
     assert.equal((await handler({ httpMethod: 'POST', headers: {}, body: '{}' })).statusCode, 401);
     assert.equal((await handler({ httpMethod: 'POST', headers: { origin: 'https://evil.example' }, body: '{}' })).statusCode, 403);
   }
+});
+
+test('timed comments: text is cleaned and the moment must sit inside the track', async () => {
+  const { cleanCommentText, validAt } = await import('../netlify/functions/track-comment.js');
+  assert.equal(cleanCommentText('  hello\n\n‮world\u0007 '), 'hello world');
+  assert.equal(cleanCommentText(42), '');
+  assert.equal(validAt(12.34, { durationSeconds: 200 }), 12.3);
+  assert.equal(validAt(-1, { durationSeconds: 200 }), null);
+  assert.equal(validAt(300, { durationSeconds: 200 }), null);
+  assert.equal(validAt('abc', {}), null);
+});
+
+test('playback streams archive.org lossless files as their MP3 copy and leaves others alone', async () => {
+  const { getStreamLink } = await import('../src/utils/PlayerUtils.js');
+  assert.equal(getStreamLink('https://ia800403.us.archive.org/12/items/x/Song%20A.wav'), 'https://ia800403.us.archive.org/12/items/x/Song%20A.mp3');
+  assert.equal(getStreamLink('https://ia600806.us.archive.org/35/items/y/B.FLAC'), 'https://ia600806.us.archive.org/35/items/y/B.mp3');
+  assert.equal(getStreamLink('https://example.com/c.wav'), 'https://example.com/c.wav');
+  assert.equal(getStreamLink('https://ia800403.us.archive.org/12/items/x/d.mp3'), 'https://ia800403.us.archive.org/12/items/x/d.mp3');
 });

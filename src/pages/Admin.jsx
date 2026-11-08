@@ -19,6 +19,7 @@ import PlaylistManager from "../components/admin/PlaylistManager";
 import GatheringPlaylistManager from "../components/admin/GatheringPlaylistManager";
 import SiteConfigManager from "../components/admin/SiteConfigManager";
 import UserRewardManager from "../components/admin/UserRewardManager";
+import CommentModeration from "../components/admin/CommentModeration";
 import PublicationTools from '../components/admin/PublicationTools';
 import { saveContent } from '../utils/contentHistory';
 import { settleRewards, normalizeRewards } from '../utils/rewardState';
@@ -857,6 +858,8 @@ export default function Admin({
             uploadHeroSlideImage={uploadHeroSlideImage}
           />
         )}
+
+        {activeTab === "notes" && isAdmin && <CommentModeration tracks={tracks} notify={setToastMessage} />}
 
         {activeTab === "users" && (
           <UserRewardManager
