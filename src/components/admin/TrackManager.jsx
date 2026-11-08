@@ -11,6 +11,7 @@ import {
 import {
   DEFAULT_TRACK_CURATION,
   TRACK_ENERGY_OPTIONS,
+  TRACK_GENRE_OPTIONS,
   TRACK_LANGUAGE_OPTIONS,
   TRACK_MOOD_OPTIONS,
   TRACK_TIME_SLOT_OPTIONS,
@@ -22,27 +23,14 @@ import {
   parseCommaSeparatedValues,
 } from "../../constants/trackCuration";
 import { prepareLyrics } from "../../utils/lyricAlign";
+import TrackSuggestPanel from "./TrackSuggestPanel";
 
 const glass =
   "bg-white/[0.03] backdrop-blur-[40px] border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]";
 
 const safeSrc = (v) => (typeof v === "string" && v.trim() ? v : null);
 
-const GENRE_OPTIONS = [
-  "Ambient",
-  "Lo-fi",
-  "Jazz",
-  "Classical",
-  "Electronic",
-  "Experimental",
-  "Hip-Hop",
-  "Blues",
-  "Rock",
-  "Pop",
-  "R&B",
-  "Soundtrack",
-  "Vocal",
-];
+const GENRE_OPTIONS = TRACK_GENRE_OPTIONS;
 
 const getTrackGenre = (track) => track?.genre || track?.tag || "Ambient";
 
@@ -555,6 +543,8 @@ export default function TrackManager({
               These fields stay optional for playback, but they help the curation layer classify the track.
             </p>
           </div>
+
+          <TrackSuggestPanel track={newTrack} setTrack={setNewTrack} />
 
           <div className="grid lg:grid-cols-2 gap-5">
             <div className="space-y-2">

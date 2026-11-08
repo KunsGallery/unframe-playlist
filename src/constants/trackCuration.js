@@ -1,3 +1,19 @@
+export const TRACK_GENRE_OPTIONS = [
+  "Ambient",
+  "Lo-fi",
+  "Jazz",
+  "Classical",
+  "Electronic",
+  "Experimental",
+  "Hip-Hop",
+  "Blues",
+  "Rock",
+  "Pop",
+  "R&B",
+  "Soundtrack",
+  "Vocal",
+];
+
 export const TRACK_MOOD_OPTIONS = [
   "calm",
   "focused",

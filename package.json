@@ -28,6 +28,7 @@
     "lucide-react": "^0.563.0",
     "modern-screenshot": "^4.6.8",
     "onnxruntime-common": "1.31.0-dev.20260911-2a43ec07e",
+    "openai": "^7.53.0",
     "qrcode": "^1.5.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

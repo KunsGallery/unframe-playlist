@@ -4,6 +4,7 @@ import { publicContent } from '../src/utils/publication.js';
 import { radioQueue, RADIO_STATIONS, journeyQueue } from '../src/utils/listening.js';
 import { durationSeconds, handler as reward } from '../netlify/functions/reward-event.js';
 import { handler as trackComment } from '../netlify/functions/track-comment.js';
+import { handler as trackSuggest } from '../netlify/functions/track-suggest.js';
 import { imageType, handler as upload } from '../netlify/functions/upload-image.js';
 import { handler as library } from '../netlify/functions/listener-library.js';
 import { jsonBody } from '../netlify/lib/server.js';
@@ -28,7 +29,7 @@ test('upload checks file signatures, never accepts SVG/HTML', () => {
 });
 test('completion duration comes from catalog; unknown lengths are never guessed', () => { assert.equal(durationSeconds({ duration: '2:30' }), 150); assert.equal(durationSeconds({ durationSeconds: 120 }), 120); assert.equal(durationSeconds({}), null); });
 test('mutating server endpoints reject unauthenticated calls before touching data', async () => {
-  for (const handler of [reward, upload, library, trackComment]) {
+  for (const handler of [reward, upload, library, trackComment, trackSuggest]) {
     assert.equal((await handler({ httpMethod: 'GET', headers: {}, body: '{}' })).statusCode, 405);
     assert.equal((await handler({ httpMethod: 'POST', headers: {}, body: '{}' })).statusCode, 401);
     assert.equal((await handler({ httpMethod: 'POST', headers: { origin: 'https://evil.example' }, body: '{}' })).statusCode, 403);
