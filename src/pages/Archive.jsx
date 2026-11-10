@@ -10,6 +10,8 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { uploadImage } from '../utils/api';
 import { LEVELS, getLevelInfo } from '../levels';
 import { achievementProgress } from '../utils/rewardState';
+import FollowingPanel from '../components/library/FollowingPanel';
+import PrivacyPanel from '../components/library/PrivacyPanel';
 import {
   ACHIEVEMENT_CATALOG,
   COLLECTIVE_CATALOG,
@@ -22,6 +24,7 @@ const h1Title = "font-black uppercase tracking-[-0.07em] leading-[0.8] italic";
 const safeSrc = (v) => (typeof v === "string" && v.trim() ? v : null);
 
 const ACHIEVEMENT_LIBRARY = ACHIEVEMENT_CATALOG;
+const MY_PAGE_TABS = [['hearts', 'Hearts'], ['stickers', 'Sticker Book'], ['following', '팔로우·알림'], ['privacy', '공개·개인정보']];
 const COLLECTIVE_LIBRARY = COLLECTIVE_CATALOG;
 
 // ✅ 6각형 SVG clipPath 쉘
@@ -161,6 +164,8 @@ export default function Archive({
   handleGoogleLogin,
   allUsers = [],
   loadRanking,
+  library,
+  notify,
 }) {
   useEffect(() => { if (user) loadRanking?.(); }, [user, loadRanking]);
 
@@ -678,17 +683,48 @@ export default function Archive({
 
         {/* Right */}
         <div className="lg:col-span-8 space-y-10 overflow-visible">
-          <div className="flex gap-8 border-b border-white/10 pb-4 relative z-30">
-            <button onClick={() => setActiveTab('hearts')} className={`px-2 py-2 text-[11px] font-black uppercase tracking-[0.4em] transition-all relative ${activeTab === 'hearts' ? 'text-[#004aad]' : 'text-zinc-500 hover:text-white'}`}>
-              01. Hearts {activeTab === 'hearts' && <Motion.div layoutId="tab-underline" className="absolute -bottom-4.25 left-0 w-full h-0.75 bg-[#004aad]" />}
-            </button>
-            <button onClick={() => setActiveTab('stickers')} className={`px-2 py-2 text-[11px] font-black uppercase tracking-[0.4em] transition-all relative ${activeTab === 'stickers' ? 'text-[#004aad]' : 'text-zinc-500 hover:text-white'}`}>
-              02. Sticker Book {activeTab === 'stickers' && <Motion.div layoutId="tab-underline" className="absolute -bottom-4.25 left-0 w-full h-0.75 bg-[#004aad]" />}
-            </button>
+          <div className="up-mypage-tabs flex flex-wrap gap-x-8 gap-y-3 border-b border-white/10 pb-4 relative z-30" role="tablist" aria-label="마이페이지 메뉴">
+            {MY_PAGE_TABS.map(([id, label], index) => (
+              <button
+                key={id}
+                id={`mypage-tab-${id}`}
+                role="tab"
+                aria-selected={activeTab === id}
+                aria-controls={`mypage-panel-${id}`}
+                tabIndex={activeTab === id ? 0 : -1}
+                onClick={() => setActiveTab(id)}
+                onKeyDown={(e) => {
+                  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+                  e.preventDefault();
+                  const n = MY_PAGE_TABS.length;
+                  const next = e.key === 'Home' ? 0 : e.key === 'End' ? n - 1 : (index + (e.key === 'ArrowRight' ? 1 : n - 1)) % n;
+                  setActiveTab(MY_PAGE_TABS[next][0]);
+                  document.getElementById(`mypage-tab-${MY_PAGE_TABS[next][0]}`)?.focus();
+                }}
+                className={`px-2 py-2 text-[11px] font-black uppercase tracking-[0.3em] transition-all relative ${activeTab === id ? 'text-[#004aad]' : 'text-zinc-500 hover:text-white'}`}
+              >
+                {String(index + 1).padStart(2, '0')}. {label}
+                {id === 'following' && library?.notifications?.length ? ` (${library.notifications.length})` : ''}
+                {activeTab === id && <Motion.div layoutId="tab-underline" className="absolute -bottom-4.25 left-0 w-full h-0.75 bg-[#004aad]" />}
+              </button>
+            ))}
           </div>
 
           <AnimatePresence mode="wait">
-            {activeTab === 'hearts' ? (
+            {activeTab === 'following' || activeTab === 'privacy' ? (
+              <Motion.section
+                key={activeTab}
+                id={`mypage-panel-${activeTab}`}
+                role="tabpanel"
+                aria-labelledby={`mypage-tab-${activeTab}`}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -12 }}
+                transition={{ duration: 0.3 }}
+              >
+                {library && (activeTab === 'following' ? <FollowingPanel library={library} notify={notify} /> : <PrivacyPanel library={library} notify={notify} />)}
+              </Motion.section>
+            ) : activeTab === 'hearts' ? (
               <Motion.section
                 key="hearts"
                 initial={{ opacity: 0, x: -30, rotateY: 10 }}

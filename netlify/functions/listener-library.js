@@ -18,7 +18,7 @@ export async function handler(event) {
         const track = d.data(), at = track.publishedAt?.toMillis?.() || track.createdAt?.toMillis?.() || Date.parse(track.publishedAt || track.createdAt || '') || 0;
         return at > Math.max(follow.followedAt, settings.notificationsSeenAt || 0) && track[follow.kind] === follow.name;
       })).map((d) => ({ id: d.id, title: d.data().title, artist: d.data().artist })) : [];
-      return response(200, { playlists: p.docs.map((d) => ({ id: d.id, ...d.data() })), follows: followed, notifications, settings: { rankingOptIn: settings.rankingOptIn === true, releaseNotifications: settings.releaseNotifications === true } });
+      return response(200, { playlists: p.docs.map((d) => ({ id: d.id, ...d.data() })), follows: followed, notifications, settings: { rankingOptIn: settings.rankingOptIn === true, releaseNotifications: settings.releaseNotifications === true, playlistDiscovery: settings.playlistDiscovery !== false } });
     }
     if (data.action === 'save-playlist') {
       if (!text(data.title, 80)) throw error(400, '플레이리스트 제목을 입력해 주세요.');
@@ -29,14 +29,15 @@ export async function handler(event) {
       if (data.id && !safeId(data.id)) throw error(400, '잘못된 플레이리스트입니다.');
       const ref = data.id ? lists.doc(data.id) : lists.doc();
       await services().db.runTransaction(async (tx) => {
-        const snap = await tx.get(ref), existing = snap.data();
+        const [snap, owner] = await Promise.all([tx.get(ref), tx.get(profileRef)]), existing = snap.data();
         const all = await tx.get(lists.limit(51));
         if (!snap.exists && all.size >= 50) throw error(400, '플레이리스트는 최대 50개까지 만들 수 있습니다.');
         const publicId = existing?.publicId || randomUUID();
         const payload = { title: text(data.title, 80), description: text(data.description, 500), trackIds, isPublic: data.isPublic === true, publicId, updatedAt: Date.now(), createdAt: existing?.createdAt || Date.now() };
         tx.set(ref, payload);
         const publicRef = root().collection('shared_playlists').doc(publicId);
-        if (payload.isPublic) tx.set(publicRef, { title: payload.title, description: payload.description, trackIds, updatedAt: payload.updatedAt });
+        // discoverable: also listed in Library recommendations, unless the owner turned that off.
+        if (payload.isPublic) tx.set(publicRef, { title: payload.title, description: payload.description, trackIds, updatedAt: payload.updatedAt, discoverable: owner.data()?.playlistDiscovery !== false });
         else tx.delete(publicRef);
       });
       return response(200, { id: ref.id });
@@ -65,9 +66,14 @@ export async function handler(event) {
     }
     if (data.action === 'settings') {
       const payload = {};
-      for (const key of ['rankingOptIn', 'releaseNotifications']) if (typeof data[key] === 'boolean') payload[key] = data[key];
+      for (const key of ['rankingOptIn', 'releaseNotifications', 'playlistDiscovery']) if (typeof data[key] === 'boolean') payload[key] = data[key];
       if (data.markRead === true) payload.notificationsSeenAt = Date.now();
       await profileRef.set(payload, { merge: true });
+      if (typeof payload.playlistDiscovery === 'boolean') {
+        const owned = await lists.get(), writer = services().db.batch();
+        for (const list of owned.docs) if (list.data().isPublic && list.data().publicId) writer.set(root().collection('shared_playlists').doc(list.data().publicId), { discoverable: payload.playlistDiscovery }, { merge: true });
+        await writer.commit();
+      }
       await projectRanking(user.uid, { force: true });
       return response(200, { ok: true });
     }

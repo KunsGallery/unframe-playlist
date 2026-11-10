@@ -5,7 +5,7 @@ import { Archive, CircleUserRound, Grid2X2, Info, Music2, Settings2, ListMusic }
 const navItems = [
   { to: "/", label: "Floor", sub: "Exhibition", icon: Grid2X2 },
   { to: "/tracks", label: "Archive", sub: "All tracks", icon: Archive },
-  { to: "/library", label: "Library", sub: "Playlists & follows", icon: ListMusic },
+  { to: "/library", label: "Library", sub: "Playlists & receipt", icon: ListMusic },
   { to: "/about", label: "About", sub: "Why UP?", icon: Info },
 ];
 

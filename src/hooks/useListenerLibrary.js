@@ -14,7 +14,7 @@ export function useListenerLibrary(user, tracks = []) {
   useEffect(() => { void Promise.resolve().then(refresh); }, [refresh, releaseRevision]);
   const mutate = useCallback(async (body) => {
     if (auth.currentUser?.uid !== user?.uid) throw new Error('계정이 변경되었습니다. 다시 시도해 주세요.');
-    if (body.action === 'settings') setData((prev) => ({ ...prev, settings: { ...prev.settings, ...Object.fromEntries(Object.entries(body).filter(([k]) => ['rankingOptIn', 'releaseNotifications'].includes(k))) } }));
+    if (body.action === 'settings') setData((prev) => ({ ...prev, settings: { ...prev.settings, ...Object.fromEntries(Object.entries(body).filter(([k]) => ['rankingOptIn', 'releaseNotifications', 'playlistDiscovery'].includes(k))) } }));
     try { const result = await callApi('listener-library', body); await refresh(); return result; } catch (e) { await refresh(); throw e; }
   }, [refresh, user?.uid]);
   // A stable object keeps the memoized routes from re-rendering on every playback tick.

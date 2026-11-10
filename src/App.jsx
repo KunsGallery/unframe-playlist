@@ -154,7 +154,7 @@ const AppRoutes = memo(function AppRoutes({
     <Routes>
       <Route path="/jam/:id" element={<JamJoin jam={jam} tracks={publicTracks} />} />
       <Route path="/recap" element={<Recap user={user} profile={userProfile} tracks={publicTracks} isAdmin={isAdmin} notify={setToastMessage} onLogin={() => signInWithPopup(auth, new GoogleAuthProvider()).catch(() => setToastMessage('로그인을 완료하지 못했습니다. 다시 시도해 주세요.'))} />} />
-      <Route path="/library" element={<ListenerLibrary user={user} profile={userProfile} tracks={publicTracks} playTrack={playTrack} library={library} notify={setToastMessage} login={() => signInWithPopup(auth, new GoogleAuthProvider()).catch(() => setToastMessage('로그인을 완료하지 못했습니다. 다시 시도해 주세요.'))} />} />
+      <Route path="/library" element={<ListenerLibrary user={user} profile={userProfile} tracks={publicTracks} playlists={playlists} playTrack={playTrack} library={library} notify={setToastMessage} login={() => signInWithPopup(auth, new GoogleAuthProvider()).catch(() => setToastMessage('로그인을 완료하지 못했습니다. 다시 시도해 주세요.'))} />} />
       <Route path="/tracks" element={<AllTracks tracks={publicTracks} playTrack={playTrack} togglePlay={togglePlay} isPlaying={isPlaying} currentTrack={currentTrack} userLikes={userLikes} handleToggleLike={handleToggleLike} />} />
       <Route path="/tracks/:trackId" element={<ReleaseDetail tracks={publicTracks} playTrack={playTrack} handleToggleLike={handleToggleLike} userLikes={userLikes} library={library} notify={setToastMessage} />} />
       <Route path="/exhibitions/:name" element={<ExhibitionJourney tracks={publicTracks} playTrack={playTrack} library={library} notify={setToastMessage} />} />
@@ -202,6 +202,8 @@ const AppRoutes = memo(function AppRoutes({
             rankingTheme={rankingTheme}
             allUsers={allUsers}
             loadRanking={loadRanking}
+            library={library}
+            notify={setToastMessage}
           />
         }
       />
