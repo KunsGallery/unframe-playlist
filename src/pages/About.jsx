@@ -129,7 +129,7 @@ const About = () => {
                     <a href="https://unframe.kr" target="_blank" rel="noreferrer" className="px-12 py-7 bg-white text-black rounded-full font-black uppercase text-xs lg:text-sm tracking-[0.2em] hover:bg-[#004aad] hover:text-white transition-all flex items-center justify-center gap-4 shadow-[0_20px_40px_rgba(255,255,255,0.1)]">
                         Explore Portal <ExternalLink className="w-5 h-5" />
                     </a>
-                    <a href="https://unframe.kr/project" target="_blank" rel="noreferrer" className="px-12 py-7 border border-white/20 rounded-full font-black uppercase text-xs lg:text-sm tracking-[0.2em] hover:bg-white hover:text-black transition-all flex items-center justify-center gap-4">
+                    <a href="https://main.unframe.kr/project" target="_blank" rel="noreferrer" className="px-12 py-7 border border-white/20 rounded-full font-black uppercase text-xs lg:text-sm tracking-[0.2em] hover:bg-white hover:text-black transition-all flex items-center justify-center gap-4">
                         Project Archive <MoveRight className="w-5 h-5" />
                     </a>
                 </div>
