@@ -49,3 +49,7 @@ export async function uploadImage(image) {
   }
   return (await callApi('upload-image', { image: base64 })).url;
 }
+
+// After a studio save: clear the CDN copy of the public catalog so visitors see the change now.
+// Best effort; if it fails the copy still expires on its own within ten minutes.
+export const refreshPublicCatalog = () => callApi('catalog-purge', {}).then(() => true).catch(() => false);

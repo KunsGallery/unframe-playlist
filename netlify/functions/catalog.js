@@ -1,5 +1,6 @@
 import { root, response, failure, error } from '../lib/server.js';
 import { PUBLIC_FEED_HEADERS, docsToRows, toPlainData } from '../lib/publicFeed.js';
+import { CATALOG_CACHE_TAG } from './catalog-purge.js';
 
 export async function handler(event) {
   try {
@@ -14,7 +15,8 @@ export async function handler(event) {
     ]);
     return {
       ...response(200, {}),
-      headers: PUBLIC_FEED_HEADERS,
+      // Tagged so a studio save can clear the CDN copy right away (see catalog-purge).
+      headers: { ...PUBLIC_FEED_HEADERS, 'Netlify-Cache-Tag': CATALOG_CACHE_TAG },
       body: JSON.stringify({
         tracks: docsToRows(tracks),
         playlists: docsToRows(playlists),

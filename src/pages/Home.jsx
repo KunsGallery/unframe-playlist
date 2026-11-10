@@ -910,7 +910,7 @@ export default function Home({
       </section>
 
       <div className="up-catalog-more">{filteredDiscovery.length > catalogLimit && <button type="button" className="up-action" onClick={() => setCatalogLimit((n) => n + 24)}>더 보기 · {discoveryTracks.length} / {filteredDiscovery.length}곡</button>}{catalogLimit === 9 && filteredDiscovery.length > 9 && <button type="button" className="up-action" onClick={() => setCatalogLimit(filteredDiscovery.length)}>전체 곡 보기</button>}</div>
-      <footer className="up-footer"><strong>UNFRAME PLAYLIST®</strong><span>Music for exhibitions, people and the spaces between.</span><small>SEOUL · {new Date().getFullYear()}</small></footer>
+      <footer className="up-footer"><strong>UNFRAME PLAYLIST®</strong><span>Music for exhibitions, people and the spaces between.</span><small>SEOUL · 2025</small></footer>
     </div>
   );
 }

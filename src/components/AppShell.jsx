@@ -49,7 +49,7 @@ export default function AppShell({ children, user, userProfile, membership, isAd
         <div className="up-sidebar__note">
           <Music2 aria-hidden="true" />
           <p>Music issued by<br />UNFRAME only.</p>
-          <span>EST. 2024</span>
+          <span>EST. 2025</span>
         </div>
       </aside>
 

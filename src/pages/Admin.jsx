@@ -12,7 +12,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { auth } from "../firebase";
-import { uploadImage } from '../utils/api';
+import { uploadImage, refreshPublicCatalog } from '../utils/api';
 import AdminTabs from "../components/admin/AdminTabs";
 import TrackManager from "../components/admin/TrackManager";
 import PlaylistManager from "../components/admin/PlaylistManager";
@@ -405,6 +405,9 @@ export default function Admin({
     }
   };
 
+  // Saves land in Firestore at once; this also clears the visitors' cached copy so the home page updates now.
+  const publishNow = () => { refreshPublicCatalog().then((ok) => { if (!ok) setToastMessage?.("저장했습니다. 방문자 화면에는 10분 안에 반영됩니다."); }); };
+
   const handleSaveTrack = async () => {
     if (!newTrack.title || !newTrack.artist || !newTrack.audioUrl) {
       setAuthError?.("제목, 아티스트, 오디오 URL은 필수입니다.");
@@ -429,10 +432,10 @@ export default function Admin({
 
       if (editingId) {
         await saveContent(db, trackDocRef(db, appId, editingId), payload, auth.currentUser?.uid);
-        setToastMessage?.("트랙 수정 완료");
+        setToastMessage?.("트랙 수정 완료"); publishNow();
       } else {
         await saveContent(db, doc(tracksCollectionRef(db, appId)), payload, auth.currentUser?.uid);
-        setToastMessage?.("트랙 업로드 완료");
+        setToastMessage?.("트랙 업로드 완료"); publishNow();
       }
 
       setNewTrack(createEmptyTrack());
@@ -448,7 +451,7 @@ export default function Admin({
     if (!window.confirm(`이 트랙을 휴지통으로 이동할까요? 나중에 복원할 수 있습니다.${uses.length ? `\n연결된 콘텐츠: ${uses.join(', ')}` : ''}`)) return;
     try {
       await saveContent(db, trackDocRef(db, appId, id), { isHidden: true, status: 'draft', trashedAt: Date.now() }, auth.currentUser?.uid);
-      setToastMessage?.("트랙 삭제 완료");
+      setToastMessage?.("트랙 삭제 완료"); publishNow();
     } catch (e) {
       console.error(e);
       setAuthError?.("트랙 삭제 실패");
@@ -493,7 +496,7 @@ export default function Admin({
       }
 
       await Promise.all(actionableUpdates);
-      setToastMessage?.("Missing curation fields filled");
+      setToastMessage?.("Missing curation fields filled"); publishNow();
     } catch (e) {
       console.error(e);
       setAuthError?.("큐레이션 필드 보정 실패");
@@ -519,10 +522,10 @@ export default function Admin({
 
       if (editingPlaylistId) {
         await saveContent(db, playlistDocRef(db, appId, editingPlaylistId), payload, auth.currentUser?.uid);
-        setToastMessage?.("플레이리스트 수정 완료");
+        setToastMessage?.("플레이리스트 수정 완료"); publishNow();
       } else {
         await saveContent(db, doc(playlistsCollectionRef(db, appId)), payload, auth.currentUser?.uid);
-        setToastMessage?.("플레이리스트 생성 완료");
+        setToastMessage?.("플레이리스트 생성 완료"); publishNow();
       }
 
       setNewPlaylist({ title: "", desc: "", image: "", trackIds: [] });
@@ -537,7 +540,7 @@ export default function Admin({
     if (!window.confirm("이 플레이리스트를 삭제할까요?")) return;
     try {
       await saveContent(db, playlistDocRef(db, appId, id), { status: 'draft', isPublished: false, trashedAt: Date.now() }, auth.currentUser?.uid);
-      setToastMessage?.("플레이리스트 삭제 완료");
+      setToastMessage?.("플레이리스트 삭제 완료"); publishNow();
     } catch (e) {
       console.error(e);
       setAuthError?.("플레이리스트 삭제 실패");
@@ -585,13 +588,13 @@ export default function Admin({
 
       if (editingGatheringPlaylistId) {
         await saveContent(db, gatheringPlaylistDocRef(db, appId, editingGatheringPlaylistId), payload, auth.currentUser?.uid);
-        setToastMessage?.("모임 플레이리스트 수정 완료");
+        setToastMessage?.("모임 플레이리스트 수정 완료"); publishNow();
       } else {
         await saveContent(db, doc(gatheringPlaylistsCollectionRef(db, appId)), {
           ...payload,
           createdAt: Timestamp.now(),
         }, auth.currentUser?.uid);
-        setToastMessage?.("모임 플레이리스트 발행 완료");
+        setToastMessage?.("모임 플레이리스트 발행 완료"); publishNow();
       }
 
       setNewGatheringPlaylist(createEmptyGatheringPlaylist());
@@ -611,7 +614,7 @@ export default function Admin({
         setEditingGatheringPlaylistId(null);
         setNewGatheringPlaylist(createEmptyGatheringPlaylist());
       }
-      setToastMessage?.("모임 플레이리스트 삭제 완료");
+      setToastMessage?.("모임 플레이리스트 삭제 완료"); publishNow();
     } catch (error) {
       console.error(error);
       setAuthError?.("모임 플레이리스트 삭제 실패");
@@ -641,7 +644,7 @@ export default function Admin({
           heroSlides: normalizeHeroSlides(siteConfig.heroSlides),
         }
       );
-      setToastMessage?.("사이트 설정 저장 완료");
+      setToastMessage?.("사이트 설정 저장 완료"); publishNow();
     } catch (e) {
       console.error(e);
       setAuthError?.("설정 저장 실패");
