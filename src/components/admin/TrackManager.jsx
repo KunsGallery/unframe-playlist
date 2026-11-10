@@ -24,6 +24,7 @@ import {
 } from "../../constants/trackCuration";
 import { prepareLyrics } from "../../utils/lyricAlign";
 import TrackSuggestPanel from "./TrackSuggestPanel";
+import ArchiveAudioField from "./ArchiveAudioField";
 
 const glass =
   "bg-white/[0.03] backdrop-blur-[40px] border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]";
@@ -373,17 +374,7 @@ export default function TrackManager({
             />
           </div>
 
-          <div className="space-y-2 lg:col-span-2">
-            <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest ml-1">
-              Audio URL
-            </p>
-            <input
-              value={newTrack.audioUrl}
-              onChange={(e) => setNewTrack((prev) => ({ ...prev, audioUrl: e.target.value }))}
-              placeholder="Audio URL"
-              className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none"
-            />
-          </div>
+          <ArchiveAudioField track={newTrack} setTrack={setNewTrack} />
 
           <div className="space-y-2">
             <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest ml-1">
