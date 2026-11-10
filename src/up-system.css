@@ -537,6 +537,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   filter: blur(22px); mix-blend-mode: multiply;
 }
 .up-full-player__sheet > *:not(.up-player-paint) { position: relative; z-index: 1; }
+/* The header holds the JAM popover, so it sits above the artwork and lyrics that follow it. */
+.up-full-player__sheet > .up-full-player__header { z-index: 5; }
 .up-lyrics__plain { color: var(--up-ink); }
 .up-lyrics__line { color: rgba(17,17,15,.5); overflow-wrap: anywhere; transition: color .35s ease; }
 .up-lyrics__line.is-active { color: var(--up-blue); }
