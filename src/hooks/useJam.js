@@ -1,6 +1,6 @@
 // src/hooks/useJam.js
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { JAM_DRIFT_SECONDS, JAM_HEARTBEAT_MS, createJam, endJam, expectedPosition, newJamId, subscribeJam, updateJam, validJamId } from '../utils/jam';
+import { JAM_HEARTBEAT_MS, JAM_SYNC_TICK_MS, createJam, endJam, expectedPosition, newJamId, subscribeJam, syncStep, updateJam, validJamId } from '../utils/jam';
 
 // Host: mirrors this player into the Jam document on play, pause, seek, track change and a slow heartbeat.
 // Guest: follows the document. Guests may still pause or skip on their own; the next host update pulls them back.
@@ -9,6 +9,8 @@ export function useJam({ db, appId, audioRef, currentTrack, currentQueue, public
   const [jamId, setJamId] = useState('');
   const [hostState, setHostState] = useState(null);
   const offsetRef = useRef(Infinity), latestRef = useRef(null);
+  // Seconds a seek takes to resume on this device and network, learned from each jump.
+  const seekLagRef = useRef(0.2), seekStartRef = useRef(0);
   const live = useRef({ currentTrack, currentQueue, publicTracks, playTrack });
   useEffect(() => { live.current = { currentTrack, currentQueue, publicTracks, playTrack }; }, [currentTrack, currentQueue, publicTracks, playTrack]);
 
@@ -50,14 +52,28 @@ export function useJam({ db, appId, audioRef, currentTrack, currentQueue, public
   useEffect(() => { if (role === 'host') push(); }, [role, currentTrack?.id, push]);
 
   // ---------- guest ----------
+  // Move toward the host's moment: a jump when far apart, a slight speed change when close.
+  const correct = useCallback((state) => {
+    const audio = audioRef.current;
+    if (!audio || !state || !Number.isFinite(audio.duration) || audio.seeking) return;
+    const target = expectedPosition(state, Date.now(), Number.isFinite(offsetRef.current) ? offsetRef.current : 0);
+    const drift = target - audio.currentTime;
+    // While the host plays, follow the moving moment; while paused, just stand at the host's spot.
+    const step = state.playing ? syncStep(drift, seekLagRef.current) : Math.abs(drift) > 0.25 ? { seekBy: drift, rate: 1 } : { rate: 1 };
+    if (step.seekBy !== undefined) {
+      seekStartRef.current = performance.now();
+      audio.currentTime = Math.min(Math.max(0, audio.currentTime + step.seekBy), Math.max(0, audio.duration - 0.5));
+    }
+    if (audio.playbackRate !== step.rate) audio.playbackRate = step.rate;
+  }, [audioRef]);
+
   const align = useCallback((state) => {
     const audio = audioRef.current;
     if (!audio || !state) return;
-    const target = expectedPosition(state, Date.now(), Number.isFinite(offsetRef.current) ? offsetRef.current : 0);
-    if (Number.isFinite(audio.duration) && Math.abs(audio.currentTime - target) > JAM_DRIFT_SECONDS) audio.currentTime = Math.min(target, Math.max(0, audio.duration - 0.5));
+    correct(state);
     if (state.playing && audio.paused) audio.play().catch(() => notify?.('화면을 눌러 Jam 재생을 이어가 주세요.'));
-    if (!state.playing && !audio.paused) audio.pause();
-  }, [audioRef, notify]);
+    if (!state.playing && !audio.paused) { audio.pause(); audio.playbackRate = 1; }
+  }, [audioRef, correct, notify]);
 
   const follow = useCallback((state) => {
     const { currentTrack: track, publicTracks: all, playTrack: play } = live.current;
@@ -90,10 +106,35 @@ export function useJam({ db, appId, audioRef, currentTrack, currentQueue, public
     if (!validJamId(id)) return;
     offsetRef.current = Infinity;
     setJamId(id); setRole('guest');
-    if (firstState) onState(firstState, Date.now());
-  }, [onState]);
+    // The join page read this state a while ago, so it starts the track but does not set the
+    // clock difference; the live listener's first fresh reading does that a moment later.
+    if (firstState) { latestRef.current = firstState; setHostState(firstState); follow(firstState); }
+  }, [follow]);
 
   const resync = useCallback(() => { if (latestRef.current) follow(latestRef.current); }, [follow]);
+
+  // Between host updates, keep checking: buffering, a slow seek or a device clock running a
+  // little fast all show up here and are evened out while the music plays.
+  useEffect(() => {
+    if (role !== 'guest') return;
+    const audio = audioRef.current;
+    const landed = () => {
+      if (!seekStartRef.current) return;
+      const took = (performance.now() - seekStartRef.current) / 1000;
+      seekStartRef.current = 0;
+      if (took < 5) seekLagRef.current = seekLagRef.current * 0.5 + took * 0.5;
+    };
+    audio?.addEventListener('seeked', landed);
+    const tick = setInterval(() => {
+      const state = latestRef.current, { currentTrack: track } = live.current;
+      if (state && track?.id === state.trackId && audio && !audio.paused && audio.readyState >= 3) correct(state);
+    }, JAM_SYNC_TICK_MS);
+    return () => {
+      clearInterval(tick);
+      audio?.removeEventListener('seeked', landed);
+      if (audio) audio.playbackRate = 1;
+    };
+  }, [role, audioRef, correct]);
 
   useEffect(() => {
     if (role !== 'guest' || !jamId) return;
