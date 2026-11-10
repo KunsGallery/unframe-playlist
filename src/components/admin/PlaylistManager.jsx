@@ -8,6 +8,7 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
+import SortableTrackList from "./SortableTrackList";
 
 const glass =
   "bg-white/[0.03] backdrop-blur-[40px] border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]";
@@ -106,10 +107,20 @@ export default function PlaylistManager({
 
   const selectedTrackIds = useMemo(() => Array.isArray(newPlaylist.trackIds) ? newPlaylist.trackIds : [], [newPlaylist.trackIds]);
 
+  // In the playlist's own order, which is the order listeners hear.
   const selectedTracks = useMemo(() => {
-    const idSet = new Set(selectedTrackIds);
-    return (tracks || []).filter((track) => idSet.has(track.id));
+    const byId = new Map((tracks || []).map((track) => [track.id, track]));
+    return selectedTrackIds.map((id) => byId.get(id)).filter(Boolean);
   }, [tracks, selectedTrackIds]);
+
+  const reorderTracks = (visibleIds) => {
+    setNewPlaylist((prev) => {
+      const current = Array.isArray(prev.trackIds) ? prev.trackIds : [];
+      // Ids of tracks no longer in the catalog stay at the end instead of being dropped.
+      const rest = current.filter((id) => !visibleIds.includes(id));
+      return { ...prev, trackIds: [...visibleIds, ...rest] };
+    });
+  };
 
   const startNewPlaylist = () => {
     setEditingPlaylistId(null);
@@ -367,49 +378,9 @@ export default function PlaylistManager({
               </h3>
             </div>
 
-            <div className="space-y-2 max-h-72 overflow-y-auto no-scrollbar">
-              {selectedTracks.length > 0 ? (
-                selectedTracks.map((track, idx) => (
-                  <div
-                    key={track.id}
-                    className="flex items-center gap-3 rounded-xl bg-white/[0.04] border border-white/5 p-3"
-                  >
-                    <div className="w-7 text-center text-zinc-600 text-xs font-bold">
-                      {idx + 1}
-                    </div>
-
-                    <div className="w-10 h-10 rounded-lg overflow-hidden bg-white/5 shrink-0">
-                      {safeSrc(track.image) ? (
-                        <img src={safeSrc(track.image)} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <ListMusic className="w-4 h-4 text-white/20" />
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-black uppercase truncate">{track.title}</p>
-                      <p className="text-[10px] text-zinc-500 uppercase tracking-widest truncate">
-                        {track.artist}
-                      </p>
-                    </div>
-
-                    <button
-                      onClick={() => removeTrack(track.id)}
-                      className="p-2 rounded-full bg-white/5 text-red-400 hover:bg-red-500/20"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))
-              ) : (
-                <div className="rounded-xl bg-white/[0.03] border border-white/5 p-6 text-center">
-                  <p className="text-xs text-zinc-500 font-bold uppercase tracking-widest">
-                    No tracks selected
-                  </p>
-                </div>
-              )}
+            <p className="text-[11px] text-zinc-500">손잡이(⋮⋮)를 끌어 순서를 바꿉니다. 이 순서대로 재생됩니다.</p>
+            <div className="max-h-[28rem] overflow-y-auto no-scrollbar">
+              <SortableTrackList tracks={selectedTracks} onReorder={reorderTracks} onRemove={removeTrack} />
             </div>
           </div>
 

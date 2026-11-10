@@ -213,3 +213,6 @@ export const getMissingTrackCurationPatch = (track = {}) => {
 
   return patch;
 };
+
+// Older tracks keep their genre in `tag`.
+export const getTrackGenre = (track) => track?.genre || track?.tag || "Ambient";

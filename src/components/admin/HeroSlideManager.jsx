@@ -9,6 +9,7 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
+import SortableTrackList from "./SortableTrackList";
 
 const glass =
   "bg-white/[0.03] backdrop-blur-[40px] border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]";
@@ -56,10 +57,17 @@ export default function HeroSlideManager({
     return playlists.find((playlist) => playlist.id === selectedSlide.linkedPlaylistId) || null;
   }, [playlists, selectedSlide]);
 
+  const playlistTrackIds = (playlist) =>
+    Array.isArray(playlist?.trackIds)
+      ? playlist.trackIds.filter(Boolean)
+      : (playlist?.items || []).map((item) => item?.id).filter(Boolean);
+
+  // A linked playlist supplies the songs (and their order) by itself; otherwise the slide's own picks.
   const linkedTracks = useMemo(() => {
-    const idSet = new Set(selectedSlide?.trackIds || []);
-    return (tracks || []).filter((track) => idSet.has(track.id));
-  }, [tracks, selectedSlide]);
+    const byId = new Map((tracks || []).map((track) => [track.id, track]));
+    const ids = linkedPlaylist ? playlistTrackIds(linkedPlaylist) : selectedSlide?.trackIds || [];
+    return ids.map((id) => byId.get(id)).filter(Boolean);
+  }, [tracks, selectedSlide, linkedPlaylist]);
 
   const filteredTracks = useMemo(() => {
     const term = trackSearch.trim().toLowerCase();
@@ -112,8 +120,15 @@ export default function HeroSlideManager({
 
     updateHeroSlide(selectedSlide.id, {
       linkedPlaylistId: playlistId,
+      // Linked: the playlist's songs are used as they are. Unlinked: keep the songs it had, now editable here.
+      trackIds: playlist ? [] : linkedPlaylist ? playlistTrackIds(linkedPlaylist) : selectedSlide.trackIds,
       ...(selectedSlide.coverImage ? {} : { coverImage: fallbackImage }),
     });
+  };
+
+  const reorderSlideTracks = (visibleIds) => {
+    const rest = selectedSlide.trackIds.filter((id) => !visibleIds.includes(id));
+    updateHeroSlide(selectedSlide.id, { trackIds: [...visibleIds, ...rest] });
   };
 
   if (!selectedSlide) {
@@ -337,7 +352,7 @@ export default function HeroSlideManager({
                   className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white font-black outline-none [&>option]:bg-zinc-900 [&>option]:text-white"
                 >
                   <option value="">-- NO PLAYLIST --</option>
-                  {playlists.map((playlist) => (
+                  {playlists.filter((playlist) => !playlist.trashedAt || playlist.id === selectedSlide.linkedPlaylistId).map((playlist) => (
                     <option key={playlist.id} value={playlist.id}>
                       {playlist.title}
                     </option>
@@ -350,7 +365,7 @@ export default function HeroSlideManager({
               <div className="rounded-2xl border border-[#004aad]/20 bg-[#004aad]/10 p-4 flex items-center gap-3">
                 <ListMusic className="w-5 h-5 text-[#8db4ff]" />
                 <p className="text-[10px] text-[#8db4ff] font-black uppercase tracking-widest">
-                  {linkedPlaylist.title} linked
+                  {linkedPlaylist.title} linked · 곡 {linkedTracks.length}개를 그대로 씁니다
                 </p>
               </div>
             )}
@@ -472,52 +487,23 @@ export default function HeroSlideManager({
               </h3>
             </div>
 
-            <div className="space-y-2 max-h-72 overflow-y-auto no-scrollbar">
-              {linkedTracks.length > 0 ? (
-                linkedTracks.map((track, idx) => (
-                  <div
-                    key={track.id}
-                    className="flex items-center gap-3 rounded-xl bg-white/[0.04] border border-white/5 p-3"
-                  >
-                    <div className="w-7 text-center text-zinc-600 text-xs font-bold">
-                      {idx + 1}
-                    </div>
-
-                    <div className="w-10 h-10 rounded-lg overflow-hidden bg-white/5 shrink-0">
-                      {safeSrc(track.image) ? (
-                        <img src={safeSrc(track.image)} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <ListMusic className="w-4 h-4 text-white/20" />
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-black uppercase truncate">{track.title}</p>
-                      <p className="text-[10px] text-zinc-500 uppercase tracking-widest truncate">
-                        {track.artist}
-                      </p>
-                    </div>
-
-                    <button
-                      onClick={() => toggleHeroTrack(selectedSlide.id, track.id)}
-                      className="p-2 rounded-full bg-white/5 text-red-400 hover:bg-red-500/20"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))
-              ) : (
-                <div className="rounded-xl bg-white/[0.03] border border-white/5 p-6 text-center">
-                  <p className="text-xs text-zinc-500 font-bold uppercase tracking-widest">
-                    No tracks linked
-                  </p>
-                </div>
-              )}
+            <p className="text-[11px] text-zinc-500">
+              {linkedPlaylist
+                ? "연결한 플레이리스트의 곡과 순서를 따라갑니다. 곡을 바꾸려면 Playlists 탭에서 그 플레이리스트를 고치세요."
+                : "손잡이(⋮⋮)를 끌어 순서를 바꿉니다."}
+            </p>
+            <div className="max-h-[28rem] overflow-y-auto no-scrollbar">
+              <SortableTrackList
+                tracks={linkedTracks}
+                readOnly={Boolean(linkedPlaylist)}
+                onReorder={reorderSlideTracks}
+                onRemove={(trackId) => toggleHeroTrack(selectedSlide.id, trackId)}
+                emptyLabel={linkedPlaylist ? "이 플레이리스트에 곡이 없습니다" : "No tracks linked"}
+              />
             </div>
           </div>
 
+          {!linkedPlaylist && (
           <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5 space-y-4">
             <div>
               <p className="text-[10px] text-[#004aad] uppercase font-black tracking-[0.35em] mb-2">
@@ -559,9 +545,10 @@ export default function HeroSlideManager({
             </div>
 
             <p className="text-[10px] text-zinc-600 font-bold leading-relaxed">
-              Exhibition OST / New Album은 track 연결을 권장, Featured Playlist는 playlist 연결을 권장합니다.
+              플레이리스트를 연결하면 그 곡이 자동으로 들어갑니다. 연결 없이 곡을 직접 고를 수도 있습니다.
             </p>
           </div>
+          )}
         </div>
       </div>
     </div>

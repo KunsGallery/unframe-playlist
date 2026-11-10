@@ -4,7 +4,7 @@ import { Archive, CircleUserRound, Grid2X2, Info, Music2, Settings2, ListMusic }
 
 const navItems = [
   { to: "/", label: "Floor", sub: "Exhibition", icon: Grid2X2 },
-  { to: "/archive", label: "Archive", sub: "Your collection", icon: Archive },
+  { to: "/tracks", label: "Archive", sub: "All tracks", icon: Archive },
   { to: "/library", label: "Library", sub: "Playlists & follows", icon: ListMusic },
   { to: "/about", label: "About", sub: "Why UP?", icon: Info },
 ];
@@ -13,7 +13,7 @@ export default function AppShell({ children, user, userProfile, membership, isAd
   const location = useLocation();
   const nickname = (userProfile?.nickname || user?.displayName || "Guest Listener").trim();
   const levelName = membership?.name || "Listener";
-  const routeLabel = location.pathname.startsWith('/tracks/') ? 'RELEASE NOTES' : location.pathname.startsWith('/exhibitions/') ? 'LISTENING JOURNEY' : location.pathname.startsWith('/playlist/') ? 'SHARED PLAYLIST' : location.pathname === '/library' ? 'LISTENER LIBRARY' : location.pathname === '/' ? 'EXHIBITION FLOOR' : location.pathname.slice(1).toUpperCase();
+  const routeLabel = location.pathname.startsWith('/tracks/') ? 'RELEASE NOTES' : location.pathname.startsWith('/exhibitions/') ? 'LISTENING JOURNEY' : location.pathname.startsWith('/playlist/') ? 'SHARED PLAYLIST' : location.pathname === '/tracks' ? 'ARCHIVE' : location.pathname === '/library' ? 'LISTENER LIBRARY' : location.pathname === '/' ? 'EXHIBITION FLOOR' : location.pathname.slice(1).toUpperCase();
 
   return (
     <div className={`up-shell ${playerOpen ? "up-shell--player-open" : ""}`}>
@@ -60,7 +60,7 @@ export default function AppShell({ children, user, userProfile, membership, isAd
             <strong>{routeLabel}</strong>
           </div>
 
-          <Link to="/archive" className="up-member" aria-label="Open listener archive">
+          <Link to="/archive" className="up-member" aria-label="마이페이지 열기">
             <span className="up-member__avatar"><CircleUserRound aria-hidden="true" /></span>
             <span><strong>{nickname}</strong><small>LV.{membership?.level || 1} · {levelName}</small></span>
           </Link>

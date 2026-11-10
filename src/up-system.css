@@ -883,3 +883,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .up-scroll-box { max-height: min(640px, 64vh); overflow-y: auto; overscroll-behavior: contain; padding: 16px; border: 1px solid var(--up-line); border-radius: 28px; background: rgba(255,255,255,.28); scrollbar-gutter: stable; scrollbar-width: thin; align-content: start; }
 .up-scroll-box:focus-visible { outline: 3px solid var(--up-blue); outline-offset: 3px; }
 @media (max-width: 900px) { .up-scroll-box { max-height: 60vh; padding: 12px; border-radius: 22px; } }
+
+/* Sort switch under the genre chips (home catalog and Archive page). */
+.up-genres + .up-sort { margin-top: -14px; }
+.up-all-tracks__count { margin: 0 0 8px; color: var(--up-muted); font: 800 11px ui-monospace, monospace; }

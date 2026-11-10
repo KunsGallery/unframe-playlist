@@ -20,6 +20,9 @@ import {
 import { doc, getDoc } from "firebase/firestore";
 import PlaylistModal from "../components/home/PlaylistModal";
 import GatheringPlaylistModal from "../components/home/GatheringPlaylistModal";
+import TrackCatalogRows, { TrackSortSwitch } from "../components/TrackCatalogRows";
+import { getTrackGenre } from "../constants/trackCuration";
+import { DEFAULT_TRACK_SORT, releaseTime, sortTracks } from "../utils/trackSort";
 import {
   formatGatheringDate,
   getGatheringSortTime,
@@ -31,13 +34,6 @@ const hideBrokenImage = (event) => {
   event.currentTarget.parentElement?.classList.add("is-fallback");
 };
 
-// Older documents store createdAt as milliseconds, newer ones as a Firestore timestamp.
-const releaseTime = (track) => {
-  const value = track?.publishedAt || track?.createdAt;
-  if (value?.seconds) return value.seconds * 1000;
-  if (typeof value === "number") return value;
-  return Date.parse(value || "") || 0;
-};
 const releaseDateLabel = (track) => {
   const time = releaseTime(track);
   if (!time) return "";
@@ -61,7 +57,6 @@ const GENRE_OPTIONS = [
   "Vocal",
 ];
 
-const getTrackGenre = (track) => track?.genre || track?.tag || "Ambient";
 
 const DEFAULT_RANKING_THEME = {
   id: "night_owl",
@@ -195,6 +190,7 @@ export default function Home({
   const [rankingIndex, setRankingIndex] = useState(0);
   const [activeMood, setActiveMood] = useState(null);
   const [catalogLimit, setCatalogLimit] = useState(9);
+  const [sortMode, setSortMode] = useState(DEFAULT_TRACK_SORT);
 
   const scrollContainerRef = useRef(null);
   const deepLinkHandled = useRef(false);
@@ -451,7 +447,8 @@ export default function Home({
             ? linkedPlaylist.items.filter(Boolean)
             : [];
 
-          const items = linkedTracks.length > 0 ? linkedTracks : playlistItems;
+          // A linked playlist decides the songs; a slide without one uses its own picks.
+          const items = playlistItems.length > 0 ? playlistItems : linkedTracks;
 
           const fallbackImage =
             safeSrc(slide?.coverImage) ||
@@ -606,7 +603,10 @@ export default function Home({
   }, [tracks, latestTracks]);
 
   const activeMoodCard = moodCards.find((mood) => mood.id === activeMood) || null;
-  const filteredDiscovery = activeMoodCard?.items?.length ? activeMoodCard.items : displayTracks;
+  const filteredDiscovery = useMemo(
+    () => sortTracks(activeMoodCard?.items?.length ? activeMoodCard.items : displayTracks, sortMode),
+    [activeMoodCard, displayTracks, sortMode]
+  );
   const discoveryTracks = filteredDiscovery.slice(0, catalogLimit);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -851,6 +851,7 @@ export default function Home({
               </button>
             ))}
           </div>
+          <TrackSortSwitch value={sortMode} onChange={setSortMode} />
 
           <div className="up-tracklist">
             {!discoveryTracks.length && (
@@ -860,23 +861,15 @@ export default function Home({
                 <small>{searchTerm ? "다른 제목이나 장르로 다시 찾아보세요." : "새로운 사운드가 곧 이곳에 도착합니다."}</small>
               </div>
             )}
-            {discoveryTracks.map((track, index) => {
-              const isCurrent = currentTrack?.id === track.id;
-              const liked = userLikes.includes(track.id);
-              return (
-                <article className={`up-track ${isCurrent ? "is-current" : ""}`} key={track.id}>
-                  <button type="button" className="up-track__play" onClick={() => isCurrent ? togglePlay?.() : safePlay(index, discoveryTracks)} aria-label={`${isCurrent && isPlaying ? 'Pause' : 'Play'} ${track.title}`}>
-                    {isCurrent && isPlaying ? <Pause /> : <Play />}
-                  </button>
-                  <span className="up-track__index">{String(index + 1).padStart(2, "0")}</span>
-                  <span className={`up-track__cover ${track.image ? "" : "is-fallback"}`}>{track.image && <img src={track.image} alt="" loading="lazy" onError={hideBrokenImage} />}</span>
-                  <span className="up-track__title"><Link to={`/tracks/${track.id}`}><strong>{track.title}</strong></Link><small>{track.artist}</small></span>
-                  <span className="up-track__genre">{getTrackGenre(track)}</span>
-                  <button type="button" className={`up-track__like ${liked ? "is-liked" : ""}`} onClick={(e) => handleToggleLike(e, track.id)} aria-label={liked ? '아카이브에서 제거' : '아카이브에 추가'} aria-pressed={liked}><Heart /></button>
-                  {(track.curatorNote || track.exhibition || track.description) && <details className="up-track-story"><summary>곡 이야기</summary>{track.exhibition && <strong>{track.exhibition}</strong>}<p>{track.curatorNote || track.description}</p>{track.artworkTitle && <small>작품 · {track.artworkTitle}</small>}</details>}
-                </article>
-              );
-            })}
+            <TrackCatalogRows
+              tracks={discoveryTracks}
+              currentTrack={currentTrack}
+              isPlaying={isPlaying}
+              togglePlay={togglePlay}
+              onPlay={(index) => safePlay(index, discoveryTracks)}
+              userLikes={userLikes}
+              handleToggleLike={handleToggleLike}
+            />
           </div>
         </div>
 
@@ -909,7 +902,7 @@ export default function Home({
         </aside>
       </section>
 
-      <div className="up-catalog-more">{filteredDiscovery.length > catalogLimit && <button type="button" className="up-action" onClick={() => setCatalogLimit((n) => n + 24)}>더 보기 · {discoveryTracks.length} / {filteredDiscovery.length}곡</button>}{catalogLimit === 9 && filteredDiscovery.length > 9 && <button type="button" className="up-action" onClick={() => setCatalogLimit(filteredDiscovery.length)}>전체 곡 보기</button>}</div>
+      <div className="up-catalog-more">{filteredDiscovery.length > catalogLimit && <button type="button" className="up-action" onClick={() => setCatalogLimit((n) => n + 24)}>더 보기 · {discoveryTracks.length} / {filteredDiscovery.length}곡</button>}<Link to="/tracks" className="up-action">전체 곡 보기</Link></div>
       <footer className="up-footer"><strong>UNFRAME PLAYLIST®</strong><span>Music for exhibitions, people and the spaces between.</span><small>SEOUL · 2025</small></footer>
     </div>
   );

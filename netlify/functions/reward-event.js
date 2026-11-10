@@ -1,5 +1,6 @@
 import { guard, services, root, privateProfile, response, failure, error, safeId, projectRanking, jsonBody, DEFAULT_NICKNAME } from '../lib/server.js';
 import { reduceRewardEvent, dateKey } from '../../src/utils/rewardState.js';
+import { likeStatsRef, likeDelta } from '../lib/trackLikes.js';
 
 const TYPES = new Set(['daily_active', 'track_play_start', 'track_complete', 'listening_pulse', 'like_added', 'like_removed', 'share_card', 'playlist_play']);
 export const durationSeconds = (track) => {
@@ -31,11 +32,13 @@ export async function handler(event) {
     const trackSnap = input.trackId && ['track_play_start', 'like_added'].includes(input.type) ? await root().collection('public').doc('data').collection('tracks').doc(input.trackId).get() : null;
     const track = trackSnap?.exists ? trackSnap.data() : null;
     if (['track_play_start', 'like_added'].includes(input.type) && !track) throw error(400, '발행된 곡만 기록할 수 있습니다.');
-    let likedCount = null, totalTracks = 0;
+    let likedCount = null, totalTracks = 0, likeChange = 0;
     if (['like_added', 'like_removed'].includes(input.type)) {
       const [likes, published] = await Promise.all([root().collection('users').doc(user.uid).collection('likes').get(), root().collection('public').doc('data').collection('tracks').get()]);
       if (input.type === 'like_added' && !likes.docs.some((d) => d.id === input.trackId)) throw error(400, '좋아요 상태를 확인해 주세요.');
       likedCount = likes.docs.filter((d) => published.docs.some((t) => t.id === d.id)).length; totalTracks = published.size;
+      const stillLiked = likes.docs.some((d) => d.id === input.trackId);
+      likeChange = input.type === 'like_added' ? 1 : stillLiked ? 0 : -1;
     }
     const ref = privateProfile(user.uid), stateRef = root().collection('server_state').doc(user.uid), now = Date.now();
     const result = await services().db.runTransaction(async (tx) => {
@@ -70,7 +73,13 @@ export async function handler(event) {
           if (listRef) { const list = await tx.get(listRef); valid = list.data()?.trackIds?.includes(session.trackId); }
           if (!valid) {
             const config = await tx.get(root().collection('public').doc('data').collection('site_config').doc('main_texts'));
-            valid = config.data()?.heroSlides?.some((slide) => slide.id === playlistKey && slide.isActive !== false && slide.trackIds?.includes(session.trackId));
+            const slide = config.data()?.heroSlides?.find((item) => item.id === playlistKey && item.isActive !== false);
+            valid = Boolean(slide?.trackIds?.includes(session.trackId));
+            // A slide linked to a playlist plays that playlist's songs.
+            if (!valid && slide?.linkedPlaylistId && safeId(slide.linkedPlaylistId)) {
+              const linked = await tx.get(root().collection('public').doc('data').collection('playlists').doc(slide.linkedPlaylistId));
+              valid = Boolean(linked.data()?.trackIds?.includes(session.trackId));
+            }
           }
         }
         if (!valid) throw error(400, '발행된 재생 목록만 기록할 수 있습니다.');
@@ -105,6 +114,7 @@ export async function handler(event) {
       receipts[month] = receipt;
       next.profile.receipts = Object.fromEntries(Object.entries(receipts).sort(([a], [b]) => b.localeCompare(a)).slice(0, 13));
       tx.set(ref, next.profile); tx.set(stateRef, state);
+      if (likeChange && input.trackId) tx.set(likeStatsRef(), likeDelta(input.trackId, likeChange), { merge: true });
       return next;
     });
     if (!result.skipProjection) await projectRanking(user.uid, { force: result.unlockedRewards?.length > 0 });
