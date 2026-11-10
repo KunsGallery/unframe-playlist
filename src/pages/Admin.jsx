@@ -381,7 +381,7 @@ export default function Admin({
       setToastMessage?.("히어로 이미지 업로드 완료 ✨");
     } catch (e) {
       console.error(e);
-      setAuthError?.("히어로 이미지 업로드 실패");
+      setAuthError?.(e?.message || "히어로 이미지 업로드 실패");
     }
   };
 
@@ -397,7 +397,7 @@ export default function Admin({
       setToastMessage?.("이미지 업로드 완료 ✨");
     } catch (error) {
       console.error("이미지 업로드 실패:", error);
-      setAuthError?.("이미지 업로드 실패");
+      setAuthError?.(error?.message || "이미지 업로드 실패");
     } finally {
       if (fieldName === "track") setIsUploadingImg(false);
       else if (fieldName === "gathering") setIsUploadingGatheringImage(false);
