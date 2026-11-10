@@ -878,3 +878,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .up-recap__tap.is-prev { left: 2px; }
 @keyframes up-recap-in { from { opacity: 0; transform: translateY(10px) scale(.985); } }
 @media (prefers-reduced-motion: reduce) { .up-recap__slide { animation: none; } }
+
+/* My page: liked songs and the sticker book scroll inside their own box instead of stretching the page. */
+.up-scroll-box { max-height: min(640px, 64vh); overflow-y: auto; overscroll-behavior: contain; padding: 16px; border: 1px solid var(--up-line); border-radius: 28px; background: rgba(255,255,255,.28); scrollbar-gutter: stable; scrollbar-width: thin; align-content: start; }
+.up-scroll-box:focus-visible { outline: 3px solid var(--up-blue); outline-offset: 3px; }
+@media (max-width: 900px) { .up-scroll-box { max-height: 60vh; padding: 12px; border-radius: 22px; } }

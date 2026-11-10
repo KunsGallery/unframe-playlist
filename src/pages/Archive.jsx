@@ -68,6 +68,13 @@ const StickerItem = memo(function StickerItem({
   const safeGlow = data?.glow ?? "rgba(125,211,252,0.35)";
 
   const useHex = isCollective;
+  const [below, setBelow] = useState(false);
+  // Inside a scrolling box the tooltip above a top-row sticker would be cut off, so it opens below instead.
+  const show = (e) => {
+    const box = e.currentTarget.closest('[data-scroll-box]');
+    setBelow(Boolean(box) && e.currentTarget.getBoundingClientRect().top - box.getBoundingClientRect().top < 170);
+    setHoveredSticker(id);
+  };
 
   const core = (
     <div
@@ -92,12 +99,12 @@ const StickerItem = memo(function StickerItem({
 
   return (
     <div
-      onMouseEnter={() => setHoveredSticker(id)}
+      onMouseEnter={show}
       onMouseLeave={() => setHoveredSticker(null)}
       onClick={(e) => isActive && onShareReward?.(e, id)}
       role="button" tabIndex={0}
       aria-label={`${safeTitle}. ${safeDesc}. ${isActive ? '획득 완료. 공유하기' : progress || '미획득'}`}
-      onFocus={() => setHoveredSticker(id)} onBlur={() => setHoveredSticker(null)}
+      onFocus={show} onBlur={() => setHoveredSticker(null)}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (isActive) onShareReward?.(e, id); else setHoveredSticker(id); } }}
       className={`relative aspect-square flex items-center justify-center transition-opacity duration-300 ${isActive ? 'cursor-pointer' : 'opacity-40 hover:opacity-70'}`}
     >
@@ -119,7 +126,7 @@ const StickerItem = memo(function StickerItem({
             initial={{ opacity: 0, y: 15, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10 }}
-            className="absolute bottom-full left-1/2 -translate-x-1/2 mb-6 z-200 w-56 pointer-events-none"
+            className={`absolute left-1/2 -translate-x-1/2 z-200 w-56 pointer-events-none ${below ? 'top-full mt-6' : 'bottom-full mb-6'}`}
           >
             <div className="bg-[#0c0c0e] border border-white/20 p-4 rounded-3xl shadow-[0_30px_70px_rgba(0,0,0,0.9)] text-center backdrop-blur-3xl">
               <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1.5" style={{ color: isActive ? safeColor : '#71717a' }}>
@@ -131,7 +138,7 @@ const StickerItem = memo(function StickerItem({
               </p>
               {progress && !isActive && <p className="text-sm text-white mt-2">{progress}</p>}
               {isActive && reward?.unlockedAt && <p className="text-xs text-white mt-2">{new Date(reward.unlockedAt?.toMillis?.() ?? reward.unlockedAt).toLocaleDateString('ko-KR')} 획득</p>}
-              <div className="absolute top-full left-1/2 -translate-x-1/2 w-3 h-3 bg-[#0c0c0e] border-r border-b border-white/20 rotate-45 -translate-y-1.5" />
+              <div className={`absolute left-1/2 -translate-x-1/2 w-3 h-3 bg-[#0c0c0e] border-white/20 rotate-45 ${below ? 'bottom-full border-l border-t translate-y-1.5' : 'top-full border-r border-b -translate-y-1.5'}`} />
             </div>
           </Motion.div>
         )}
@@ -692,7 +699,10 @@ export default function Archive({
               >
                 <h2 className={`${h1Title} text-6xl lg:text-[8.5rem] opacity-15`}>Liked<br />Records</h2>
 
-                <div className="grid gap-4">
+                <div className="up-scroll-box grid gap-4" data-scroll-box tabIndex={0} aria-label="좋아요한 곡 목록">
+                  {(tracks || []).filter(t => userLikes?.includes(t?.id)).length === 0 && (
+                    <p className="text-sm text-zinc-500 py-6 text-center">아직 좋아요한 곡이 없습니다. 플레이어의 하트를 눌러 모아 보세요.</p>
+                  )}
                   {(tracks || []).filter(t => userLikes?.includes(t?.id)).map(t => {
                     const img = safeSrc(t?.image);
                     return (
@@ -748,7 +758,7 @@ export default function Archive({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-5 lg:gap-6 overflow-visible">
+                <div className="up-scroll-box grid grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-5 lg:gap-6" data-scroll-box tabIndex={0} aria-label="스티커북">
                   {Object.entries(COLLECTIVE_LIBRARY).map(([key, data]) => (
                     <StickerItem
                       key={key}
